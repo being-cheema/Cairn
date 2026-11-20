@@ -104,8 +104,8 @@ try:
     mail(action="feedback"); time.sleep(1)
     seen = mail()["seen"]
     q = parse_qs(urlsplit(seen[-1].split(": ", 1)[1]).query) if seen[-1].startswith("feedback: ") else {}
-    t.ok("Send Feedback opens Gmail's compose page", q.get("to") == ["hello@officecommun.com"]
-         and q.get("su", [""])[0].startswith("Search feedback"), seen[-1])
+    t.ok("Send Feedback opens Gmail's compose page", not q.get("to", [""])[0]
+         and q.get("su", [""])[0].startswith("Cairn feedback"), seen[-1])
     sv.quit()
 
     # A small window for links from other apps: compose in one.

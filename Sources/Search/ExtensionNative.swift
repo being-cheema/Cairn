@@ -19,9 +19,9 @@ import WebKit
 enum ExtensionNative {
     /// Why an app's connection ended (#1122: iCloud Passwords' helper went
     /// after a couple of minutes): the host's name and how, never a message.
-    /// `log show --predicate 'subsystem == "com.officecommun.search" AND
+    /// `log show --predicate 'subsystem == "<the bundle id, Brand.bundleID>" AND
     /// category == "ExtensionNative"' --info --last 1h`
-    static let log = Logger(subsystem: "com.officecommun.search", category: "ExtensionNative")
+    static let log = Logger(subsystem: Brand.logSubsystem, category: "ExtensionNative")
 
     struct Refused: LocalizedError {
         let why: String

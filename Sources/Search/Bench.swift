@@ -119,7 +119,7 @@ final class Bench {
     /// nothing of yours, and scripts set them up with a defaults write.
     @MainActor
     enum Consent {
-        private static let mark = SwitchMark(service: "com.officecommun.search.bench")
+        private static let mark = SwitchMark(service: Brand.service("bench"))
         static var given: Bool { mark.given }
         static func grant() { mark.grant() }
         static func revoke() { mark.revoke() }

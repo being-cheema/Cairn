@@ -435,10 +435,12 @@ final class Links: NSObject, NSApplicationDelegate {
     static func writeFeedback() {
         var text = URLComponents()
         text.scheme = "mailto"
-        text.path = "hello@officecommun.com"
+        // No address: feedback about this fork goes where its owner says, and
+        // the draft is the person's to address (Brand.feedbackAddress).
+        text.path = Brand.feedbackAddress ?? ""
         text.queryItems = [
-            URLQueryItem(name: "subject", value: "Search feedback — \(Updater.version) (\(Updater.build))"),
-            URLQueryItem(name: "body", value: "\n\n—\nSearch \(Updater.version), build \(Updater.build), macOS \(ProcessInfo.processInfo.operatingSystemVersionString)"),
+            URLQueryItem(name: "subject", value: "\(Brand.name) feedback — \(Updater.version) (\(Updater.build))"),
+            URLQueryItem(name: "body", value: "\n\n—\n\(Brand.name) \(Updater.version), build \(Updater.build), macOS \(ProcessInfo.processInfo.operatingSystemVersionString)"),
         ]
         guard let url = text.url else { return }
         // With a webmail chosen, its compose page, in a tab of the window in

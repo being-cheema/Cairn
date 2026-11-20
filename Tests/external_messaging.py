@@ -3,7 +3,7 @@
 tab groups, in a hidden probe.
 
 Build first (`./build.sh`), then `python3 Tests/external_messaging.py`. It
-runs a copy of build/Search.app under a bundle id of its own (WebKit stops
+runs a copy of build/Cairn.app under a bundle id of its own (WebKit stops
 an extension's worker a few seconds after it starts under Search's real id
 in a test run), in a world of its own with split_view.py's harness, started
 hidden; the copy, its WebKit folders and the world are removed afterwards.
@@ -40,7 +40,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import split_view as sv  # noqa: E402
 
 sv.use("external-messaging")
-BUNDLE = "com.officecommun.search.exttest"
+BUNDLE = "io.github.being-cheema.cairn.exttest"
 work = Path(tempfile.mkdtemp(prefix="search-external-"))
 NOWHERE = "abcdefghijklmnopabcdefghijklmnop"
 
@@ -112,9 +112,9 @@ LOOP = """(async function (ids) {
 
 
 def probe_copy():
-    """build/Search.app under a bundle id of its own, signed ad hoc."""
-    app = work / "Search.app"
-    shutil.copytree(Path(sv.ROOT, "build", "Search.app"), app, symlinks=True)
+    """build/Cairn.app under a bundle id of its own, signed ad hoc."""
+    app = work / "Cairn.app"
+    shutil.copytree(Path(sv.ROOT, "build", "Cairn.app"), app, symlinks=True)
     subprocess.run(["/usr/libexec/PlistBuddy", "-c", f"Set :CFBundleIdentifier {BUNDLE}", str(app / "Contents/Info.plist")], check=True)
     (app / "Contents/embedded.provisionprofile").unlink(missing_ok=True)
     subprocess.run(["codesign", "-f", "-s", "-", "--entitlements", str(Path(sv.ROOT, "Search.entitlements")), "--deep", str(app)],

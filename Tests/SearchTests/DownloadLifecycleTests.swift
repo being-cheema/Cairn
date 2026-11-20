@@ -26,7 +26,7 @@ final class DownloadLifecycleTests: XCTestCase {
     override class func tearDown() {
         Disk.drain()
         if let world = Store.world {
-            let suite = "com.officecommun.search.test.\(world)"
+            let suite = "io.github.being-cheema.cairn.test.\(world)"
             UserDefaults.standard.removePersistentDomain(forName: suite)
             try? FileManager.default.removeItem(at: Store.folder)
         }

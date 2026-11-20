@@ -43,7 +43,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import split_view as sv  # noqa: E402
 
 sv.use("shim-order")
-BUNDLE = "com.officecommun.search.shimorder"
+BUNDLE = "io.github.being-cheema.cairn.shimorder"
 work = Path(tempfile.mkdtemp(prefix="search-shimorder-"))
 
 ENTRIES = 3
@@ -145,9 +145,9 @@ for w in WORLDS:
 
 
 def probe_copy():
-    """build/Search.app under a bundle id of its own, signed ad hoc."""
-    app = work / "Search.app"
-    shutil.copytree(Path(sv.ROOT, "build", "Search.app"), app, symlinks=True)
+    """build/Cairn.app under a bundle id of its own, signed ad hoc."""
+    app = work / "Cairn.app"
+    shutil.copytree(Path(sv.ROOT, "build", "Cairn.app"), app, symlinks=True)
     subprocess.run(["/usr/libexec/PlistBuddy", "-c", f"Set :CFBundleIdentifier {BUNDLE}",
                     str(app / "Contents/Info.plist")], check=True)
     (app / "Contents/embedded.provisionprofile").unlink(missing_ok=True)

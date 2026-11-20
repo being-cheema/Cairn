@@ -33,14 +33,14 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-BUILT = ROOT / "build" / "Search.app"
+BUILT = ROOT / "build" / "Cairn.app"
 HOME = os.path.expanduser("~")
-ID = "com.officecommun.search.autocorrect"
+ID = "io.github.being-cheema.cairn.autocorrect"
 W = f"ac-{hashlib.sha1(str(ROOT).encode()).hexdigest()[:8]}"
 SUPPORT = f"{HOME}/Library/Application Support/Search ({W})"
-SUITE = f"com.officecommun.search.test.{W}"
+SUITE = f"io.github.being-cheema.cairn.test.{W}"
 SOCK = f"{SUPPORT}/bench.sock"
-COPY = Path(tempfile.mkdtemp(prefix="ac-probe-")) / "Search.app"
+COPY = Path(tempfile.mkdtemp(prefix="ac-probe-")) / "Cairn.app"
 EXE = str(COPY / "Contents" / "MacOS" / "Search")
 
 PAGE = b"""<!doctype html><title>typing</title>

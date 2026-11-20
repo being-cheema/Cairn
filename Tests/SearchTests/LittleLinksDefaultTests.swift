@@ -10,7 +10,7 @@ final class LittleLinksDefaultTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
-        suite = "com.officecommun.search.test.little-default-\(getpid())-\(UUID().uuidString)"
+        suite = "io.github.being-cheema.cairn.test.little-default-\(getpid())-\(UUID().uuidString)"
         store = UserDefaults(suiteName: suite)
     }
 

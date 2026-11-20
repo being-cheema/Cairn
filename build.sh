@@ -9,7 +9,7 @@
 #                              claude/split-view-4a6927)
 #   SEARCH_DEV=1 SEARCH_FEATURE=name ./build.sh
 #                              the same, named Search-name
-#   ./build.sh release dmg     + build/Search.dmg, build/Search.zip and
+#   ./build.sh release dmg     + build/Cairn.dmg, build/Cairn.zip and
 #                                build/appcast.json, signed with Developer ID
 #                                if there is one in the keychain
 #   ./build.sh release ship    + both notarised, the DMG stapled
@@ -39,9 +39,9 @@
 #     (SEARCH_SIGN_IDENTITY names it; otherwise the first one found is used)
 #   - a notarytool profile: xcrun notarytool store-credentials "search"
 #     (SEARCH_NOTARY_PROFILE names it; default "search")
-#   - SEARCH_DOWNLOAD_URL, the https folder the three files are served from,
-#     for the appcast. Default https://officecommun.com/search, which is
-#     where Updater.feed in Updater.swift looks.
+#   - CAIRN_DOWNLOAD_URL, the https folder the three files are served from,
+#     for the appcast: CAIRN_DOWNLOAD_URL, which has no default. The feed the
+#     app reads (CAIRN_FEED_URL) is that folder's appcast.json.
 #
 # NOTES.md, next to this script, is what's new: newest release first, one
 # paragraph each. The first paragraph goes into the appcast, and from there
@@ -52,19 +52,39 @@ cd "$(dirname "$0")"
 CONFIG="${1:-release}"
 STEP="${2:-app}"
 ARCH="${SEARCH_ARCH:-$(uname -m)}"
+# The names come from Sources/Search/Brand.swift, so there is one place that
+# says what this fork is called. Only what a copy under another identity
+# needs is an environment variable:
+#   CAIRN_BUNDLE_ID          the bundle id (default: Brand.bundleID)
+#   CAIRN_TEAM_ID            the Developer ID team that signs releases and the
+#                            feed; without it nothing is verified as a release
+#   CAIRN_FEED_URL           https address of this build's appcast.json; without
+#                            it the app has no updater at all
+#   CAIRN_FEEDBACK_ADDRESS   where Help › Send Feedback addresses its draft
+#   CAIRN_DOWNLOAD_URL       the https folder the DMG, ZIP and appcast are
+#                            served from (dmg and ship steps)
+brand() { sed -n "s/^ *static let $1 = \"\(.*\)\"\$/\1/p" Sources/Search/Brand.swift | head -1; }
+BRAND="$(brand name)"
+BUNDLE_ID="${CAIRN_BUNDLE_ID:-$(brand bundleID)}"
+[ -n "$BRAND" ] && [ -n "$BUNDLE_ID" ] || { echo "Sources/Search/Brand.swift has no name or bundleID" >&2; exit 1; }
+[[ "$BUNDLE_ID" =~ ^[A-Za-z0-9.-]+$ ]] || { echo "CAIRN_BUNDLE_ID is letters, digits, dots and hyphens" >&2; exit 1; }
+TEAM_ID="${CAIRN_TEAM_ID:-}"
+[ -z "$TEAM_ID" ] || [[ "$TEAM_ID" =~ ^[A-Z0-9]{10}$ ]] || { echo "CAIRN_TEAM_ID is a ten-character Apple team id" >&2; exit 1; }
+FEED_URL="${CAIRN_FEED_URL:-}"
+[ -z "$FEED_URL" ] || [[ "$FEED_URL" =~ ^https://[^[:space:]]+$ ]] || { echo "CAIRN_FEED_URL is an https address" >&2; exit 1; }
 case "$ARCH" in
   arm64) OUT="build"; SUBFOLDER="" ;;
   x86_64) OUT="build/intel"; SUBFOLDER="/intel" ;;
   *) echo "SEARCH_ARCH is arm64 or x86_64, not “$ARCH”" >&2; exit 1 ;;
 esac
-APP="$OUT/Search.app"
-NAME="Search"
+NAME="$BRAND"
+APP="$OUT/$NAME.app"
 # Asked for with SEARCH_DEV=1, a dev build, on a yellow plate and named for
 # the feature it's built from: "Search-split-view" in the menu bar, the Dock
 # and ⌘Tab, so it's never taken for the installed app beside it, or for the
 # dev build from another worktree. Only the name people see changes. The
 # bundle id stays, so it shares the real app's settings, and so does the
-# folder, build/Search.app, which fresh.sh and the tests open. Not by
+# folder, build/Cairn.app, which fresh.sh and the tests open. Not by
 # default: a plain ./build.sh is also the Search people here use every day
 # and the release candidates. What goes in a DMG or a ZIP is never one.
 case "${SEARCH_DEV:-}" in
@@ -132,7 +152,7 @@ cp Search.sdef "$APP/Contents/Resources/"
 # what the app weighed (6.5 MB of binary, 2.7 without them), and nothing the
 # app reads while it runs. They are kept beside the build instead, as a dSYM
 # that turns the addresses in a crash report back into names (Console, or
-# atos -o build/Search.app.dSYM/Contents/Resources/DWARF/Search).
+# atos -o build/Cairn.app.dSYM/Contents/Resources/DWARF/Search).
 if [ "$CONFIG" = "release" ]; then
   rm -rf "$APP.dSYM"
   dsymutil "$BINARY" -o "$APP.dSYM" 2>/dev/null || echo "no dSYM this time" >&2
@@ -175,6 +195,16 @@ else
 fi
 rm -rf "$ICONCAR" "$ICONDOC"
 
+# What only the builder knows (Brand.feedURL, teamID, feedbackAddress): in the
+# plist when given, and absent otherwise, which is how the app knows it has
+# no updater. Written through PlistBuddy-safe escaping: they are checked above.
+BUILDERKEYS=""
+[ -z "$FEED_URL" ] || BUILDERKEYS="$BUILDERKEYS<key>CairnFeedURL</key><string>$FEED_URL</string>"
+[ -z "$TEAM_ID" ] || BUILDERKEYS="$BUILDERKEYS<key>CairnTeamID</key><string>$TEAM_ID</string>"
+if [ -n "${CAIRN_FEEDBACK_ADDRESS:-}" ]; then
+  [[ "$CAIRN_FEEDBACK_ADDRESS" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+$ ]] || { echo "CAIRN_FEEDBACK_ADDRESS is an email address" >&2; exit 1; }
+  BUILDERKEYS="$BUILDERKEYS<key>CairnFeedbackAddress</key><string>$CAIRN_FEEDBACK_ADDRESS</string>"
+fi
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -183,15 +213,16 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleName</key><string>$NAME</string>
   <key>CFBundleDisplayName</key><string>$NAME</string>
   <key>CFBundleExecutable</key><string>$NAME</string>
-  <key>CFBundleIdentifier</key><string>com.officecommun.search</string>
+  <key>CFBundleIdentifier</key><string>$BUNDLE_ID</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>$VERSION</string>
   <key>CFBundleVersion</key><string>$BUILD</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   $ICONNAME
   <key>LSMinimumSystemVersion</key><string>$MINIMUM</string>
+  $BUILDERKEYS
   <key>LSApplicationCategoryType</key><string>public.app-category.productivity</string>
-  <key>NSHumanReadableCopyright</key><string>© Office Commun · Search</string>
+  <key>NSHumanReadableCopyright</key><string>$NAME, a fork of Search · © Office Commun (MIT, see LICENSE)</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSAppleScriptEnabled</key><true/>
   <key>OSAScriptingDefinition</key><string>Search.sdef</string>
@@ -255,28 +286,28 @@ cat > "$APP/Contents/Info.plist" <<PLIST
        still wants a sentence to put in its own prompt, and touching the APIs
        without one is a crash rather than a refusal. -->
   <key>NSCameraUsageDescription</key>
-  <string>Websites you visit can ask to use your camera. Search asks you the first time each site does and keeps your answer; Settings › Privacy forgets them.</string>
+  <string>Websites you visit can ask to use your camera. $NAME asks you the first time each site does and keeps your answer; Settings › Privacy forgets them.</string>
   <key>NSMicrophoneUsageDescription</key>
-  <string>Websites you visit can ask to use your microphone. Search asks you the first time each site does and keeps your answer; Settings › Privacy forgets them.</string>
+  <string>Websites you visit can ask to use your microphone. $NAME asks you the first time each site does and keeps your answer; Settings › Privacy forgets them.</string>
   <!-- Location: the first key is the one macOS has always read; the second
        is the one CoreLocation's requestWhenInUseAuthorization documents.
        Same sentence in both. -->
   <key>NSLocationUsageDescription</key>
-  <string>Websites you visit can ask for your location. Search asks you each time a site does, unless you choose Always allow for it; Settings › Privacy forgets those choices.</string>
+  <string>Websites you visit can ask for your location. $NAME asks you each time a site does, unless you choose Always allow for it; Settings › Privacy forgets those choices.</string>
   <key>NSLocationWhenInUseUsageDescription</key>
-  <string>Websites you visit can ask for your location. Search asks you each time a site does, unless you choose Always allow for it; Settings › Privacy forgets those choices.</string>
+  <string>Websites you visit can ask for your location. $NAME asks you each time a site does, unless you choose Always allow for it; Settings › Privacy forgets those choices.</string>
   <key>NSDownloadsFolderUsageDescription</key>
   <string>Files you download are saved to your Downloads folder.</string>
   <!-- Only once you turn on Settings › Passwords › Fill in your contact
        details: your own card, never anyone else's (MeCard.swift). -->
   <key>NSContactsUsageDescription</key>
-  <string>Search fills in forms with the details on your own card in Contacts, once you pick them under a box. It reads no one else's card and saves no copy of yours.</string>
+  <string>$NAME fills in forms with the details on your own card in Contacts, once you pick them under a box. It reads no one else's card and saves no copy of yours.</string>
 </dict>
 </plist>
 PLIST
 # A dev build's name, as a localised one: under the icon in the Dock, in
 # ⌘Tab and in Finder, macOS shows the bundle's folder name otherwise. The
-# plain names above stay "Search", matching the folder, since a folder named
+# plain names above stay "$NAME" (Cairn), matching the folder, since a folder named
 # otherwise reads to macOS as renamed by hand, and then the folder wins.
 if [ "$DEV" = 1 ]; then
   mkdir -p "$APP/Contents/Resources/en.lproj"
@@ -304,8 +335,12 @@ if [ "$STEP" = "ship" ] && [ ! -f "Search.provisionprofile" ] && [ -z "${SEARCH_
   exit 1
 fi
 if [ -f "Search.provisionprofile" ]; then
+  [ -n "$TEAM_ID" ] || { echo "Search.provisionprofile is here, so CAIRN_TEAM_ID (the team it was issued to) is needed" >&2; exit 1; }
   cp "Search.provisionprofile" "$APP/Contents/embedded.provisionprofile"
-  ENTITLEMENTS="Search.passkeys.entitlements"
+  # The template names no team: this one's is put in, for this bundle id.
+  ENTITLEMENTS="$(mktemp -t cairn-entitlements).plist"
+  sed -e "s/@TEAM_ID@/$TEAM_ID/g" -e "s/@BUNDLE_ID@/$BUNDLE_ID/g" Search.passkeys.entitlements > "$ENTITLEMENTS"
+  trap 'rm -f "$ENTITLEMENTS"' EXIT
   echo "passkeys: profile embedded"
 fi
 if [ -n "$IDENTITY" ]; then
@@ -370,7 +405,8 @@ echo "packed: $ZIP"
 # characters JSON minds escaped, is the line under the version in Settings.
 # Written last — after notarisation has stapled its ticket to the DMG, which
 # changes it — so the DMG's hash is the one people download.
-BASE="${SEARCH_DOWNLOAD_URL:-https://officecommun.com/search}"
+BASE="${CAIRN_DOWNLOAD_URL:-}"
+[[ "$BASE" =~ ^https://[^[:space:]]+$ ]] || { echo "dmg and ship write an appcast: CAIRN_DOWNLOAD_URL is the https folder it is served from" >&2; exit 1; }
 BASE="${BASE%/}$SUBFOLDER"
 NOTES=""
 if [ -f NOTES.md ]; then
@@ -389,8 +425,9 @@ write_engine() {
   [ "$ARCH" = "arm64" ] && [ -n "${SEARCH_AI_ENGINE_VERSION:-}" ] || return 0
   [[ "$SEARCH_AI_ENGINE_VERSION" =~ ^[0-9]+$ ]] || { echo "SEARCH_AI_ENGINE_VERSION is a whole number" >&2; exit 1; }
   [ -f "$ENGINE" ] || { echo "$ENGINE is missing — ./engine.sh arm64 makes it" >&2; exit 1; }
-  codesign --verify --strict -R='anchor apple generic and identifier "com.officecommun.search.ai-engine" and certificate leaf[subject.OU] = "7BYKA895MC"' "$ENGINE" \
-    || { echo "$ENGINE isn't signed with the Developer ID as com.officecommun.search.ai-engine" >&2; exit 1; }
+  [ -n "$TEAM_ID" ] || { echo "an engine in the feed needs CAIRN_TEAM_ID, the team that signed it" >&2; exit 1; }
+  codesign --verify --strict -R="anchor apple generic and identifier \"$BUNDLE_ID.ai-engine\" and certificate leaf[subject.OU] = \"$TEAM_ID\"" "$ENGINE" \
+    || { echo "$ENGINE isn't signed with the Developer ID as $BUNDLE_ID.ai-engine" >&2; exit 1; }
   local FILE="search-ai-engine-arm64-$SEARCH_AI_ENGINE_VERSION"
   mkdir -p "$OUT/ai"
   cp "$ENGINE" "$OUT/ai/$FILE"
@@ -424,7 +461,7 @@ JSON
     local SIGNED
     SIGNED="$(mktemp -d)"
     cp "$OUT/appcast.json" "$SIGNED/appcast.json"
-    codesign --force --timestamp --sign "$IDENTITY" --identifier com.officecommun.search.appcast "$SIGNED/appcast.json"
+    codesign --force --timestamp --sign "$IDENTITY" --identifier "$BUNDLE_ID.appcast" "$SIGNED/appcast.json"
     ditto -c -k --sequesterRsrc "$SIGNED/appcast.json" "$OUT/appcast.json.zip"
     rm -rf "$SIGNED"
     echo "signed: $OUT/appcast.json.zip"

@@ -95,7 +95,7 @@ final class EngineSuggestTests: XCTestCase {
         for secret in ["hunter2hunter2x", "sk-proj-4f9aX2kQ7", fakeToken,
                        "AKIAIOSFODNN7EXAMPLE", "correcthorsebatterystaplecorrecthorse",
                        "4111111111111111", "4111-1111-1111-1111", "my password is Tr0ub4dor&3xyzzy",
-                       "drice@officecommun.com", "write to me@example.org", "line one\nline two",
+                       "someone@example.org", "write to me@example.org", "line one\nline two",
                        String(repeating: "word ", count: 17)] {
             XCTAssertFalse(EngineSuggest.sendable(secret), secret)
         }

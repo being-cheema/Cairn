@@ -19,11 +19,17 @@ LLAMA_TAG="v0.5.0"
 LLAMA_COMMIT="7fe450e19305b828c199d602c23a8337aaa1f03b"
 OUT="build/engine"
 SRC="$OUT/llama.cpp"
-IDENTIFIER="com.officecommun.search.ai-engine"
+# The identifier is the app's bundle id plus .ai-engine (Brand.engineIdentifier):
+# one place, Sources/Search/Brand.swift, names it, and CAIRN_BUNDLE_ID builds
+# a copy under another id the same way build.sh does.
+BUNDLE_ID="${CAIRN_BUNDLE_ID:-$(sed -n 's/^ *static let bundleID = "\(.*\)"$/\1/p' Sources/Search/Brand.swift | head -1)}"
+[ -n "$BUNDLE_ID" ] || { echo "Sources/Search/Brand.swift has no bundleID" >&2; exit 1; }
+IDENTIFIER="$BUNDLE_ID.ai-engine"
 JOBS=$(sysctl -n hw.logicalcpu)
 which="${1:-all}"
 
 mkdir -p "$OUT"
+sed "s/@BUNDLE_ID@/$BUNDLE_ID/g" Engine/Info.plist > "$OUT/engine-info.plist"
 if [ ! -d "$SRC/.git" ]; then
   git clone --quiet --depth 1 --branch "$LLAMA_TAG" https://github.com/ggml-org/llama.cpp "$SRC"
 fi
@@ -71,7 +77,7 @@ build() {
   clang++ -std=c++17 -O2 -arch "$arch" -mmacosx-version-min=14.0 \
     -I"$SRC/include" -I"$SRC/ggml/include" -I"$SRC/vendor" \
     Engine/search-ai-engine.cpp -o "$exe" -Wl,-dead_strip \
-    -Wl,-sectcreate,__TEXT,__info_plist,Engine/Info.plist \
+    -Wl,-sectcreate,__TEXT,__info_plist,"$OUT/engine-info.plist" \
     "${libs[@]}" "${frameworks[@]}"
   strip -x "$exe"
   if [ -n "$IDENTITY" ] && [ "$IDENTITY" != "-" ]; then

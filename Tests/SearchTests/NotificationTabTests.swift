@@ -21,7 +21,7 @@ final class NotificationTabTests: XCTestCase {
         Disk.drain()
         if Store.world == world {
             try? FileManager.default.removeItem(at: Store.folder)
-            UserDefaults(suiteName: "com.officecommun.search.test.\(world)")?.removePersistentDomain(forName: "com.officecommun.search.test.\(world)")
+            UserDefaults(suiteName: "io.github.being-cheema.cairn.test.\(world)")?.removePersistentDomain(forName: "io.github.being-cheema.cairn.test.\(world)")
         }
         super.tearDown()
     }

@@ -15,10 +15,11 @@
   <!-- Passkeys, for any site. Apple grants this to browsers on request; it
        only works with the matching Developer ID provisioning profile
        embedded in the app, which build.sh does when Search.provisionprofile
-       is next to it. The two identifiers are how macOS ties the app to that
+       is next to it. @TEAM_ID@ and @BUNDLE_ID@ are filled in by build.sh from
+       CAIRN_TEAM_ID and the bundle id: no team is named in the source. The two identifiers are how macOS ties the app to that
        profile: without them the restricted entitlement is refused. -->
-  <key>com.apple.application-identifier</key><string>7BYKA895MC.com.officecommun.search</string>
-  <key>com.apple.developer.team-identifier</key><string>7BYKA895MC</string>
+  <key>com.apple.application-identifier</key><string>@TEAM_ID@.@BUNDLE_ID@</string>
+  <key>com.apple.developer.team-identifier</key><string>@TEAM_ID@</string>
   <key>com.apple.developer.web-browser.public-key-credential</key><true/>
 </dict>
 </plist>
