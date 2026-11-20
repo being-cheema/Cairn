@@ -1984,6 +1984,9 @@ private struct UpdateMenuItem: View {
 
     var body: some View {
         switch updater.stage {
+        // A copy built without a feed (Brand.feedURL) has nothing to check.
+        case .none where !Updater.configured:
+            EmptyView()
         case .none:
             Button(updater.checking ? "Checking for Updates…" : "Check for Updates…") { updater.checkByHand() }
                 .disabled(updater.checking)

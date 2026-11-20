@@ -9,7 +9,7 @@ import Foundation
 // address and the one file pinned below.
 //
 // Nothing downloaded is taken on trust:
-//   - the engine's hash is the signed feed's, its signature Office Commun's
+//   - the engine's hash is the signed feed's, its signature the builder's
 //     Developer ID for its own identifier, checked again before every start;
 //     and it must be sandboxed with nothing added — no network, no files —
 //     or it isn't started at all;
@@ -53,7 +53,7 @@ final class AIEngine: ObservableObject {
     }
     @Published var offered: Offer?
 
-    nonisolated static let identifier = "com.officecommun.search.ai-engine"
+    nonisolated static let identifier = Brand.engineIdentifier
 
     enum State: Equatable {
         case absent
@@ -206,7 +206,7 @@ final class AIEngine: ObservableObject {
 
     // MARK: - checking
 
-    /// The engine is Office Commun's, for its own identifier, signed the way
+    /// The engine is the builder's, for its own identifier, signed the way
     /// a release is — or, in a test run, at least its identifier — and it is
     /// sandboxed with nothing added: no network, no file access, no way out.
     nonisolated static func trusted(_ file: URL) -> Bool {

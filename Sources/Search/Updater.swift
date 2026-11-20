@@ -14,8 +14,8 @@ import Security
 // newer.
 //
 // What the updater leaves alone, on purpose: everything in
-// ~/Library/Application Support/Search, the defaults under
-// com.officecommun.search, and the keychain. The session, the pins, the
+// ~/Library/Application Support/Cairn, the defaults under
+// the bundle id, and the keychain. The session, the pins, the
 // history, the passwords — none of it is read, moved or rewritten here. Only
 // the bundle changes hands, and it keeps its bundle id and its signing
 // identity, so the keychain items the old build made open for the new one.
@@ -29,25 +29,28 @@ import Security
 final class Updater: ObservableObject {
     static let shared = Updater()
 
-    /// Where the file lives. SEARCH_FEED, for a test run, points somewhere
-    /// else — and is the only way plain http is accepted, so a build that
-    /// was not handed the variable only ever listens to the real site.
-    /// SEARCH_FEED points a test run at a feed of its own. Only a test run:
-    /// the browser people use reads Office Commun's feed whatever the
-    /// environment it was started with says.
-    static let feed: URL = {
+    /// Where the file lives, if anywhere. A copy built without a feed
+    /// (Brand.feedURL: build.sh's CAIRN_FEED_URL) has none, and then nothing
+    /// here runs: no timer, no request, not even at launch. A fork that
+    /// kept its upstream's address would have asked the upstream's server
+    /// every hour, for ever, which is the one thing this replaced.
+    /// SEARCH_FEED points a test run at a feed of its own, and is the only
+    /// way plain http is accepted. Only a test run: the browser people use
+    /// reads the feed it was built with whatever the environment it was
+    /// started with says.
+    static let feed: URL? = {
         if overridden, let set = ProcessInfo.processInfo.environment["SEARCH_FEED"], let url = URL(string: set) {
             return url
         }
-        // An Intel Mac has a download of its own from 1.0.5 (build.sh,
-        // SEARCH_ARCH=x86_64) and a feed beside it naming only Intel builds,
-        // so neither kind of Mac is ever offered the other's.
-        #if arch(x86_64)
-        return URL(string: "https://officecommun.com/search/intel/appcast.json")!
-        #else
-        return URL(string: "https://officecommun.com/search/appcast.json")!
-        #endif
+        // An Intel Mac has a download of its own (build.sh, SEARCH_ARCH=
+        // x86_64) and a feed beside it naming only Intel builds, so neither
+        // kind of Mac is ever offered the other's: the builder gives each
+        // build its own address.
+        return Brand.feedURL
     }()
+
+    /// Whether this copy updates itself at all.
+    static var configured: Bool { feed != nil }
 
     private static var overridden: Bool {
         Store.testing && ProcessInfo.processInfo.environment["SEARCH_FEED"] != nil
@@ -133,6 +136,8 @@ final class Updater: ObservableObject {
     func checkIfDue(then say: @escaping (String) -> Void) {
         self.say = say
         Swap.sweep()
+        // No feed, no updater: nothing is scheduled and nothing is asked.
+        guard Updater.configured else { return }
         // And again every hour for as long as the app is up — a browser that
         // is left open for a week would otherwise never look.
         if clock == nil {
@@ -146,6 +151,8 @@ final class Updater: ObservableObject {
     }
 
     private var clock: Timer?
+    /// Whether the hourly look is scheduled: never without a feed.
+    var hasTimer: Bool { clock != nil }
 
     /// Every hour, give or take the clock's tolerance: one small signed file.
     private func checkIfDue() {
@@ -157,6 +164,10 @@ final class Updater: ObservableObject {
     /// Search › Check for Updates…: the result is said in the line at the
     /// foot of the window, and an available update is offered in the menu.
     func checkByHand() {
+        guard Updater.configured else {
+            say?("This copy of \(Brand.name) has no update feed — build a newer one")
+            return
+        }
         switch stage {
         case .ready(let next):
             say?("Search \(next.version) is ready — relaunch to use it")
@@ -179,7 +190,7 @@ final class Updater: ObservableObject {
     /// names, or nil when this is the latest; what becomes of it after that
     /// is said through the line handed to `checkIfDue`.
     func check(then done: @escaping (Release?) -> Void) {
-        guard !checking else { return }
+        guard Updater.configured, !checking else { done(nil); return }
         checking = true
         Task { [weak self] in
             let found = await Updater.fetch()
@@ -219,7 +230,7 @@ final class Updater: ObservableObject {
 
     /// The disk image, when the bundle can't be swapped where it is: fetched
     /// by Search itself, never through a web page, and opened only if its
-    /// hash is the signed feed's and its signature is Office Commun's.
+    /// hash is the signed feed's and its signature is the builder's.
     @Published private(set) var fetchingDisk = false
     /// What a test run decided about a disk image, for the bench.
     static var diskVerdict = ""
@@ -312,11 +323,11 @@ final class Updater: ObservableObject {
     }
 
     private static func fetch() async -> Release? {
-        // The feed as Office Commun signed it: appcast.json.zip, next to the
+        // The feed as its builder signed it: appcast.json.zip, next to the
         // plain one older builds read, holding the same file with its code
         // signature (build.sh). Only what comes out of it, checked, is read:
         // a feed a server or a hijacked answer made up is no feed at all.
-        guard let packed = await get(feed.appendingPathExtension("zip"), limit: 1 << 20),
+        guard let feed, let packed = await get(feed.appendingPathExtension("zip"), limit: 1 << 20),
               let data = await Task.detached(priority: .utility, operation: { Updater.opened(packed) }).value,
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let version = json["version"] as? String,
@@ -364,11 +375,13 @@ final class Updater: ObservableObject {
         return data
     }
 
-    /// The team that signs Search's releases, and with them its feed.
-    nonisolated static let team = "7BYKA895MC"
-    nonisolated static let feedIdentifier = "com.officecommun.search.appcast"
+    /// The team that signs this fork's releases, and with them its feed:
+    /// the builder's (Brand.teamID). Without one nothing can be told from a
+    /// forgery, so nothing is accepted.
+    nonisolated static var team: String? { Brand.teamID }
+    nonisolated static var feedIdentifier: String { Brand.feedIdentifier }
 
-    /// The feed inside `packed`, if it is Office Commun's: appcast.json with
+    /// The feed inside `packed`, if it is the builder's: appcast.json with
     /// a code signature (codesign keeps it in the file's extended attributes,
     /// and ditto carries those in the ZIP) that holds up and meets the
     /// Developer ID requirement for the team and the feed's own identifier.
@@ -389,7 +402,7 @@ final class Updater: ObservableObject {
         else { return nil }
         var code: SecStaticCode?
         guard SecStaticCodeCreateWithPath(file as CFURL, [], &code) == errSecSuccess, let code,
-              let requirement = Swap.developerID(team: team, identifier: feedIdentifier),
+              let team, let requirement = Swap.developerID(team: team, identifier: feedIdentifier),
               SecStaticCodeCheckValidity(code, [], requirement) == errSecSuccess
         else { return nil }
         return data
@@ -404,7 +417,7 @@ final class Updater: ObservableObject {
     private static func link(_ value: Any?) -> URL? {
         guard let url = (value as? String).flatMap(URL.init(string:)) else { return nil }
         guard url.scheme == "https" || (overridden && url.scheme == "http") else { return nil }
-        guard url.host == feed.host else { return nil }
+        guard let feed, url.host == feed.host else { return nil }
         return url
     }
 }
@@ -540,12 +553,12 @@ private enum Swap {
         guard let expected = release.dmgSha256 else { throw Refused.hash }
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("search-disk-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        let dmg = folder.appendingPathComponent("Search \(release.version).dmg")
+        let dmg = folder.appendingPathComponent("\(Brand.name) \(release.version).dmg")
         try await download(release.dmg, to: dmg)
         guard try digest(of: dmg) == expected else { throw Refused.hash }
         var code: SecStaticCode?
         guard SecStaticCodeCreateWithPath(dmg as CFURL, [], &code) == errSecSuccess, let code,
-              let requirement = developerID(team: Updater.team, identifier: nil),
+              let team = Updater.team, let requirement = developerID(team: team, identifier: nil),
               SecStaticCodeCheckValidity(code, [], requirement) == errSecSuccess
         else { throw Refused.unsigned }
         return dmg
@@ -610,7 +623,10 @@ private enum Swap {
 extension Updater {
     /// Developer ID for this team, and the identifier when given: the same
     /// requirement a release is checked against, for the AI engine too.
-    nonisolated static func developerID(team: String, identifier: String?) -> SecRequirement? {
-        Swap.developerID(team: team, identifier: identifier)
+    nonisolated static func developerID(team: String?, identifier: String?) -> SecRequirement? {
+        // No team configured (Brand.teamID): no requirement, and so no
+        // signature that can meet one. Everything asking fails closed.
+        guard let team else { return nil }
+        return Swap.developerID(team: team, identifier: identifier)
     }
 }

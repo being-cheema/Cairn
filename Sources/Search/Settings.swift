@@ -1068,10 +1068,11 @@ struct SettingsPanel: View {
                 .aspectRatio(Logomark.canvas.width / Logomark.canvas.height, contentMode: .fit)
                 .frame(height: 34)
             VStack(alignment: .leading, spacing: 3) {
-                Text("Search")
+                Text(Brand.name)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Palette.ink)
-                Text("by Office Commun · version \(Updater.version)")
+                // The credit the MIT licence and the upstream's request ask for.
+                Text("A fork of Search by Office Commun (MIT) · version \(Updater.version)")
                     .font(.system(size: 12))
                     .foregroundStyle(Palette.muted)
             }
@@ -1083,21 +1084,22 @@ struct SettingsPanel: View {
     private var versionTitle: String {
         switch updater.stage {
         case .none: return "Updates"
-        case .fetching(let next): return "Search \(next.version) is downloading…"
-        case .ready(let next): return "Search \(next.version) is ready"
-        case .offered(let next), .waiting(let next): return "Search \(next.version) is out"
+        case .fetching(let next): return "\(Brand.name) \(next.version) is downloading…"
+        case .ready(let next): return "\(Brand.name) \(next.version) is ready"
+        case .offered(let next), .waiting(let next): return "\(Brand.name) \(next.version) is out"
         }
     }
 
     private var versionDetail: String {
         switch updater.stage {
         case .none:
+            guard Updater.configured else { return "This copy has no update feed, so it never looks. Build a newer one" }
             return updater.lastChecked.map { "Checked \($0.formatted(.relative(presentation: .named))), every hour on its own" }
                 ?? "Checked every hour on its own"
         case .fetching(let next):
             return next.notes ?? "Quietly, in the background. Nothing you have set is touched"
         case .ready(let next):
-            return next.notes ?? "It's there the next time you open Search"
+            return next.notes ?? "It's there the next time you open \(Brand.name)"
         case .offered(let next):
             return next.notes ?? "Open the disk image, the same as the first time"
         case .waiting(let next):
@@ -1108,6 +1110,8 @@ struct SettingsPanel: View {
     @ViewBuilder
     private var versionControl: some View {
         switch updater.stage {
+        case .none where !Updater.configured:
+            EmptyView()
         case .none:
             Pill(updater.checking ? "Checking…" : "Check now") {
                 updater.check { found in
