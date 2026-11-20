@@ -9,6 +9,9 @@ struct PasswordsPanel: View {
     @FocusState private var hunting: Bool
     @State private var open: String?
     @State private var adding = false
+    /// What Search kept under its own label, not yet copied (Vault.legacy).
+    @State private var legacy: [Kept] = []
+    @State private var copying = false
 
     var body: some View {
         Plate("Passwords", width: 620, close: { browser.managing = false }) {
@@ -51,6 +54,24 @@ struct PasswordsPanel: View {
             }
         } foot: {
             VStack(alignment: .leading, spacing: 10) {
+                // Only while there is something to copy, which is only for a
+                // person who had used the app this one comes from.
+                if !legacy.isEmpty {
+                    HStack(spacing: 8) {
+                        Text(legacy.count == 1
+                             ? "1 password was kept by Search, the app this one comes from."
+                             : "\(legacy.count) passwords were kept by Search, the app this one comes from.")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Palette.ink)
+                        Spacer(minLength: 0)
+                        Pill(copying ? "Copying…" : "Copy to \(Brand.name)…") { copyLegacy() }
+                            .disabled(copying)
+                    }
+                    Text("macOS asks for your login password to let each one go; Always Allow asks once. Nothing in Search is changed or removed.")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Palette.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 HStack(spacing: 8) {
                     Text("Bring in from")
                         .font(.system(size: 12))
@@ -72,7 +93,7 @@ struct PasswordsPanel: View {
                         .font(.system(size: 12))
                         .foregroundStyle(Palette.muted)
                 }
-                Text("macOS asks once for that browser's keychain key. Nothing is changed there; everything lands in your own keychain, under Search.")
+                Text("macOS asks once for that browser's keychain key. Nothing is changed there; everything lands in your own keychain, under \(Brand.name).")
                     .font(.system(size: 11.5))
                     .foregroundStyle(Palette.muted)
                     .fixedSize(horizontal: false, vertical: true)
@@ -81,6 +102,28 @@ struct PasswordsPanel: View {
         .animation(Motion.settle, value: adding)
         .animation(Motion.settle, value: open)
         .onAppear { hunting = true }
+        .task { await refreshLegacy() }
+    }
+
+    private func refreshLegacy() async {
+        legacy = await Task.detached(priority: .utility) { Vault.legacy() }.value
+    }
+
+    /// The copy, read item by item off the main thread: each read may put up
+    /// the system's own prompt, and a wait on one is not a frozen window.
+    private func copyLegacy() {
+        let items = legacy
+        copying = true
+        Task {
+            let result = await Task.detached(priority: .userInitiated) { Vault.copyLegacy(items) }.value
+            copying = false
+            browser.relist()
+            await refreshLegacy()
+            let done = result.copied == 1 ? "1 password" : "\(result.copied) passwords"
+            browser.announce(result.skipped == 0
+                             ? "Copied \(done) from Search"
+                             : "Copied \(done) from Search, \(result.skipped) not allowed — try again to copy those")
+        }
     }
 
     /// A site, and under it its accounts once opened.

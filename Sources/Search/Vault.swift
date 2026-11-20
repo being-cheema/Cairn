@@ -104,7 +104,7 @@ enum Vault {
     }
 
     /// The items' attributes — no secrets — narrowed by whatever is given.
-    private static func rows(where extra: [String: Any]) -> [[String: Any]] {
+    private static func rows(where extra: [String: Any], label: String = Vault.label) -> [[String: Any]] {
         var query: [String: Any] = [
             kSecClass as String: kSecClassInternetPassword,
             kSecAttrLabel as String: label,
@@ -124,7 +124,7 @@ enum Vault {
     }
 
     /// One item's secret, by the two things that name it.
-    private static func secret(host: String, user: String) -> String? {
+    private static func secret(host: String, user: String, label: String = Vault.label) -> String? {
         var out: CFTypeRef?
         let status = SecItemCopyMatching([
             kSecClass as String: kSecClassInternetPassword,
@@ -180,6 +180,43 @@ enum Vault {
         return Kept(host: host, user: user, used: used, clear: clear)
     }
 
+    // MARK: - passwords the upstream's build kept
+
+    // The bundle id changed with the name, and the label every item is tagged
+    // with changed with it (Brand.keychainLabel), so what Search kept is
+    // not lost but unseen: this app lists only items tagged as its own.
+    // Nothing moves on its own. The items are counted without their secrets
+    // (which asks nothing), and copying them is a button on the Passwords page:
+    // each secret is read from an item another app made, which is the
+    // keychain's to allow, so macOS asks for the login password, once per
+    // item unless Always Allow is chosen. The originals are never touched, so
+    // a Search installed beside this one goes on working.
+
+    private static let legacyLabel = Store.world.map { "\(Brand.legacyKeychainLabel) (\($0))" } ?? Brand.legacyKeychainLabel
+
+    /// What Search kept that this app has not got yet, without secrets.
+    static func legacy() -> [Kept] {
+        guard legacyLabel != label else { return [] }
+        let have = Set(rows(where: [:]).compactMap(kept(from:)).map(\.id))
+        return rows(where: [:], label: legacyLabel).compactMap(kept(from:))
+            .filter { !have.contains($0.id) }
+            .sorted { $0.host == $1.host ? $0.user < $1.user : $0.host < $1.host }
+    }
+
+    /// Copies each of `items` under this app's own label, one keychain read
+    /// each. `skipped` are those whose secret was not handed over (a Deny, or
+    /// an item with none): left as they are, offered again next time.
+    static func copyLegacy(_ items: [Kept]) -> (copied: Int, skipped: Int) {
+        var copied = 0, skipped = 0
+        for item in items {
+            guard let password = secret(host: item.host, user: item.user, label: legacyLabel),
+                  save(host: item.host, user: item.user, password: password, used: item.used, clear: item.clear)
+            else { skipped += 1; continue }
+            copied += 1
+        }
+        return (copied, skipped)
+    }
+
     // MARK: - writing
 
     @discardableResult
@@ -213,6 +250,13 @@ enum Vault {
         guard status == errSecItemNotFound else { return false }
 
         var fresh = identity.merging(fields) { _, new in new }
+        // The keychain's own key for an internet password is its server,
+        // account, protocol and the like — not its label — so an item of
+        // the same account that the upstream's Search kept would make this
+        // add fail as a duplicate, and nothing would be saved. A security
+        // domain of our own makes ours a different item, which is also what
+        // lets a copy of the upstream's sit beside it (copyLegacy).
+        fresh[kSecAttrSecurityDomain as String] = Brand.bundleID
         fresh[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlocked
         return SecItemAdd(fresh as CFDictionary, nil) == errSecSuccess
     }

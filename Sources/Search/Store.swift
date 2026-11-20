@@ -131,8 +131,37 @@ enum Store {
                 try? files.moveItem(at: old, to: home)
             }
         }
+        // A fork's own start. The upstream's folder, when this app has none of
+        // its own yet, is *copied*: moved, it would take the data from a
+        // Search installed beside this one. Copied beside the destination and
+        // renamed into place, so an interrupted copy leaves no half a folder
+        // that the next launch would take for the whole. Nothing is read out
+        // of it here; it is the same files the app always wrote.
+        if !testing {
+            let upstream = support.appendingPathComponent(Brand.legacyFolderName, isDirectory: true)
+            copyUpstream(from: upstream, to: home)
+        }
         return home
     }()
+
+    /// `upstream` copied to `home`, when `home` isn't there and it is. Beside
+    /// it and then renamed, so an interrupted copy leaves nothing that would
+    /// pass for a whole folder. Returns whether it copied.
+    @discardableResult
+    static func copyUpstream(from upstream: URL, to home: URL) -> Bool {
+        let files = FileManager.default
+        guard !files.fileExists(atPath: home.path), files.fileExists(atPath: upstream.path) else { return false }
+        let partial = home.deletingLastPathComponent().appendingPathComponent("\(home.lastPathComponent).copying", isDirectory: true)
+        try? files.removeItem(at: partial)
+        do {
+            try files.copyItem(at: upstream, to: partial)
+            try files.moveItem(at: partial, to: home)
+            return true
+        } catch {
+            try? files.removeItem(at: partial)
+            return false
+        }
+    }
 
     static func file(_ name: String) -> URL {
         folder.appendingPathComponent(name)
