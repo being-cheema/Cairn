@@ -22,7 +22,7 @@ import SystemConfiguration
 //
 // Off unless turned on (Settings › General › Sync with your other Macs).
 //
-// In the folder, "Search Sync/<scope>/<device>.json": one file per Mac per
+// In the folder, "<Brand.name> Sync/<scope>/<device>.json": one file per Mac per
 // scope, written only by that Mac, so two Macs never write the same file.
 // The scopes: "app" for the settings below, and "profile-<id>" for each
 // profile's spaces, pins and bookmarks — a profile's never mixes with
@@ -129,7 +129,7 @@ final class Sync: ObservableObject {
     nonisolated static let folderKey = "sync.folder"
     nonisolated static let deviceKey = "sync.device"
     /// The folder Search makes inside the one chosen.
-    nonisolated static let inside = "Search Sync"
+    nonisolated static let inside = "\(Brand.name) Sync"
 
     /// This Mac's id in the folder: made once, kept with the settings, so
     /// each test world (SEARCH_PROBE=<name>) is a Mac of its own.
