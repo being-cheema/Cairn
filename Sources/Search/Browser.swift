@@ -5190,7 +5190,9 @@ final class Browser: NSObject, ObservableObject {
         // Search's own pages have no address, only their search:// one: kept
         // by that, so ⇧⌘T after closing History brings History back rather
         // than the tab closed before it.
-        guard !tab.shy, let url = tab.address ?? tab.page?.url else { return }
+        // Nor a page from an agent's task space: reopened it would load in
+        // your cookies, which is what the space is there to keep it from.
+        guard !tab.shy, tab.store.isPersistent, let url = tab.address ?? tab.page?.url else { return }
         ghosts.append(Ghost(url: url, title: tab.title, index: index, groupID: tab.groupID,
                             partner: partner, onLeft: onLeft, was: tab.id, batch: batching?.id,
                             kind: batching?.kind ?? .clear, muted: tab.muted,
@@ -6148,9 +6150,15 @@ final class Browser: NSObject, ObservableObject {
     /// looking at, and marked as not yours. `shy`: a private one, for a test run.
     /// `agent`: a coding agent's (AgentControl), marked as such.
     @discardableResult
-    func benchOpen(_ url: URL, shy: Bool = false, agent: Bool = false) -> Tab {
+    /// `store`: the agent's task space, a cookie store of its own (AgentControl).
+    func benchOpen(_ url: URL, shy: Bool = false, agent: Bool = false, store: WKWebsiteDataStore? = nil) -> Tab {
         let url = Browser.page(url)
-        let tab = Tab(shy: shy, bench: true, configuration: shy ? nil : Browser.extensionConfiguration(for: url))
+        // An extension's own page keeps its own configuration; any other gets
+        // the task's store, so nothing of yours is in it.
+        let configuration = shy ? nil
+            : (store.flatMap { Browser.extensionConfiguration(for: url) == nil ? Web.configuration(store: $0, isolated: true) : nil })
+            ?? Browser.extensionConfiguration(for: url)
+        let tab = Tab(shy: shy, bench: true, configuration: configuration)
         tab.agent = agent
         prepare(tab)
         tabs.append(tab)

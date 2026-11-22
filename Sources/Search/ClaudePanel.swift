@@ -12,6 +12,8 @@ import SwiftUI
 
 struct ClaudePanel: View {
     @ObservedObject var session: ClaudeSession
+    /// Settings › Developer › Agents work in a clean browser is on.
+    var clean = false
     let close: () -> Void
     let openSettings: () -> Void
     @FocusState private var typing: Bool
@@ -98,7 +100,8 @@ struct ClaudePanel: View {
                 Text("What should I do?")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Palette.ink)
-                Text("I work in tabs of my own, and you are asked before I start.")
+                Text(clean ? "I work in a clean browser of my own: not signed in to anything, and gone when we're done. You are asked before I start."
+                           : "I work in tabs of my own, and you are asked before I start.")
                     .font(.system(size: 12))
                     .foregroundStyle(Palette.muted)
                     .fixedSize(horizontal: false, vertical: true)

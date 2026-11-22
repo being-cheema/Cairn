@@ -429,6 +429,10 @@ final class AgentSession: ObservableObject, Identifiable {
     fileprivate var pages: [String: Tab.ID] = [:]
     /// The tabs it opened, and the ones those opened.
     fileprivate(set) var own: Set<Tab.ID> = []
+    /// The task's own cookie store, when Settings › Developer › Agents work in
+    /// a clean browser is on: made with its first tab, shared by the tabs it
+    /// opens and those they open, and gone with them (AgentControl.end).
+    fileprivate(set) var taskStore: WKWebsiteDataStore?
     /// p1 → the number of its last read.
     fileprivate var snaps: [String: Int] = [:]
     private var counter = 0
@@ -790,6 +794,7 @@ final class AgentControl: ObservableObject {
         }
         session.hello?(AgentRefusal(code: "stopped", message: "Stopped in Search").said)
         session.hello = nil
+        closeTaskTabs(session)
         session.consent.end()
         // What was said last goes if the socket takes it now; nothing waits.
         flush(session)
@@ -1044,6 +1049,18 @@ final class AgentControl: ObservableObject {
                                                      "adhoc": $0.adhoc, "signed": $0.signed] } ?? [:]]
     }
 
+    /// The task is over: its tabs close, and the store they shared goes with
+    /// them, cookies and all. Only with a task store: without one the tabs
+    /// are left as they always were.
+    private func closeTaskTabs(_ session: AgentSession) {
+        guard session.taskStore != nil else { return }
+        for browser in Browsers.all {
+            for tab in browser.tabs where session.own.contains(tab.id) { browser.close(tab) }
+        }
+        session.own = []
+        session.taskStore = nil
+    }
+
     /// A tab an agent's tab opened (Browser's createWebViewWith): its own too.
     func adopted(_ tab: Tab, from opener: Tab) {
         guard let session, session.own.contains(opener.id) else { return }
@@ -1098,7 +1115,8 @@ final class AgentControl: ObservableObject {
                 tabs(session, browser, answer)
             case "open":
                 guard let url = AgentRules.address(request["url"] as? String ?? "") else { throw Self.badAddress }
-                let tab = browser.benchOpen(url, agent: true)
+                if browser.prefs.taskSpaces, session.taskStore == nil { session.taskStore = .nonPersistent() }
+                let tab = browser.benchOpen(url, agent: true, store: session.taskStore)
                 session.own.insert(tab.id)
                 work(on: tab, session)
                 PageRoom.shared.house(tab)

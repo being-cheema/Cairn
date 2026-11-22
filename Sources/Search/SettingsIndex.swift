@@ -543,6 +543,12 @@ enum SettingsIndex {
               keys: ["agents.logins"],
               words: ["agent", "claude", "password", "sign in", "login", "autofill", "keychain"]),
 
+        .init(id: "agents.taskspaces", group: "developer", icon: "shippingbox",
+              title: "Agents work in a clean browser", detail: "Their tabs start signed out and leave nothing behind",
+              more: "Tabs a coding agent opens, Claude's included, get cookies and storage of their own for that task, instead of yours, and are closed with all of it when the task ends: Stop, New Chat, closing the panel, the agent disconnecting or the window closing. They start signed out of everything. The agent can still ask the browser to sign in with a saved login if that switch is on, or you can sign in by hand in its tab. Your own tabs and cookies are never used or copied.",
+              keys: ["agents.taskspaces"],
+              words: ["agent", "claude", "clean", "private", "cookies", "isolated", "task", "sandbox", "signed out"]),
+
         // Moved to a menu, or always on: only the find field says so.
         .init(id: "autocorrect", group: "pages", icon: "textformat.abc.dottedunderline",
               title: "Correct spelling as you type", detail: "Now in Edit › Spelling and Grammar, as in Safari",

@@ -702,7 +702,7 @@ struct SidePanelView: View {
                            close: { browser.closeSidePanel() })
                 .environment(\.asTab, true)
         case .claude:
-            ClaudePanel(session: browser.claude, close: { browser.closeSidePanel() },
+            ClaudePanel(session: browser.claude, clean: browser.prefs.taskSpaces, close: { browser.closeSidePanel() },
                         openSettings: { browser.tuning = true })
         case nil:
             Color.clear

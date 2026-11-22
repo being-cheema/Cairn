@@ -200,6 +200,12 @@ final class Preferences: ObservableObject {
     @Published var claudeActs: Bool {
         didSet { store.set(claudeActs, forKey: "claude.acts") }
     }
+    /// Tabs a coding agent opens live in a clean browser of their own for the
+    /// task (AgentControl): no cookies of yours, nothing kept when it ends.
+    /// Off unless turned on, so nothing changes until then.
+    @Published var taskSpaces: Bool {
+        didSet { store.set(taskSpaces, forKey: "agents.taskspaces") }
+    }
     /// A coding agent may have the browser fill a saved login into a page of
     /// its own (AgentControl, `sign_in`): the browser does it, and the agent
     /// is never given the password. Off unless turned on, and like the agents
@@ -1144,6 +1150,7 @@ final class Preferences: ObservableObject {
         applePasswords = store.bool(forKey: "passwords.apple")
         claudePanel = store.bool(forKey: "claude.panel")
         claudeActs = store.bool(forKey: "claude.acts")
+        taskSpaces = store.bool(forKey: "agents.taskspaces")
         let loginsAsked = store.bool(forKey: "agents.logins")
         let loginsAllowed = loginsAsked && (Store.testing || Preferences.agentLoginsMark.given)
         agentLogins = loginsAllowed

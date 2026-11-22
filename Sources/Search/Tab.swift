@@ -85,7 +85,7 @@ enum Web {
     /// screen — a parked row made ahead of time (see Spaces.swift).
     /// `store`: a shy tab's own, for one opened from it — a link followed
     /// out of a private page is still signed in to whatever that page was.
-    static func configuration(shy: Bool = false, space: UUID? = nil, store: WKWebsiteDataStore? = nil) -> WKWebViewConfiguration {
+    static func configuration(shy: Bool = false, space: UUID? = nil, store: WKWebsiteDataStore? = nil, isolated: Bool = false) -> WKWebViewConfiguration {
         let config = WKWebViewConfiguration()
         // The real store, not the ephemeral one: staying signed in between
         // launches is the difference between a browser and a preview pane. A
@@ -95,10 +95,12 @@ enum Web {
         config.websiteDataStore = store ?? (shy ? .nonPersistent() : MainActor.assumeIsolated { Spaces.store(for: space ?? Spaces.current) })
         // A private tab's store is made right here and is in no list, so the
         // proxy is put on it here too, or a private tab alone would go direct.
-        if shy { let own = config.websiteDataStore; MainActor.assumeIsolated { BrowserProxy.shared.attach(own) } }
+        if shy || isolated { let own = config.websiteDataStore; MainActor.assumeIsolated { BrowserProxy.shared.attach(own) } }
         // Web notifications go through the store (see Notifications.swift);
         // a private tab's is left without, and a page there is refused.
-        if !shy { let kept = config.websiteDataStore; MainActor.assumeIsolated { SiteNotifications.shared.attach(kept) } }
+        // An isolated one (an agent's task space) is a private one in this: a
+        // page there is refused too.
+        if !shy, !isolated { let kept = config.websiteDataStore; MainActor.assumeIsolated { SiteNotifications.shared.attach(kept) } }
         config.processPool = Web.pool
         // A test run's pretend camera and microphone (see ExtensionCapture).
         if #available(macOS 15.4, *), Store.testing { ExtensionCapture.mockDevices(config.preferences) }
