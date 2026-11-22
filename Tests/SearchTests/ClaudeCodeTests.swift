@@ -34,9 +34,11 @@ final class ClaudeCodeTests: XCTestCase {
     }
 
     func testTheEnvironmentCarriesNothingOfOurs() {
-        let env = ClaudeCode.environment(home: "/Users/someone")
+        let env = ClaudeCode.environment(home: "/Users/someone", user: "someone")
         XCTAssertEqual(env["HOME"], "/Users/someone")
-        XCTAssertEqual(Set(env.keys), ["HOME", "PATH", "LANG", "NO_COLOR", "CLAUDE_CODE_ENTRYPOINT"])
+        XCTAssertEqual(env["USER"], "someone", "its sign-in is a keychain item under this account")
+        XCTAssertEqual(env["LOGNAME"], "someone")
+        XCTAssertEqual(Set(env.keys), ["HOME", "USER", "LOGNAME", "PATH", "LANG", "NO_COLOR"])
         XCTAssertFalse(env.keys.contains { $0.contains("KEY") || $0.contains("TOKEN") || $0.hasPrefix("ANTHROPIC") })
     }
 

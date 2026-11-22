@@ -135,16 +135,19 @@ enum ClaudeCode {
         ]
     }
 
-    /// What the program is given to run in: a home it needs to find its own
-    /// sign-in, a PATH that leads nowhere interesting, and nothing of this
-    /// app's — no key, no token, no variable somebody set for a test.
-    static func environment(home: String = NSHomeDirectory()) -> [String: String] {
+    /// What the program is given to run in: a home and a user name, which it
+    /// needs to find its own sign-in (the keychain item it keeps is under the
+    /// account of that name), a PATH that leads nowhere interesting, and
+    /// nothing of this app's — no key, no token, no variable somebody set for
+    /// a test. No label of its own either: it is run as the person would run it.
+    static func environment(home: String = NSHomeDirectory(), user: String = NSUserName()) -> [String: String] {
         [
             "HOME": home,
+            "USER": user,
+            "LOGNAME": user,
             "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
             "LANG": "en_US.UTF-8",
             "NO_COLOR": "1",
-            "CLAUDE_CODE_ENTRYPOINT": "cairn-side-panel",
         ]
     }
 
