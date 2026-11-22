@@ -145,10 +145,14 @@ class Handler(BaseHTTPRequestHandler):
 
     def record(self, method, body=""):
         kind, failed = judge(method, self.path, body)
-        entry = {"at": time.strftime("%H:%M:%S"), "method": method, "path": self.path, "failed": failed, "why": kind}
+        # Who sent it, and which fields (names only, never values): to tell a
+        # form Claude sent from one something else did.
+        fields = sorted({pair.split("=")[0] for pair in body.split("&") if pair}) if method == "POST" else []
+        entry = {"at": time.strftime("%H:%M:%S"), "method": method, "path": self.path, "failed": failed, "why": kind,
+                 "from": self.headers.get("Referer", ""), "fields": fields}
         with LOCK:
             EVENTS.append(entry)
-        line = f"{entry['at']}  {method:4} {self.path[:90]}"
+        line = f"{entry['at']}  {method:4} {self.path[:90]}" + (f"  from {entry['from']} fields {fields}" if method == "POST" else "")
         print(red(f"FAIL  {line}   <- {kind}") if failed else f"      {line}", flush=True)
 
     def send(self, body, kind="text/html; charset=utf-8", status=200):
