@@ -384,8 +384,10 @@ def main():
         x, err = a.tool("list_tabs")
         t.ok("and isn't asked about again straight away", err and code(x) == "not_now", x)
         a.close()
-        t.ok("its tab stays for you to look at",
-             any(x["url"].startswith(BASE + "/done") for x in sv.cmd({"do": "tabs"})["tabs"]))
+        # The task is over, so its clean browser goes with its tabs (task
+        # spaces): nothing of its pages, or the cookies they set, is left.
+        t.ok("its tabs go with the task",
+             until(lambda: not any(x["url"].startswith(BASE + "/done") for x in sv.cmd({"do": "tabs"})["tabs"])))
 
         # ---- a second agent, allowed to see your tabs
         time.sleep(11)
