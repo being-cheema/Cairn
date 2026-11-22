@@ -37,7 +37,7 @@ BUILT = ROOT / "build" / "Cairn.app"
 HOME = os.path.expanduser("~")
 ID = "io.github.being-cheema.cairn.autocorrect"
 W = f"ac-{hashlib.sha1(str(ROOT).encode()).hexdigest()[:8]}"
-SUPPORT = f"{HOME}/Library/Application Support/Search ({W})"
+SUPPORT = f"{HOME}/Library/Application Support/Cairn ({W})"
 SUITE = f"io.github.being-cheema.cairn.test.{W}"
 SOCK = f"{SUPPORT}/bench.sock"
 COPY = Path(tempfile.mkdtemp(prefix="ac-probe-")) / "Cairn.app"

@@ -59,7 +59,7 @@ HOME = os.path.expanduser("~")
 SUPPORT = f"{HOME}/Library/Application Support"
 WEBKIT = f"{HOME}/Library/WebKit/io.github.being-cheema.cairn"
 LEASES = f"{HOME}/Library/Caches/io.github.being-cheema.cairn.bench-mcp"
-REAL = f"{SUPPORT}/Search"
+REAL = f"{SUPPORT}/Cairn"
 FIRST_SPACE = "00000000-0000-0000-0000-000000000001"
 PERSONAL = "00000000-0000-0000-0000-0000000000A1"
 VERSIONS = ["2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"]
@@ -94,7 +94,7 @@ def named(world):
 
 
 def folder(world):
-    return f"{SUPPORT}/Search ({world})"
+    return f"{SUPPORT}/Cairn ({world})"
 
 
 def suite(world):
@@ -112,7 +112,7 @@ def ask(world, request, patience=35.0):
         try:
             s.connect(socket_of(world))
         except (FileNotFoundError, ConnectionRefusedError):
-            raise Refusal("not_listening", f"Search ({world}) isn't listening", "Call open_session.") from None
+            raise Refusal("not_listening", f"Cairn ({world}) isn't listening", "Call open_session.") from None
         s.sendall((json.dumps(request) + "\n").encode())
         chunks = []
         try:
@@ -164,7 +164,7 @@ def probe(pid):
     """Whether a process holds some world's bench socket: a test run, not
     someone's Search."""
     names = subprocess.run(["lsof", "-a", "-U", "-p", pid, "-Fn"], capture_output=True, text=True, check=False).stdout
-    return any(n.startswith("n") and "/Search (" in n and n.endswith("/bench.sock") for n in names.splitlines())
+    return any(n.startswith("n") and "/Cairn (" in n and n.endswith("/bench.sock") for n in names.splitlines())
 
 
 def loaded(path):
@@ -286,7 +286,7 @@ class Session:
         if not self.pids or not held or not held <= self.pids:
             raise Refusal(
                 "not_ours",
-                f"Search ({self.world}) is no longer the process this session started",
+                f"Cairn ({self.world}) is no longer the process this session started",
                 "close_session, then open_session.",
             )
         return ask(self.world, request, patience)
@@ -390,10 +390,10 @@ def launch(s):
             break
         time.sleep(0.1)
     else:
-        raise Refusal("not_listening", f"Search ({s.world}) didn't start listening within 30 s")
+        raise Refusal("not_listening", f"Cairn ({s.world}) didn't start listening within 30 s")
     s.pids = (running() - before) & holding(s.world)
     if not s.pids:
-        raise Refusal("not_ours", f"Search ({s.world}) is listening, but not from the process just started")
+        raise Refusal("not_ours", f"Cairn ({s.world}) is listening, but not from the process just started")
 
 
 def quit_world(s):

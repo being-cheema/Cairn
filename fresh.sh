@@ -29,7 +29,7 @@ fi
 STORE=$(printf '5E4C%04X-%04X-4000-8000-000000000001' $((HASH >> 16)) $((HASH & 0xFFFF)))
 
 if [ "${1:-}" != "again" ]; then
-  rm -rf "$HOME/Library/Application Support/Search ($WORLD)"
+  rm -rf "$HOME/Library/Application Support/Cairn ($WORLD)"
   defaults delete "$SUITE" 2>/dev/null || true
   # Store.probeStore(1), the fixed identifier of the world's website data.
   rm -rf "$HOME/Library/WebKit/io.github.being-cheema.cairn/WebsiteDataStore/$STORE"
