@@ -516,6 +516,9 @@ final class Browser: NSObject, ObservableObject {
     /// not, and what is in it.
     @Published var sidePanelShown = false
     @Published var sidePanel: SidePanelContent?
+    /// The conversation in the side panel's Claude (ClaudePanel), made when
+    /// the panel first asks for it. Nothing runs until something is sent.
+    lazy var claude = ClaudeSession(agentsOn: { [weak self] in self?.prefs.agents ?? false })
     /// The Settings page it opens on next.
     var settingsPage: SettingsPanel.Page {
         get {

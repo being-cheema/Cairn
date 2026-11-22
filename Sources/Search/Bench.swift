@@ -4507,6 +4507,7 @@ final class Bench {
                                                        "developerExtras": web.flatMap { $0.configuration.preferences.value(forKey: "developerExtrasEnabled") as? Bool } ?? false]
                 .merging(SidePanelPages.shared.siteReport(in: browser)) { a, _ in a }
             case .downloads: content = ["kind": "downloads"]
+            case .claude: content = ["kind": "claude"]
             case nil: break
             }
             // Where the panel's page and every page sit in the window, from

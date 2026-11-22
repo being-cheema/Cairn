@@ -527,6 +527,12 @@ enum SettingsIndex {
               keys: ["agents"],
               words: ["agent", "ai", "claude", "claude code", "codex", "mcp", "automation", "computer use", "developer"]),
 
+        .init(id: "claude.panel", group: "developer", icon: "sparkles",
+              title: "Claude in the side panel", detail: "Your own Claude Code, beside the page, using the browser's tools and nothing else",
+              more: "Opens from View › Claude Panel and runs the claude program you installed and signed in to, never a key or sign-in of this app's. It is started with no shell, no files and none of your Claude settings, in an empty folder, and only if Anthropic signed it. It uses the browser through the same door as any coding agent, so it needs “Let coding agents use Search” on, asks you in the window first, works in tabs of its own and never sees passwords, card numbers or one-time codes. What it says is shown as plain text. Closing the panel stops it.",
+              keys: ["claude.panel"],
+              words: ["claude", "claude code", "ai", "agent", "assistant", "side panel", "chat"]),
+
         // Moved to a menu, or always on: only the find field says so.
         .init(id: "autocorrect", group: "pages", icon: "textformat.abc.dottedunderline",
               title: "Correct spelling as you type", detail: "Now in Edit › Spelling and Grammar, as in Safari",

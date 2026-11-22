@@ -188,6 +188,12 @@ final class Preferences: ObservableObject {
         }
     }
     static let agentsMark = SwitchMark(service: Brand.service("agents"))
+    /// Claude in the side panel (ClaudePanel): the person's own Claude Code,
+    /// run headless with the browser's tools and nothing else. Off unless
+    /// turned on; it also needs `agents`, which is the person's to allow.
+    @Published var claudePanel: Bool {
+        didSet { store.set(claudePanel, forKey: "claude.panel") }
+    }
     /// Found on at launch without the mark, and put back to off.
     private(set) var agentsRefused = false
     /// Light, dark, or the Mac's own.
@@ -1117,6 +1123,7 @@ final class Preferences: ObservableObject {
         savesPasswords = store.object(forKey: "passwords.save") as? Bool ?? true
         fillsPasswords = store.object(forKey: "passwords.fill") as? Bool ?? true
         applePasswords = store.bool(forKey: "passwords.apple")
+        claudePanel = store.bool(forKey: "claude.panel")
         let contacts = store.bool(forKey: "contacts.fill")
         fillsContacts = contacts
         FormRelay.contacts = contacts

@@ -34,6 +34,10 @@ enum SidePanelContent: Equatable {
     /// Downloads, for whoever chose it in Settings › Downloads › Open
     /// Downloads: the same list as its tab, beside every page.
     case downloads
+    /// Claude, as the person's own Claude Code answers in it (ClaudeSession),
+    /// for whoever turned on Settings › About › Developer › Claude in the
+    /// side panel.
+    case claude
 }
 
 /// The sites offered in View › Side Panel, as they are typed: a short list,
@@ -163,6 +167,20 @@ extension Browser {
         sidePanelShown = true
     }
 
+    /// Claude in the side panel; again, and it goes, ending what it was doing.
+    /// Not in a popup window, and not at all unless the setting is on.
+    func toggleClaudePanel() {
+        if sidePanelShown, sidePanel == .claude {
+            closeSidePanel()
+            return
+        }
+        guard prefs.claudePanel, !isPopup else { return }
+        if case .page(_, _, let tab?) = sidePanel { SidePanelPages.shared.unbind(tab, in: self) }
+        SidePanelPages.shared.drop(in: self)
+        sidePanel = .claude
+        sidePanelShown = true
+    }
+
     /// The tab's page into the side panel, from the tab's menu. Not a
     /// private tab's: the panel is signed in as the space is.
     func openInSidePanel(_ tab: Tab) {
@@ -189,6 +207,8 @@ extension Browser {
 
     /// Closed: an extension's page is let go, as Chrome does.
     func closeSidePanel() {
+        // Closing it is Stop: nothing goes on running behind a closed panel.
+        if sidePanel == .claude { claude.stop() }
         if case .page(_, _, let tab?) = sidePanel { SidePanelPages.shared.unbind(tab, in: self) }
         SidePanelPages.shared.drop(in: self)
         sidePanelShown = false
@@ -681,6 +701,9 @@ struct SidePanelView: View {
             DownloadsPanel(browser: browser, loot: browser.loot, compact: true,
                            close: { browser.closeSidePanel() })
                 .environment(\.asTab, true)
+        case .claude:
+            ClaudePanel(session: browser.claude, close: { browser.closeSidePanel() },
+                        openSettings: { browser.tuning = true })
         case nil:
             Color.clear
         }

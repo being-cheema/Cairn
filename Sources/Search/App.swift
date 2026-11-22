@@ -191,6 +191,13 @@ struct SearchApp: App {
                             .disabled(!(browser.active?.isWeb ?? false) || (browser.active?.shy ?? true))
                     }
                 }
+                // Claude in the side panel, only once it is on (Settings › About
+                // › Developer).
+                if browser.prefs.claudePanel {
+                    Button(browser.sidePanelShown && browser.sidePanel == .claude ? "Close Claude Panel" : "Claude Panel") {
+                        browser.toggleClaudePanel()
+                    }
+                }
                 // Dark pages, only once they are on (Settings › Appearance).
                 if browser.prefs.darkensPages {
                     Divider()

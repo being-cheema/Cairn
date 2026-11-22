@@ -827,6 +827,7 @@ struct SettingsPanel: View {
         case "about.notes": Pill("What's New…") { browser.lead(to: InternalPage(.notes)) }
         case "bench": Switch(on: $prefs.bench)
         case "agents": Switch(on: $prefs.agents)
+        case "claude.panel": Switch(on: $prefs.claudePanel)
         default: EmptyView()
         }
     }
