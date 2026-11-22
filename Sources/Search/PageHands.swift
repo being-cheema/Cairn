@@ -120,6 +120,31 @@ enum PageScripts {
       return s;
     }
 
+    // What a click on this element, or Return in it, would commit, for the
+    // agent's commit gates (AgentGate): its role and words, and the form it
+    // is in with what that holds. Read here, where the page can't edit it
+    // between the question and the click.
+    function gate(el) {
+      var form = el.form || (el.closest ? el.closest('form') : null);
+      var type = (el.type || '').toLowerCase(), tag = el.tagName.toLowerCase();
+      var submits = !!form && ((tag === 'button' && (type === '' || type === 'submit')) ||
+        (tag === 'input' && /^(submit|image)$/.test(type)));
+      var pw = false, card = false;
+      if (form) Array.prototype.forEach.call(form.elements, function (f) {
+        if (f.tagName !== 'INPUT') return;
+        var ac = (f.getAttribute('autocomplete') || '').toLowerCase();
+        var said = [f.name, f.id, f.getAttribute('aria-label'), f.getAttribute('placeholder')].join(' ');
+        if ((f.type || '').toLowerCase() === 'password') pw = true;
+        if (/(^|\s)cc-/.test(ac) || /card.?(number|num|no)|cc.?num|cvc|cvv|csc/i.test(said)) card = true;
+      });
+      var a = el.closest ? el.closest('a[href]') : null;
+      return { tag: tag, type: type, role: role(el), label: name(el), submits: submits, inForm: !!form, pw: pw, card: card,
+        method: form ? String(form.method || 'get').toLowerCase() : '',
+        action: form ? String(form.action || '').slice(0, 300) : '',
+        href: a ? String(a.href).slice(0, 300) : '',
+        enter: !!form && (submits || (tag === 'input' && !/^(checkbox|radio|button|file|range|color|reset)$/.test(type))) };
+    }
+
     """#
 
     private static let readBody = #"""
@@ -200,8 +225,9 @@ enum PageScripts {
           q = parts.join(' > ');
           if (document.querySelector(q) !== el) q = null;
         }
-        return JSON.stringify({ ok: true, selector: q, at: [Math.round(x), Math.round(y)] });
+        return JSON.stringify({ ok: true, selector: q, at: [Math.round(x), Math.round(y)], gate: gate(el) });
       }
+      if (how === 'probe') return JSON.stringify({ ok: true, gate: gate(el) });
       if (how === 'press') { el.click(); return JSON.stringify({ ok: true }); }
       if (how === 'scroll') {
         el.scrollIntoView({ block: 'center', inline: 'nearest' });
@@ -375,6 +401,18 @@ enum PageScripts {
     static func touch(key: String, snap: Int, index: Int, how: String, text: String?,
                       replace: Bool, strict: Bool = false) -> String {
         call(touchBody, [key, snap, index, how, text ?? NSNull(), replace, strict])
+    }
+
+    /// What the page has focused, as AgentGate describes an element: for
+    /// Return, which commits whatever form the focused field is in.
+    static func focused() -> String {
+        call(#"""
+        (function () {
+          var el = document.activeElement;
+          if (!el || el === document.body || el === document.documentElement) return JSON.stringify({ ok: true, gate: null });
+          return JSON.stringify({ ok: true, gate: gate(el) });
+        })
+        """#, [])
     }
 
     static func check(_ condition: [String: Any]) -> String {

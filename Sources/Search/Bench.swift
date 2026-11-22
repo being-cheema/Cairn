@@ -558,6 +558,12 @@ final class Bench {
                 agents.idleForTest = request["after"] as? Double
                 agents.letGoForTest = request["letGo"] as? Double
             case "deny": agents.answerForTest(allow: false, seesTabs: false)
+            // A held action (AgentGate): answered as its buttons would be,
+            // or the Approve button pressed with no click behind it, which
+            // is ignored.
+            case "approve": agents.answerHeldForTest(approve: true)
+            case "decline": agents.answerHeldForTest(approve: false)
+            case "pressApprove": agents.answerHeld(approve: true, event: nil)
             // The question's Allow pressed with no click behind it, as
             // Accessibility would press it: ignored.
             case "press": agents.answer(allow: true, event: nil)

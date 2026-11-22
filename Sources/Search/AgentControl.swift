@@ -360,6 +360,25 @@ struct AgentRefusal: Error {
 
 // MARK: - one connection
 
+/// An agent's action the browser is holding until you click Approve or
+/// Don't Approve on it in the window.
+@MainActor
+final class HeldAction: Identifiable {
+    enum Answer { case approved, declined, timedOut }
+    let id = UUID()
+    let hold: AgentGate.Hold
+    /// On the clock events are stamped with: a click in the first half second
+    /// is taken as meant for what was there before.
+    let since: TimeInterval
+    fileprivate let resolve: (Answer) -> Void
+
+    fileprivate init(hold: AgentGate.Hold, since: TimeInterval, resolve: @escaping (Answer) -> Void) {
+        self.hold = hold
+        self.since = since
+        self.resolve = resolve
+    }
+}
+
 @MainActor
 final class AgentSession: ObservableObject, Identifiable {
     let id = UUID()
@@ -433,6 +452,11 @@ final class AgentSession: ObservableObject, Identifiable {
     /// a clean browser is on: made with its first tab, shared by the tabs it
     /// opens and those they open, and gone with them (AgentControl.end).
     fileprivate(set) var taskStore: WKWebsiteDataStore?
+    /// The sites (registrable domains) this task has been to: what "leaving
+    /// the task's sites" is measured from (AgentGate).
+    fileprivate var sites = Set<String>()
+    /// An action held for your click (AgentGate), and what to do with the answer.
+    @Published fileprivate(set) var held: HeldAction?
     /// p1 → the number of its last read.
     fileprivate var snaps: [String: Int] = [:]
     private var counter = 0
@@ -794,6 +818,8 @@ final class AgentControl: ObservableObject {
         }
         session.hello?(AgentRefusal(code: "stopped", message: "Stopped in Search").said)
         session.hello = nil
+        // Nothing asked is left waiting on a session that has gone.
+        session.held?.resolve(.declined)
         closeTaskTabs(session)
         session.consent.end()
         // What was said last goes if the socket takes it now; nothing waits.
@@ -1040,13 +1066,69 @@ final class AgentControl: ObservableObject {
         return ["running": running, "connected": true, "state": state, "client": session.client,
                 "program": session.program, "seesTabs": session.consent.seesTabs, "wantsTabs": session.wantsTabs,
                 "drawn": allowButton?.window != nil && tabsBox?.window != nil,
-                "own": session.own.count, "auto": session.auto, "justAdmitted": session.justAdmitted, "admissions": admissions, "wantsAlways": session.wantsAlways,
+                "own": session.own.count, "held": session.held?.hold.summary ?? "", "heldReason": session.held?.hold.reason.rawValue ?? "",
+                "auto": session.auto, "justAdmitted": session.justAdmitted, "admissions": admissions, "wantsAlways": session.wantsAlways,
                 "offersAlways": session.noAlways == nil, "noAlways": session.noAlways ?? "",
                 "alwaysDrawn": alwaysBox?.window != nil, "busy": session.busy,
                 "pillDrawn": stopButton?.window != nil, "overPage": stopOverPage,
                 "workingOn": session.workingOn.map { Bench.short($0) } ?? "", "marked": marked,
                 "launcher": session.launcher.map { ["path": $0.path, "identifier": $0.identifier, "team": $0.team,
                                                      "adhoc": $0.adhoc, "signed": $0.signed] } ?? [:]]
+    }
+
+    // MARK: commit gates
+
+    /// How long a held action waits for your click.
+    static let holdFor: TimeInterval = 300
+    weak var approveButton: NSView?
+    weak var declineButton: NSView?
+
+    private func rules(_ browser: Browser) -> AgentGate.Rules {
+        AgentGate.Rules(commits: browser.prefs.agentGate, leaves: browser.prefs.agentLeave)
+    }
+
+    /// Puts `hold` to you in the window and calls `then` once with the
+    /// answer: yours, or none within `holdFor`, or the session going. The
+    /// agent's call waits for it, and gets the result, or why not.
+    private func ask(_ hold: AgentGate.Hold, _ session: AgentSession, then: @escaping (HeldAction.Answer) -> Void) {
+        var answered = false
+        let held = HeldAction(hold: hold, since: ProcessInfo.processInfo.systemUptime) { [weak session] verdict in
+            guard !answered else { return }
+            answered = true
+            session?.held = nil
+            if verdict == .approved, let site = hold.site { session?.sites.insert(site) }
+            then(verdict)
+        }
+        session.held = held
+        Self.log.notice("held for your click: \(hold.reason.rawValue, privacy: .public)")
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.holdFor) { [weak session] in
+            if let session, session.held === held { held.resolve(.timedOut) }
+        }
+    }
+
+    /// Approve or Don't Approve, from the question in the window: only a
+    /// fresh mouse click on that button (AgentRules.isClick), never a key
+    /// and never anything the agent sends.
+    func answerHeld(approve: Bool, event: NSEvent?) {
+        guard let session, let held = session.held,
+              AgentRules.isClick(event, on: approve ? approveButton : declineButton, in: session.browser?.window, after: held.since + 0.5)
+        else { return }
+        held.resolve(approve && live(session) ? .approved : .declined)
+    }
+
+    /// For the bench's `agents`, in a test run.
+    func answerHeldForTest(approve: Bool) {
+        guard Store.testing, let held = session?.held else { return }
+        held.resolve(approve ? .approved : .declined)
+    }
+
+    private static func declined(_ hold: AgentGate.Hold, _ verdict: HeldAction.Answer) -> [String: Any] {
+        if verdict == .timedOut {
+            return AgentRefusal(code: "no_answer", message: "The person didn't answer within \(Int(holdFor)) s: not done",
+                                hint: "Say in your reply what you were about to do and ask them. Don't repeat it.").said
+        }
+        return AgentRefusal(code: "declined", message: "The person did not approve this: \(hold.summary)",
+                            hint: "Don't try it again or another way round. Tell them what you wanted to do and why, and carry on with the rest.").said
     }
 
     /// The task is over: its tabs close, and the store they shared goes with
@@ -1115,18 +1197,40 @@ final class AgentControl: ObservableObject {
                 tabs(session, browser, answer)
             case "open":
                 guard let url = AgentRules.address(request["url"] as? String ?? "") else { throw Self.badAddress }
-                if browser.prefs.taskSpaces, session.taskStore == nil { session.taskStore = .nonPersistent() }
-                let tab = browser.benchOpen(url, agent: true, store: session.taskStore)
-                session.own.insert(tab.id)
-                work(on: tab, session)
-                PageRoom.shared.house(tab)
-                settle(tab, session, timeout: request["timeout"] as? Double ?? 20, answer)
+                func open() {
+                    guard self.live(session) else { return answer(AgentRefusal(code: "stopped", message: "Stopped in Search").said) }
+                    if browser.prefs.taskSpaces, session.taskStore == nil { session.taskStore = .nonPersistent() }
+                    let tab = browser.benchOpen(url, agent: true, store: session.taskStore)
+                    session.own.insert(tab.id)
+                    if let site = AgentGate.site(url) { session.sites.insert(site) }
+                    work(on: tab, session)
+                    PageRoom.shared.house(tab)
+                    settle(tab, session, timeout: request["timeout"] as? Double ?? 20, answer)
+                }
+                if let hold = AgentGate.hold(address: url, sites: session.sites, rules: rules(browser)) {
+                    ask(hold, session) { verdict in
+                        if verdict == .approved { open() } else { answer(Self.declined(hold, verdict)) }
+                    }
+                } else {
+                    open()
+                }
             case "go":
                 let tab = try self.tab(request, session, browser, .drive)
                 guard let url = AgentRules.address(request["url"] as? String ?? "") else { throw Self.badAddress }
-                tab.go(to: url)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
-                    self?.settle(tab, session, timeout: request["timeout"] as? Double ?? 20, answer)
+                func go() {
+                    guard self.live(session) else { return answer(AgentRefusal(code: "stopped", message: "Stopped in Search").said) }
+                    if let site = AgentGate.site(url) { session.sites.insert(site) }
+                    tab.go(to: url)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+                        self?.settle(tab, session, timeout: request["timeout"] as? Double ?? 20, answer)
+                    }
+                }
+                if let hold = AgentGate.hold(address: url, sites: session.sites, rules: rules(browser)) {
+                    ask(hold, session) { verdict in
+                        if verdict == .approved { go() } else { answer(Self.declined(hold, verdict)) }
+                    }
+                } else {
+                    go()
                 }
             case "back", "forward":
                 let tab = try self.tab(request, session, browser, .drive)
@@ -1156,9 +1260,40 @@ final class AgentControl: ObservableObject {
                 }
                 guard live(session) else { throw AgentRefusal(code: "stopped", message: "Stopped in Search") }
                 PageRoom.shared.house(tab)
-                PageHands.key(tab.web, code: key.code, characters: key.characters, flags: key.flags)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-                    self?.settle(tab, session, timeout: 10, answer)
+                func press() {
+                    guard self.live(session) else { return answer(AgentRefusal(code: "stopped", message: "Stopped in Search").said) }
+                    PageHands.key(tab.web, code: key.code, characters: key.characters, flags: key.flags)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                        self?.settle(tab, session, timeout: 10, answer)
+                    }
+                }
+                // Return, or Space on a button, in a form that would commit
+                // something: asked first, about what the page has focused.
+                let rules = rules(browser)
+                let sends = key.flags.isEmpty && (key.characters == "\r" || key.characters == " ")
+                guard rules.commits, sends else { return press() }
+                page(tab, session, PageScripts.focused()) { [weak self] result in
+                    guard let self else { return }
+                    let seen: [String: Any]
+                    switch result {
+                    case .failure(let refusal): return answer(refusal.said)
+                    case .success(let out): seen = out
+                    }
+                    var target = AgentGate.Target(seen["gate"]) ?? AgentGate.Target()
+                    // Space only acts on a button.
+                    if key.characters == " " { target.enter = target.submits }
+                    guard let hold = AgentGate.hold(enter: target, on: tab.pageAddress, rules: rules) else { return press() }
+                    self.ask(hold, session) { verdict in
+                        guard verdict == .approved else { return answer(Self.declined(hold, verdict)) }
+                        // Still what was asked about.
+                        self.page(tab, session, PageScripts.focused()) { again in
+                            guard case .success(let now) = again, AgentGate.Target(now["gate"])?.fingerprint == target.fingerprint else {
+                                return answer(AgentRefusal(code: "changed", message: "The page changed while waiting: not done",
+                                                           hint: "Read the page again and ask once more if it still applies.").said)
+                            }
+                            press()
+                        }
+                    }
                 }
             case "sign_in":
                 try signIn(request, session, browser, answer)
@@ -1401,16 +1536,37 @@ final class AgentControl: ObservableObject {
             case .failure(let refusal): answer(refusal.said)
             case .success(let seen):
                 guard self.live(session) else { return answer(AgentRefusal(code: "stopped", message: "Stopped in Search").said) }
-                guard let at = seen["at"] as? [Double], PageHands.click(tab.web, at: at) else {
-                    answer(AgentRefusal(code: "not_clicked", message: "The page had nowhere to click").said)
-                    return
+                @MainActor func press(_ seen: [String: Any]) {
+                    guard self.live(session) else { return answer(AgentRefusal(code: "stopped", message: "Stopped in Search").said) }
+                    guard let at = seen["at"] as? [Double], PageHands.click(tab.web, at: at) else {
+                        answer(AgentRefusal(code: "not_clicked", message: "The page had nowhere to click").said)
+                        return
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        self.settle(tab, session, timeout: request["timeout"] as? Double ?? 10) { out in
+                            var out = out
+                            out["page"] = page
+                            out["navigated"] = tab.address != before
+                            answer(out)
+                        }
+                    }
                 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    self.settle(tab, session, timeout: request["timeout"] as? Double ?? 10) { out in
-                        var out = out
-                        out["page"] = page
-                        out["navigated"] = tab.address != before
-                        answer(out)
+                // The page it is on is one of the task's sites.
+                if let here = AgentGate.site(tab.pageAddress) { session.sites.insert(here) }
+                let target = AgentGate.Target(seen["gate"]) ?? AgentGate.Target()
+                guard let hold = AgentGate.hold(click: target, on: tab.pageAddress, sites: session.sites, rules: self.rules(browser)) else {
+                    return press(seen)
+                }
+                self.ask(hold, session) { verdict in
+                    guard verdict == .approved else { return answer(Self.declined(hold, verdict)) }
+                    // Asked about this element: it must still be it, and
+                    // where it is now is where the click goes.
+                    self.page(tab, session, PageScripts.touch(key: Self.key, snap: snap, index: index, how: "click", text: nil, replace: true, strict: true)) { again in
+                        guard case .success(let now) = again, AgentGate.Target(now["gate"])?.fingerprint == hold.fingerprint else {
+                            return answer(AgentRefusal(code: "changed", message: "The page changed while waiting: not done",
+                                                       hint: "Read the page again and ask once more if it still applies.").said)
+                        }
+                        press(now)
                     }
                 }
             }
@@ -1424,6 +1580,12 @@ final class AgentControl: ObservableObject {
             throw AgentRefusal(code: "bad_text", message: "No control characters but tab and newline",
                                hint: "Use press for Enter, Tab or Escape.")
         }
+        // Typed as keys, a new line is Return, which sends a form: with the
+        // gate on, that is for press, which asks.
+        if browser.prefs.agentGate, request["keys"] as? Bool == true, text.contains(where: \.isNewline) {
+            throw AgentRefusal(code: "bad_text", message: "No new lines when typing as keys",
+                               hint: "Type the text without them, then use press Enter.")
+        }
         let replace = request["replace"] as? Bool ?? true
         func touch(_ how: String, _ text: String?, _ then: @escaping ([String: Any]) -> Void) {
             page(tab, session, PageScripts.touch(key: Self.key, snap: snap, index: index, how: how, text: text, replace: replace, strict: true)) { result in
@@ -1435,10 +1597,30 @@ final class AgentControl: ObservableObject {
         }
         func finish(_ out: [String: Any]) {
             guard request["submit"] as? Bool == true else { return answer(out) }
-            touch("submit", "") { [weak self] _ in
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    self?.settle(tab, session, timeout: request["timeout"] as? Double ?? 10) { state in
-                        answer(out.merging(state) { mine, _ in mine })
+            func submit() {
+                touch("submit", "") { [weak self] _ in
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        self?.settle(tab, session, timeout: request["timeout"] as? Double ?? 10) { state in
+                            answer(out.merging(state) { mine, _ in mine })
+                        }
+                    }
+                }
+            }
+            // Sending a form is a commitment: asked first when the gate is on.
+            let rules = rules(browser)
+            guard rules.commits else { return submit() }
+            touch("probe", nil) { probed in
+                var target = AgentGate.Target(probed["gate"]) ?? AgentGate.Target()
+                target.enter = true
+                guard let hold = AgentGate.hold(enter: target, on: tab.pageAddress, rules: rules) else { return submit() }
+                self.ask(hold, session) { verdict in
+                    guard verdict == .approved else { return answer(Self.declined(hold, verdict)) }
+                    touch("probe", nil) { again in
+                        guard AgentGate.Target(again["gate"])?.fingerprint == target.fingerprint else {
+                            return answer(AgentRefusal(code: "changed", message: "The page changed while waiting: not done",
+                                                       hint: "Read the page again and ask once more if it still applies.").said)
+                        }
+                        submit()
                     }
                 }
             }

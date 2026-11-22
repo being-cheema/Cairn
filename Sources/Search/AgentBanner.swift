@@ -40,6 +40,8 @@ private struct AgentSessionBar: View {
     var body: some View {
         if session.browser === browser, session.consent.state == .asking {
             AgentQuestion(session: session)
+        } else if session.browser === browser, session.consent.state == .allowed, let held = session.held {
+            AgentApproval(session: session, held: held)
         }
     }
 }
@@ -297,6 +299,65 @@ private struct AgentQuestion: View {
         let from = session.program.isEmpty ? "" : "From \(session.program) on this Mac. "
         return from + "It works in tabs of its own while you watch, until you press Stop. "
             + "It never sees passwords, card numbers, private tabs or Settings."
+    }
+}
+
+/// An action the browser is holding for you (AgentGate): said by the
+/// browser in its own words, with Approve and Don't Approve, pressed only by
+/// a fresh click of yours (AgentControl.answerHeld).
+private struct AgentApproval: View {
+    @ObservedObject var session: AgentSession
+    let held: HeldAction
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "hand.raised")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Palette.muted)
+                    .padding(.top, 2)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("“\(session.client)” is waiting for you")
+                        .font(.system(size: 12.5, weight: .medium))
+                        .foregroundStyle(Palette.ink)
+                    Text(verbatim: held.hold.summary)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Palette.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("Nothing happens until you approve. The words in quotes are the page's own.")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(Palette.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            HStack(spacing: 12) {
+                Spacer(minLength: 8)
+                Button { AgentControl.shared.answerHeld(approve: false, event: NSApp.currentEvent) } label: {
+                    Text("Don't Approve")
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                        .contentShape(Rectangle())
+                        .background(ClickSpot { AgentControl.shared.declineButton = $0 })
+                }
+                Button { AgentControl.shared.answerHeld(approve: true, event: NSApp.currentEvent) } label: {
+                    Text("Approve")
+                        .foregroundStyle(Palette.ground)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Palette.ink, in: Capsule())
+                        .background(ClickSpot { AgentControl.shared.approveButton = $0 })
+                }
+            }
+            .font(.system(size: 12))
+            .foregroundStyle(Palette.ink)
+            .buttonStyle(.plain)
+        }
+        .frame(maxWidth: 420, alignment: .leading)
+        .padding(16)
+        .background(Palette.ground, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Palette.hairline, lineWidth: 1))
+        .shadow(color: .black.opacity(0.12), radius: 20, y: 6)
+        .padding(.horizontal, 16)
     }
 }
 

@@ -831,6 +831,8 @@ struct SettingsPanel: View {
         case "claude.acts": Switch(on: $prefs.claudeActs)
         case "agents.logins": Switch(on: $prefs.agentLogins)
         case "agents.taskspaces": Switch(on: $prefs.taskSpaces)
+        case "agents.gate": Switch(on: $prefs.agentGate)
+        case "agents.leave": Switch(on: $prefs.agentLeave)
         default: EmptyView()
         }
     }

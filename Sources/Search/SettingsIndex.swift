@@ -549,6 +549,17 @@ enum SettingsIndex {
               keys: ["agents.taskspaces"],
               words: ["agent", "claude", "clean", "private", "cookies", "isolated", "task", "sandbox", "signed out"]),
 
+        .init(id: "agents.gate", group: "developer", icon: "hand.raised",
+              title: "Ask me before an agent submits, pays or posts", detail: "Held until you click Approve in the window; the agent can't answer for you",
+              more: "On, when an agent's click or Return would send a form, pay, post or send something, or sign in, the browser holds it and asks you in the window. Only a click of yours on Approve lets it through, once, for that very control. The agent is told it is waiting and then what you decided. It goes by the control's role and words and the form around it, so it is a strong guard and not a proof: a page can call a payment button something odd. Searches (a form that only looks things up) aren't held. Downloads stay refused. This is enforced by the browser, whatever Claude is told or what “acts without asking” says.",
+              keys: ["agents.gate"],
+              words: ["agent", "claude", "approve", "confirm", "pay", "submit", "post", "send", "sign in", "commit", "gate", "ask"]),
+        .init(id: "agents.leave", group: "developer", icon: "arrow.up.right.square",
+              title: "Ask me before an agent leaves its sites", detail: "A step to a site the task hasn't been to is held for your click",
+              more: "A task's sites are the ones its first page and the pages it opens were on. When an agent would open or follow a link to another site (by its registrable domain, as example.co.uk), the browser holds it and asks you, and once you approve, that site is one of the task's. Research across many sites will ask often; leave this off for that. A page that sends the tab on by itself after a click isn't caught.",
+              keys: ["agents.leave"],
+              words: ["agent", "claude", "leave", "site", "domain", "navigate", "task", "ask"]),
+
         // Moved to a menu, or always on: only the find field says so.
         .init(id: "autocorrect", group: "pages", icon: "textformat.abc.dottedunderline",
               title: "Correct spelling as you type", detail: "Now in Edit › Spelling and Grammar, as in Safari",

@@ -206,6 +206,15 @@ final class Preferences: ObservableObject {
     @Published var taskSpaces: Bool {
         didSet { store.set(taskSpaces, forKey: "agents.taskspaces") }
     }
+    /// An agent's submit, payment, post or sign-in is held until you click
+    /// Approve in the window (AgentGate). Off unless turned on.
+    @Published var agentGate: Bool {
+        didSet { store.set(agentGate, forKey: "agents.gate") }
+    }
+    /// Likewise a step to a site that isn't one of the task's.
+    @Published var agentLeave: Bool {
+        didSet { store.set(agentLeave, forKey: "agents.leave") }
+    }
     /// A coding agent may have the browser fill a saved login into a page of
     /// its own (AgentControl, `sign_in`): the browser does it, and the agent
     /// is never given the password. Off unless turned on, and like the agents
@@ -1151,6 +1160,8 @@ final class Preferences: ObservableObject {
         claudePanel = store.bool(forKey: "claude.panel")
         claudeActs = store.bool(forKey: "claude.acts")
         taskSpaces = store.bool(forKey: "agents.taskspaces")
+        agentGate = store.bool(forKey: "agents.gate")
+        agentLeave = store.bool(forKey: "agents.leave")
         let loginsAsked = store.bool(forKey: "agents.logins")
         let loginsAllowed = loginsAsked && (Store.testing || Preferences.agentLoginsMark.given)
         agentLogins = loginsAllowed

@@ -262,7 +262,8 @@ def passing(verb, keys):
     def tool(args):
         request = {"do": verb}
         request.update({k: args[k] for k in keys if k in args})
-        return search.ask(request, float(args.get("timeout", 20)) + 30)
+        # A held action (the person's Approve) may wait up to five minutes.
+        return search.ask(request, float(args.get("timeout", 20)) + 330)
 
     return tool
 
