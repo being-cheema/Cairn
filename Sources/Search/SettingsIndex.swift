@@ -532,6 +532,16 @@ enum SettingsIndex {
               more: "Opens from View › Claude Panel and runs the claude program you installed and signed in to, never a key or sign-in of this app's. It is started with no shell, no files and none of your Claude settings, in an empty folder, and only if Anthropic signed it. It uses the browser through the same door as any coding agent, so it needs “Let coding agents use Search” on, asks you in the window first, works in tabs of its own and never sees passwords, card numbers or one-time codes. What it says is shown as plain text. Closing the panel stops it.",
               keys: ["claude.panel"],
               words: ["claude", "claude code", "ai", "agent", "assistant", "side panel", "chat"]),
+        .init(id: "claude.acts", group: "developer", icon: "bolt",
+              title: "Claude acts without asking first", detail: "Does the whole task; stops only for a fingerprint, a passkey, a code or what only you know",
+              more: "Off, Claude is told to say what it is about to do before anything that sends, pays, posts, signs in or downloads, and to wait for your yes. On, it is told to carry on. That is advice to the model, not a lock: what the tools can do is decided by the switches here and by the browser, which still asks you to Allow each connection, still keeps Claude to tabs of its own, and still never hands it a password, card number or one-time code. A page that tries to give it orders can still mislead it, so leave this off if you will have it open pages you don't trust while you are signed in elsewhere.",
+              keys: ["claude.acts"],
+              words: ["claude", "autonomous", "ask", "confirm", "permission", "agent", "approve", "act"]),
+        .init(id: "agents.logins", group: "developer", icon: "key",
+              title: "Let agents sign in with my saved passwords", detail: "The browser fills the login; the agent is never shown it",
+              more: "An agent can ask the browser to sign in on a page of its own. The browser looks up the account you saved for that exact site, fills the sign-in form itself, and tells the agent only that it did and the account's name. The password is never given to the agent, shown in the panel or logged. Only https pages, only that site's own saved accounts, only in tabs the agent opened. Passkeys, Touch ID, codes and sites with no saved login stay yours to do.",
+              keys: ["agents.logins"],
+              words: ["agent", "claude", "password", "sign in", "login", "autofill", "keychain"]),
 
         // Moved to a menu, or always on: only the find field says so.
         .init(id: "autocorrect", group: "pages", icon: "textformat.abc.dottedunderline",

@@ -134,6 +134,65 @@ final class ClaudeSessionTests: XCTestCase {
         session.stop()
     }
 
+    func testWordsStreamInAndTheFinishedMessageIsNotShownAgain() async throws {
+        let session = try session(try program(reply: """
+              echo '{"type":"stream_event","event":{"type":"message_start"}}'
+              echo '{"type":"stream_event","event":{"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"a","name":"mcp__search__open_tab"}}}'
+              echo '{"type":"stream_event","event":{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"b","name":"mcp__search__read_page"}}}'
+              echo '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"a","name":"mcp__search__open_tab"},{"type":"tool_use","id":"b","name":"mcp__search__read_page"}]}}'
+              echo '{"type":"stream_event","event":{"type":"message_start"}}'
+              echo '{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"It is a "}}}'
+              echo '{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"recipe."}}}'
+              echo '{"type":"assistant","message":{"content":[{"type":"text","text":"It is a recipe."}]}}'
+              echo '{"type":"stream_event","event":{"type":"message_start"}}'
+              echo '{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Anything else?"}}}'
+              echo '{"type":"assistant","message":{"content":[{"type":"text","text":"Anything else?"}]}}'
+              echo '{"type":"result","is_error":false}'
+        """))
+        session.draft = "go"; session.submit()
+        await wait("the turn to end") { !session.running }
+        let turn = try XCTUnwrap(session.turns.first)
+        XCTAssertEqual(turn.answer, "It is a recipe.\n\nAnything else?", "each said once, a message to a paragraph")
+        XCTAssertEqual(turn.steps, ["Opening a tab", "Reading the page"], "a tool told twice is shown once")
+        session.stop()
+    }
+
+    func testAMessageWithoutStreamingStillShows() async throws {
+        let session = try session(try program(reply: good))
+        session.draft = "go"; session.submit()
+        await wait("the turn to end") { !session.running }
+        XCTAssertEqual(session.turns.first?.answer, "Opened it.")
+        session.stop()
+    }
+
+    func testNewChatEndsTheRunAndForgetsWhatWasSaid() async throws {
+        let session = try session(try program(reply: good))
+        session.draft = "go"; session.submit()
+        await wait("the turn to end") { !session.running }
+        session.newChat()
+        XCTAssertTrue(session.turns.isEmpty)
+        XCTAssertFalse(session.running)
+        XCTAssertNil(session.problem)
+        session.draft = "again"; session.submit()
+        await wait("a fresh program to answer") { !session.running && session.turns.count == 1 }
+        XCTAssertEqual(session.turns.first?.question, "again")
+        let starts = try String(contentsOf: record, encoding: .utf8).split(separator: "\n").filter { $0.hasPrefix("PWD=") }.count
+        XCTAssertEqual(starts, 1, "the record holds the latest start")
+        session.stop()
+    }
+
+    func testWhatItIsDoingIsSaidWhileItWorks() async throws {
+        let session = try session(try program(reply: """
+              echo '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"x","name":"mcp__search__click"}]}}'
+              sleep 30
+        """))
+        XCTAssertNil(session.step)
+        session.draft = "go"; session.submit()
+        await wait("its step") { session.step == "Clicking" }
+        session.stop()
+        XCTAssertNil(session.step)
+    }
+
     func testStopEndsTheProgramAndTheTurn() async throws {
         let session = try session(try program(reply: "      sleep 30"))
         session.draft = "go"; session.submit()

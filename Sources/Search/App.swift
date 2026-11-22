@@ -197,6 +197,7 @@ struct SearchApp: App {
                     Button(browser.sidePanelShown && browser.sidePanel == .claude ? "Close Claude Panel" : "Claude Panel") {
                         browser.toggleClaudePanel()
                     }
+                    .shortcut("view.claudePanel")
                 }
                 // Dark pages, only once they are on (Settings › Appearance).
                 if browser.prefs.darkensPages {

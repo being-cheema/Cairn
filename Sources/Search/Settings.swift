@@ -828,6 +828,8 @@ struct SettingsPanel: View {
         case "bench": Switch(on: $prefs.bench)
         case "agents": Switch(on: $prefs.agents)
         case "claude.panel": Switch(on: $prefs.claudePanel)
+        case "claude.acts": Switch(on: $prefs.claudeActs)
+        case "agents.logins": Switch(on: $prefs.agentLogins)
         default: EmptyView()
         }
     }

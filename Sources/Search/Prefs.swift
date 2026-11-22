@@ -194,6 +194,25 @@ final class Preferences: ObservableObject {
     @Published var claudePanel: Bool {
         didSet { store.set(claudePanel, forKey: "claude.panel") }
     }
+    /// Claude does a task through without stopping to ask first, stopping only
+    /// for what only the person can give. Off unless turned on. This changes
+    /// what it is told (ClaudeCode.brief), not what the tools allow.
+    @Published var claudeActs: Bool {
+        didSet { store.set(claudeActs, forKey: "claude.acts") }
+    }
+    /// A coding agent may have the browser fill a saved login into a page of
+    /// its own (AgentControl, `sign_in`): the browser does it, and the agent
+    /// is never given the password. Off unless turned on, and like the agents
+    /// switch it leaves a mark in the keychain, so a setting some other
+    /// program wrote is put back to off at launch.
+    @Published var agentLogins: Bool {
+        didSet {
+            store.set(agentLogins, forKey: "agents.logins")
+            agentLogins ? Preferences.agentLoginsMark.grant() : Preferences.agentLoginsMark.revoke()
+        }
+    }
+    static let agentLoginsMark = SwitchMark(service: Brand.service("agents.logins"))
+    private(set) var agentLoginsRefused = false
     /// Found on at launch without the mark, and put back to off.
     private(set) var agentsRefused = false
     /// Light, dark, or the Mac's own.
@@ -1124,6 +1143,14 @@ final class Preferences: ObservableObject {
         fillsPasswords = store.object(forKey: "passwords.fill") as? Bool ?? true
         applePasswords = store.bool(forKey: "passwords.apple")
         claudePanel = store.bool(forKey: "claude.panel")
+        claudeActs = store.bool(forKey: "claude.acts")
+        let loginsAsked = store.bool(forKey: "agents.logins")
+        let loginsAllowed = loginsAsked && (Store.testing || Preferences.agentLoginsMark.given)
+        agentLogins = loginsAllowed
+        if loginsAsked, !loginsAllowed {
+            agentLoginsRefused = true
+            store.set(false, forKey: "agents.logins")
+        }
         let contacts = store.bool(forKey: "contacts.fill")
         fillsContacts = contacts
         FormRelay.contacts = contacts

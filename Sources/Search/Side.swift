@@ -1410,6 +1410,7 @@ private struct SideFoot: View {
                 FetchDoor(browser: browser, fetches: fetches, arrowEdge: prefs.sidePosition == .right ? .leading : .trailing)
                 ExtensionSlot(browser: browser, edge: prefs.sidePosition == .right ? .leading : .trailing, room: 0)
                 BookmarkDoor(browser: browser, arrowEdge: prefs.sidePosition == .right ? .leading : .trailing)
+                ClaudeDoor(browser: browser, prefs: prefs)
                 if prefs.usesSpaces { SpaceDot(browser: browser) }
                 if Profiles.shared.several { ProfileBadge(browser: browser) }
             }
@@ -1421,6 +1422,7 @@ private struct SideFoot: View {
                 if prefs.usesSpaces { SpaceDot(browser: browser) }
                 ExtensionSlot(browser: browser, edge: prefs.sidePosition == .right ? .leading : .trailing, room: room)
                 BookmarkDoor(browser: browser, arrowEdge: prefs.sidePosition == .right ? .leading : .trailing)
+                ClaudeDoor(browser: browser, prefs: prefs)
                 // Only while a download is running, and a moment after.
                 FetchDoor(browser: browser, fetches: fetches, arrowEdge: prefs.sidePosition == .right ? .leading : .trailing)
                 Spacer(minLength: 0)

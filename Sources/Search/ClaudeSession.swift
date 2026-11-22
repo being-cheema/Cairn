@@ -44,11 +44,20 @@ final class ClaudeSession: ObservableObject {
     private let verify: (URL) -> Bool
     private let script: URL?
     private let world: String?
+    private let options: () -> ClaudeCode.Options
 
     private var process: Process?
     private var input: FileHandle?
     private var folder: URL?
     private var pending = Data()
+    /// Words of the message in progress arrived as they were written, so the
+    /// finished message repeating them is not shown twice.
+    private var streamed = false
+    /// The next words open a new paragraph.
+    private var needBreak = false
+    /// Tools already shown for this turn: told as they begin and again in the
+    /// finished message.
+    private var seenTools = Set<String>()
     /// A line longer than this is not the program speaking: it is ended.
     private static let longest = 8 << 20
 
@@ -56,12 +65,14 @@ final class ClaudeSession: ObservableObject {
          executable: URL? = nil,
          verify: @escaping (URL) -> Bool = ClaudeCode.signedByAnthropic,
          script: URL? = nil,
-         world: String? = Store.world) {
+         world: String? = Store.world,
+         options: @escaping () -> ClaudeCode.Options = { ClaudeCode.Options() }) {
         self.agentsOn = agentsOn
         self.executable = executable
         self.verify = verify
         self.script = script
         self.world = world
+        self.options = options
     }
 
     // MARK: - sending
@@ -75,6 +86,9 @@ final class ClaudeSession: ObservableObject {
         problem = nil
         draft = ""
         turns.append(Turn(question: text))
+        seenTools = []
+        streamed = false
+        needBreak = false
         running = true
         let line = ClaudeCode.message(text)
         do {
@@ -84,6 +98,17 @@ final class ClaudeSession: ObservableObject {
             stop()
         }
     }
+
+    /// A conversation from the start: the run ended, what was said forgotten.
+    func newChat() {
+        stop()
+        turns = []
+        problem = nil
+        draft = ""
+    }
+
+    /// What it is doing now, while it is: the last thing it said it was at.
+    var step: String? { running ? turns.last?.steps.last : nil }
 
     /// Ends the run, for Stop, for closing the panel, for a window going.
     func stop() {
@@ -121,7 +146,7 @@ final class ClaudeSession: ObservableObject {
 
         let run = Process()
         run.executableURL = claude
-        run.arguments = ClaudeCode.arguments(config: home.appendingPathComponent("mcp.json"))
+        run.arguments = ClaudeCode.arguments(config: home.appendingPathComponent("mcp.json"), options: options())
         run.currentDirectoryURL = home
         run.environment = ClaudeCode.environment()
         let toIt = Pipe(), fromIt = Pipe(), errors = Pipe()
@@ -188,10 +213,21 @@ final class ClaudeSession: ObservableObject {
             switch event {
             case .ready:
                 break
+            case .start:
+                streamed = false
+                needBreak = !turns[last].answer.isEmpty
+            case .delta(let text):
+                if needBreak { turns[last].answer += "\n\n"; needBreak = false }
+                turns[last].answer += text
+                streamed = true
             case .text(let text):
+                // Already shown as it was written.
+                if streamed { continue }
                 turns[last].answer += (turns[last].answer.isEmpty ? "" : "\n\n") + text
-            case .tool(let step):
-                if turns[last].steps.last != step { turns[last].steps.append(step) }
+            case .tool(let id, let step):
+                if let id { guard seenTools.insert(id).inserted else { continue } }
+                else if turns[last].steps.last == step { continue }
+                turns[last].steps.append(step)
             case .done:
                 turns[last].done = true
                 running = false

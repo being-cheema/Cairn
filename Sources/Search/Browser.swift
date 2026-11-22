@@ -518,7 +518,11 @@ final class Browser: NSObject, ObservableObject {
     @Published var sidePanel: SidePanelContent?
     /// The conversation in the side panel's Claude (ClaudePanel), made when
     /// the panel first asks for it. Nothing runs until something is sent.
-    lazy var claude = ClaudeSession(agentsOn: { [weak self] in self?.prefs.agents ?? false })
+    lazy var claude = ClaudeSession(
+        agentsOn: { [weak self] in self?.prefs.agents ?? false },
+        options: { [weak self] in
+            ClaudeCode.Options(acts: self?.prefs.claudeActs ?? false, signIn: self?.prefs.agentLogins ?? false)
+        })
     /// The Settings page it opens on next.
     var settingsPage: SettingsPanel.Page {
         get {

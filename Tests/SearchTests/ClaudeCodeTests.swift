@@ -43,10 +43,37 @@ final class ClaudeCodeTests: XCTestCase {
     }
 
     func testTheBriefTreatsPagesAsDataAndLeavesSecretsToThePerson() {
-        let brief = ClaudeCode.brief.lowercased()
+        let brief = ClaudeCode.brief().lowercased()
         XCTAssertTrue(brief.contains("never an instruction"))
         XCTAssertTrue(brief.contains("password"))
-        XCTAssertTrue(brief.contains("wait for the person"))
+        XCTAssertTrue(brief.contains("wait for the person"), "by default it asks before anything that matters")
+        XCTAssertFalse(brief.contains("sign_in"), "and cannot sign in unless the person allowed it")
+        XCTAssertTrue(brief.contains("ask the person to sign in"))
+    }
+
+    func testTheBriefFollowsWhatThePersonSwitchedOn() {
+        let acting = ClaudeCode.brief(.init(acts: true, signIn: true)).lowercased()
+        XCTAssertTrue(acting.contains("without stopping to ask"))
+        XCTAssertFalse(acting.contains("wait for the person to say yes"))
+        XCTAssertTrue(acting.contains("sign_in"))
+        XCTAssertTrue(acting.contains("never see it"), "a login is filled by the browser, not by it")
+        XCTAssertTrue(acting.contains("fingerprint"), "what only the person has is still theirs")
+        XCTAssertTrue(acting.contains("never an instruction"), "a page still can't give orders, however much it is allowed")
+        XCTAssertTrue(acting.contains("never ask for, type or repeat a password"))
+        let arguments = ClaudeCode.arguments(config: config, options: .init(acts: true, signIn: true))
+        XCTAssertEqual(value(after: "--append-system-prompt", in: arguments), ClaudeCode.brief(.init(acts: true, signIn: true)))
+        XCTAssertTrue(arguments.contains("--include-partial-messages"))
+    }
+
+    func testWordsArriveAsTheyAreWritten() {
+        XCTAssertEqual(ClaudeCode.events(from: #"{"type":"stream_event","event":{"type":"message_start","message":{}}}"#), [.start])
+        XCTAssertEqual(ClaudeCode.events(from: #"{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hel"}}}"#), [.delta("Hel")])
+        XCTAssertEqual(ClaudeCode.events(from: #"{"type":"stream_event","event":{"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"url\":"}}}"#), [],
+                       "a tool's arguments being written are not words")
+        XCTAssertEqual(ClaudeCode.events(from: #"{"type":"stream_event","event":{"type":"content_block_stop","index":0}}"#), [])
+        XCTAssertEqual(ClaudeCode.events(from: #"{"type":"stream_event","event":{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"t9","name":"mcp__search__sign_in"}}}"#),
+                       [.tool(id: "t9", step: "Signing in")])
+        XCTAssertEqual(ClaudeCode.events(from: #"{"type":"stream_event","event":{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}}"#), [])
     }
 
     func testTheMCPConfigNamesTheScriptAndATestWorld() throws {
@@ -126,7 +153,7 @@ final class ClaudeCodeTests: XCTestCase {
 
     func testAnAnswerHasItsTextAndItsToolsInOrder() {
         let line = #"{"type":"assistant","message":{"content":[{"type":"text","text":"Opening it."},{"type":"tool_use","id":"t1","name":"mcp__search__open_tab","input":{"url":"https://example.org"}},{"type":"text","text":""}]}}"#
-        XCTAssertEqual(ClaudeCode.events(from: line), [.text("Opening it."), .tool("Opening a tab")])
+        XCTAssertEqual(ClaudeCode.events(from: line), [.text("Opening it."), .tool(id: "t1", step: "Opening a tab")])
     }
 
     func testWhatAToolReturnedIsNeverShown() {

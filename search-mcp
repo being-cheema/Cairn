@@ -390,6 +390,18 @@ TOOLS = [
         page_arg({"key": {"type": "string"}}, ("page", "key")),
     ),
     (
+        "sign_in",
+        passing("sign_in", ["page", "user"]),
+        (
+            "Fill the person's saved login into the sign-in form of a tab of your own, if they allowed it. Search does this "
+            "itself and never shows you the password: you are told only that the fields are filled and the account's name. "
+            "Then click the site's own sign-in button. Only https pages and only accounts saved for that exact site. "
+            "If it says there is no saved login, or the site wants a fingerprint, a passkey or a code, tell the person what "
+            "you need and wait."
+        ),
+        page_arg({"user": {"type": "string", "description": "Which saved account, if the site has several (the newest otherwise)"}}),
+    ),
+    (
         "scroll",
         passing("scroll", ["page", "dx", "dy", "to", "element"]),
         (

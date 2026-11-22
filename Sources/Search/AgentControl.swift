@@ -40,7 +40,11 @@ import WebKit
 // any box seen as a password, stay secret for good — and pictures black out
 // those, every frame, and whatever can't be read. Secret-looking values are
 // taken out of the addresses it is given. No cookies, no storage, nothing
-// from the keychain, no camera, microphone, screen, location or
+// from the keychain — but for one verb, `sign_in`, off unless the person
+// switched on "Let agents sign in with my saved passwords": Search itself
+// fills the login saved for that exact https site into a page of the agent's
+// own and says only that it did and the account's name, never the password.
+// No camera, microphone, screen, location or
 // notifications, and no offer to save a password it signed in with. No
 // files chosen, no downloads, and no address but http and https: not
 // Search's own pages, Settings, extensions or file://, and no link handed
@@ -1138,6 +1142,8 @@ final class AgentControl: ObservableObject {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
                     self?.settle(tab, session, timeout: 10, answer)
                 }
+            case "sign_in":
+                try signIn(request, session, browser, answer)
             case "scroll":
                 try scroll(request, session, browser, answer)
             case "wait_for":
@@ -1179,6 +1185,60 @@ final class AgentControl: ObservableObject {
         default:
             if session.pages[handle] != nil { session.forget(handle) }
             throw AgentRefusal(code: "stale_page", message: "No page \(handle.isEmpty ? "given" : "“\(handle)”")", hint: "Use list_tabs or open_tab.")
+        }
+    }
+
+    /// Sign in on a page of its own, with an account the person saved for that
+    /// exact site — if they let agents (Settings › About › Developer). The
+    /// browser does it: the account is looked up and its secret read here, and
+    /// handed to the page's form by Search's own script, never returned. What
+    /// the agent is told is that the fields were filled, and the account's
+    /// name. Only https, only the page's own host (not another of the site's:
+    /// accounts.example.com's login is not offered on a look-alike), only a
+    /// page of its own, and only while the page is still that address: the
+    /// script checks again as it fills. Nothing here is logged. It does not
+    /// press anything: submitting is the agent's own click, like any other.
+    private func signIn(_ request: [String: Any], _ session: AgentSession, _ browser: Browser, _ answer: @escaping ([String: Any]) -> Void) throws {
+        guard browser.prefs.agentLogins else {
+            throw AgentRefusal(code: "not_allowed", message: "The person hasn't let agents sign in with their saved passwords",
+                               hint: "Ask them to sign in in that tab themselves, then carry on.")
+        }
+        let tab = try self.tab(request, session, browser, .drive)
+        guard let address = tab.pageAddress, address.scheme?.lowercased() == "https",
+              let host = browser.curtain.host(of: address)
+        else {
+            throw AgentRefusal(code: "not_secure", message: "Only an https page can be signed in to this way",
+                               hint: "Go to the site's https sign-in page first.")
+        }
+        // This site's own accounts, kept from https, newest first.
+        let accounts = Vault.kept(matching: host, wide: false).filter { !$0.clear }
+        guard !accounts.isEmpty else {
+            throw AgentRefusal(code: "no_saved_login", message: "No login is saved for \(host)",
+                               hint: "Tell the person what you need: the account to use, and that they must sign in themselves or save it first.")
+        }
+        let wanted = (request["user"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let chosen: Kept
+        if wanted.isEmpty {
+            chosen = accounts[0]
+        } else if let named = accounts.first(where: { $0.user.caseInsensitiveCompare(wanted) == .orderedSame }) {
+            chosen = named
+        } else {
+            throw AgentRefusal(code: "no_such_account", message: "No saved account called that for \(host)",
+                               hint: "Saved for this site: " + accounts.map(\.user).joined(separator: ", "))
+        }
+        guard live(session) else { throw AgentRefusal(code: "stopped", message: "Stopped in Search") }
+        guard let login = Vault.login(chosen) else {
+            throw AgentRefusal(code: "keychain_refused", message: "The keychain didn't hand the login over",
+                               hint: "Tell the person: it may need their Mac password, or Touch ID, to be allowed.")
+        }
+        tab.fill(user: login.user, password: login.password, onlyOn: address) { worked in
+            guard worked else {
+                return answer(AgentRefusal(code: "no_form", message: "No sign-in form on this page to fill",
+                                           hint: "Some sites ask for the account name first; type that, press Enter, then call sign_in again on the password step.").said)
+            }
+            Vault.touch(login)
+            answer(["filled": true, "user": login.user,
+                    "note": "The saved password is in the form. Click the site's sign-in button to submit it."])
         }
     }
 

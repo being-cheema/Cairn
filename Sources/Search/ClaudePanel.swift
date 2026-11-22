@@ -4,6 +4,11 @@ import SwiftUI
 // of the browser is — the same ink, muted and faint, the same sizes, hairlines
 // and pills, and as plain: text only, nothing to follow, nothing to fetch.
 // Off until Settings › About › Developer › Claude in the side panel is on.
+//
+// What you said sits in a soft bubble on the right, what Claude did as quiet
+// lines with a tick each, and what it says as plain text on the left, written
+// as it arrives. The box grows with what you type; Return sends, and the
+// button beside it is Stop while Claude works.
 
 struct ClaudePanel: View {
     @ObservedObject var session: ClaudeSession
@@ -13,75 +18,119 @@ struct ClaudePanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 8) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Palette.muted)
-                Text("Claude")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Palette.ink)
-                Spacer(minLength: 0)
-                if session.running {
-                    Pill("Stop") { session.stop() }
-                }
-                Door(icon: "xmark", help: "Close") { close() }
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-            .padding(.bottom, 8)
+            header
             Rectangle().fill(Palette.hairline).frame(height: 1)
 
             ScrollViewReader { scroller in
                 ScrollView(showsIndicators: false) {
                     conversation
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
+                        .padding(.horizontal, 14)
+                        .padding(.top, 14)
+                        .padding(.bottom, 8)
+                    Color.clear.frame(height: 1).id("end")
                 }
                 .onChange(of: session.turns.last?.answer) { _, _ in scrollToEnd(scroller) }
                 .onChange(of: session.turns.last?.steps.count) { _, _ in scrollToEnd(scroller) }
                 .onChange(of: session.turns.count) { _, _ in scrollToEnd(scroller) }
             }
 
-            Rectangle().fill(Palette.hairline).frame(height: 1)
-            TextField("", text: $session.draft, prompt: Text("Ask Claude…").foregroundStyle(Palette.faint))
-                .textFieldStyle(.plain)
-                .font(.system(size: 12.5))
-                .foregroundStyle(Palette.ink)
-                .focused($typing)
-                .onSubmit { session.submit() }
-                .disabled(session.running)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-            Text("Claude Code on this Mac · browser tools only · may be wrong")
-                .font(.system(size: 10.5))
-                .foregroundStyle(Palette.faint)
-                .lineLimit(1)
-                .padding(.horizontal, 16)
-                .padding(.bottom, 10)
+            composer
         }
         .onAppear { typing = true }
     }
 
-    private func scrollToEnd(_ scroller: ScrollViewProxy) {
-        if let last = session.turns.last { scroller.scrollTo(last.id, anchor: .bottom) }
+    // MARK: - the top
+
+    private var header: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(Palette.muted)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Claude")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Palette.ink)
+                if let step = session.step {
+                    Text(verbatim: step + "…")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Palette.muted)
+                        .lineLimit(1)
+                        .transition(.opacity)
+                }
+            }
+            Spacer(minLength: 0)
+            Door(icon: "square.and.pencil", help: "New Chat") { session.newChat() }
+                .opacity(session.turns.isEmpty && session.problem == nil ? 0.35 : 1)
+                .disabled(session.turns.isEmpty && session.problem == nil)
+            Door(icon: "xmark", help: "Close") { close() }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+        .animation(.easeOut(duration: 0.15), value: session.step)
     }
 
+    private func scrollToEnd(_ scroller: ScrollViewProxy) {
+        scroller.scrollTo("end", anchor: .bottom)
+    }
+
+    // MARK: - the conversation
+
     private var conversation: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 18) {
             if let problem = session.problem {
                 notice(problem)
-            } else if session.turns.isEmpty {
-                Text("Ask Claude to do something in the browser. It works in tabs of its own, and you are asked before it starts.")
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(Palette.muted)
-                    .fixedSize(horizontal: false, vertical: true)
             }
-            ForEach(session.turns) { turn in
-                TurnView(turn: turn).id(turn.id)
+            if session.turns.isEmpty, session.problem == nil {
+                welcome
+            }
+            ForEach(Array(session.turns.enumerated()), id: \.element.id) { index, turn in
+                TurnView(turn: turn, working: session.running && index == session.turns.count - 1)
+                    .id(turn.id)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
+
+    /// Before the first message: what it is for, and a few ways to begin.
+    private var welcome: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("What should I do?")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Palette.ink)
+                Text("I work in tabs of my own, and you are asked before I start.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Palette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(Self.ideas, id: \.self) { idea in
+                    Button {
+                        session.draft = idea
+                        typing = true
+                    } label: {
+                        Text(verbatim: idea)
+                            .font(.system(size: 12))
+                            .foregroundStyle(Palette.ink)
+                            .multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Palette.wash.opacity(0.6), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(.top, 6)
+    }
+
+    static let ideas = [
+        "Open a site and tell me what's on it",
+        "Search for something and open the best result",
+        "Compare a few options and tell me which to pick",
+    ]
 
     private func notice(_ problem: ClaudeSession.Problem) -> some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -111,40 +160,152 @@ struct ClaudePanel: View {
         }
     }
 
+    // MARK: - what you type
+
+    private var composer: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .bottom, spacing: 8) {
+                TextField("", text: $session.draft, prompt: Text("Ask Claude…").foregroundStyle(Palette.faint), axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Palette.ink)
+                    .lineLimit(1...6)
+                    .focused($typing)
+                    .onSubmit { session.submit() }
+                    .disabled(session.running)
+                    .padding(.vertical, 5)
+                send
+            }
+            .padding(.leading, 12)
+            .padding(.trailing, 6)
+            .padding(.vertical, 5)
+            .background(Palette.wash.opacity(0.6), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Palette.hairline, lineWidth: 1))
+
+            Text("Claude Code on this Mac · may be wrong")
+                .font(.system(size: 10.5))
+                .foregroundStyle(Palette.faint)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .padding(.horizontal, 4)
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 6)
+        .padding(.bottom, 10)
+    }
+
+    /// Send, or Stop while it works.
+    private var send: some View {
+        let busy = session.running
+        let ready = !session.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        return Button {
+            if busy { session.stop() } else { session.submit() }
+        } label: {
+            Image(systemName: busy ? "stop.fill" : "arrow.up")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(Palette.ground)
+                .frame(width: 26, height: 26)
+                .background(Circle().fill(Palette.ink.opacity(busy || ready ? 1 : 0.25)))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!busy && !ready)
+        .help(busy ? "Stop" : "Send   ⏎")
+    }
+
+    // MARK: - one exchange
+
     private struct TurnView: View {
         let turn: ClaudeSession.Turn
+        let working: Bool
+
+        /// Only the latest few steps in full, the rest counted.
+        private static let shown = 4
 
         var body: some View {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(verbatim: turn.question)
-                    .font(.system(size: 12, weight: .medium))
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 0) {
+                    Spacer(minLength: 36)
+                    Text(verbatim: turn.question)
+                        .font(.system(size: 13))
+                        .foregroundStyle(Palette.ink)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Palette.wash, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+
+                if !turn.steps.isEmpty {
+                    VStack(alignment: .leading, spacing: 5) {
+                        if turn.steps.count > Self.shown {
+                            Text("\(turn.steps.count - Self.shown) earlier steps")
+                                .font(.system(size: 11))
+                                .foregroundStyle(Palette.faint)
+                        }
+                        let tail = Array(turn.steps.suffix(Self.shown).enumerated())
+                        ForEach(tail, id: \.offset) { index, step in
+                            let live = working && index == tail.count - 1 && turn.answer.isEmpty
+                            HStack(spacing: 6) {
+                                if live {
+                                    ProgressView().controlSize(.mini).frame(width: 9, height: 9)
+                                } else {
+                                    Image(systemName: "checkmark").font(.system(size: 8.5, weight: .semibold))
+                                }
+                                Text(verbatim: step)
+                                    .font(.system(size: 11.5))
+                            }
+                            .foregroundStyle(live ? Palette.muted : Palette.faint)
+                        }
+                    }
+                }
+
+                if turn.answer.isEmpty, turn.failed == nil, working, turn.steps.isEmpty {
+                    HStack(spacing: 6) {
+                        ProgressView().controlSize(.mini).frame(width: 9, height: 9)
+                        Text("Thinking").font(.system(size: 11.5))
+                    }
                     .foregroundStyle(Palette.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-                ForEach(Array(turn.steps.enumerated()), id: \.offset) { _, step in
-                    Text(verbatim: step + "…")
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(Palette.faint)
                 }
-                if turn.answer.isEmpty, turn.failed == nil, !turn.done {
-                    Text("…").font(.system(size: 13)).foregroundStyle(Palette.faint)
-                }
+
                 // As written, and never as markdown: no link to follow, no
                 // picture to fetch.
                 if !turn.answer.isEmpty {
                     Text(verbatim: turn.answer)
                         .font(.system(size: 13))
                         .foregroundStyle(Palette.ink)
-                        .lineSpacing(2.5)
+                        .lineSpacing(3)
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
+
                 if let failed = turn.failed {
-                    Text(verbatim: failed)
-                        .font(.system(size: 12))
-                        .foregroundStyle(Palette.muted)
-                        .fixedSize(horizontal: false, vertical: true)
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle").font(.system(size: 10, weight: .medium))
+                        Text(verbatim: failed).font(.system(size: 11.5)).fixedSize(horizontal: false, vertical: true)
+                    }
+                    .foregroundStyle(Palette.muted)
+                    .padding(8)
+                    .background(Palette.wash, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
             }
+        }
+    }
+}
+
+/// The button for it at the right of the row of buttons beside the address,
+/// once Claude is on (Settings › About › Developer). It lights while the
+/// panel is up; another press puts it away.
+struct ClaudeDoor: View {
+    @ObservedObject var browser: Browser
+    @ObservedObject var prefs: Preferences
+
+    var body: some View {
+        if prefs.claudePanel, !browser.isPopup {
+            Door(icon: "sparkles",
+                 on: browser.sidePanelShown && browser.sidePanel == .claude,
+                 help: "Claude   ⌥⌘K") { browser.toggleClaudePanel() }
         }
     }
 }
