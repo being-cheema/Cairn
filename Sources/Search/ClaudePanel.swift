@@ -3,7 +3,8 @@ import SwiftUI
 // Claude in the side panel (ClaudeSession): a conversation drawn as the rest
 // of the browser is — the same ink, muted and faint, the same sizes, hairlines
 // and pills, and as plain: text only, nothing to follow, nothing to fetch.
-// Off until Settings › About › Developer › Claude in the side panel is on.
+// It still needs "Let coding agents use Search" (Settings › About › Developer),
+// which is the person's to allow.
 //
 // What you said sits in a soft bubble on the right, what Claude did as quiet
 // lines with a tick each, and what it says as plain text on the left, written
@@ -12,8 +13,8 @@ import SwiftUI
 
 struct ClaudePanel: View {
     @ObservedObject var session: ClaudeSession
-    /// Settings › Developer › Agents work in a clean browser is on.
-    var clean = false
+    /// The model it runs (ClaudeCode.models), nil for the person's own default.
+    @Binding var model: String?
     let close: () -> Void
     let openSettings: () -> Void
     @FocusState private var typing: Bool
@@ -100,8 +101,7 @@ struct ClaudePanel: View {
                 Text("What should I do?")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Palette.ink)
-                Text(clean ? "I work in a clean browser of my own: not signed in to anything, and gone when we're done. You are asked before I start."
-                           : "I work in tabs of my own, and you are asked before I start.")
+                Text("I work in a clean browser of my own: not signed in to anything, and gone when we're done. You are asked before I start.")
                     .font(.system(size: 12))
                     .foregroundStyle(Palette.muted)
                     .fixedSize(horizontal: false, vertical: true)
@@ -185,16 +185,53 @@ struct ClaudePanel: View {
             .background(Palette.wash.opacity(0.6), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Palette.hairline, lineWidth: 1))
 
-            Text("Claude Code on this Mac · may be wrong")
-                .font(.system(size: 10.5))
-                .foregroundStyle(Palette.faint)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-                .padding(.horizontal, 4)
+            HStack(spacing: 6) {
+                modelMenu
+                Text("· Claude Code on this Mac · may be wrong")
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(Palette.faint)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .padding(.horizontal, 4)
         }
         .padding(.horizontal, 12)
         .padding(.top, 6)
         .padding(.bottom, 10)
+    }
+
+    /// Which model, from the few Claude Code takes by name. A change starts a
+    /// new chat: a running Claude Code can't switch, and a new one wouldn't
+    /// remember what was said.
+    private var modelMenu: some View {
+        let shown = ClaudeCode.models.first { $0.alias == model }?.name ?? "Default"
+        return Menu {
+            Button { choose(nil) } label: { Label("Default", systemImage: model == nil ? "checkmark" : "") }
+            ForEach(ClaudeCode.models, id: \.alias) { entry in
+                Button { choose(entry.alias) } label: { Label(entry.name, systemImage: model == entry.alias ? "checkmark" : "") }
+            }
+            if !session.turns.isEmpty {
+                Divider()
+                Text("Changing it starts a new chat")
+            }
+        } label: {
+            HStack(spacing: 3) {
+                Text(verbatim: shown)
+                Image(systemName: "chevron.up.chevron.down").font(.system(size: 7.5, weight: .semibold))
+            }
+            .font(.system(size: 10.5, weight: .medium))
+            .foregroundStyle(Palette.muted)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Which Claude model answers")
+    }
+
+    private func choose(_ alias: String?) {
+        guard alias != model else { return }
+        model = alias
+        if !session.turns.isEmpty || session.running { session.newChat() }
     }
 
     /// Send, or Stop while it works.
@@ -297,15 +334,13 @@ struct ClaudePanel: View {
     }
 }
 
-/// The button for it at the right of the row of buttons beside the address,
-/// once Claude is on (Settings › About › Developer). It lights while the
-/// panel is up; another press puts it away.
+/// The button for it at the right of the row of buttons beside the address.
+/// It lights while the panel is up; another press puts it away.
 struct ClaudeDoor: View {
     @ObservedObject var browser: Browser
-    @ObservedObject var prefs: Preferences
 
     var body: some View {
-        if prefs.claudePanel, !browser.isPopup {
+        if !browser.isPopup {
             Door(icon: "sparkles",
                  on: browser.sidePanelShown && browser.sidePanel == .claude,
                  help: "Claude   ⌥⌘K") { browser.toggleClaudePanel() }

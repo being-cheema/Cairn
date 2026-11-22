@@ -1,6 +1,7 @@
 # Spec: task spaces and commit gates
 
-Status: **draft, waiting for approval. Nothing here is built.**
+Status: built. Later change: the switches described below were removed and
+everything is always on (see git log); only the model picker is a setting.
 Branch: `step3-spec`. Covers Step 3 items 1 and 3, plus four small fixes that
 make Claude reliable on real pages.
 

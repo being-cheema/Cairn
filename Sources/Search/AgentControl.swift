@@ -40,8 +40,7 @@ import WebKit
 // any box seen as a password, stay secret for good — and pictures black out
 // those, every frame, and whatever can't be read. Secret-looking values are
 // taken out of the addresses it is given. No cookies, no storage, nothing
-// from the keychain — but for one verb, `sign_in`, off unless the person
-// switched on "Let agents sign in with my saved passwords": Search itself
+// from the keychain — but for one verb, `sign_in`: Search itself
 // fills the login saved for that exact https site into a page of the agent's
 // own and says only that it did and the account's name, never the password.
 // No camera, microphone, screen, location or
@@ -448,8 +447,7 @@ final class AgentSession: ObservableObject, Identifiable {
     fileprivate var pages: [String: Tab.ID] = [:]
     /// The tabs it opened, and the ones those opened.
     fileprivate(set) var own: Set<Tab.ID> = []
-    /// The task's own cookie store, when Settings › Developer › Agents work in
-    /// a clean browser is on: made with its first tab, shared by the tabs it
+    /// The task's own cookie store: made with its first tab, shared by the tabs it
     /// opens and those they open, and gone with them (AgentControl.end).
     fileprivate(set) var taskStore: WKWebsiteDataStore?
     /// The sites (registrable domains) this task has been to: what "leaving
@@ -1107,7 +1105,7 @@ final class AgentControl: ObservableObject {
     weak var declineButton: NSView?
 
     private func rules(_ browser: Browser) -> AgentGate.Rules {
-        AgentGate.Rules(commits: browser.prefs.agentGate, leaves: browser.prefs.agentLeave)
+        AgentGate.Rules.standard
     }
 
     /// Puts `hold` to you in the window and calls `then` once with the
@@ -1258,7 +1256,7 @@ final class AgentControl: ObservableObject {
                 guard let url = AgentRules.address(request["url"] as? String ?? "") else { throw Self.badAddress }
                 func open() {
                     guard self.live(session) else { return answer(AgentRefusal(code: "stopped", message: "Stopped in Search").said) }
-                    if browser.prefs.taskSpaces, session.taskStore == nil { session.taskStore = .nonPersistent() }
+                    if session.taskStore == nil { session.taskStore = .nonPersistent() }
                     let tab = browser.benchOpen(url, agent: true, store: session.taskStore)
                     session.own.insert(tab.id)
                     if let site = AgentGate.site(url) { session.sites.insert(site) }
@@ -1411,10 +1409,6 @@ final class AgentControl: ObservableObject {
     /// script checks again as it fills. Nothing here is logged. It does not
     /// press anything: submitting is the agent's own click, like any other.
     private func signIn(_ request: [String: Any], _ session: AgentSession, _ browser: Browser, _ answer: @escaping ([String: Any]) -> Void) throws {
-        guard browser.prefs.agentLogins else {
-            throw AgentRefusal(code: "not_allowed", message: "The person hasn't let agents sign in with their saved passwords",
-                               hint: "Ask them to sign in in that tab themselves, then carry on.")
-        }
         let tab = try self.tab(request, session, browser, .drive)
         guard let address = tab.pageAddress, address.scheme?.lowercased() == "https",
               let host = browser.curtain.host(of: address)
@@ -1645,7 +1639,7 @@ final class AgentControl: ObservableObject {
         }
         // Typed as keys, a new line is Return, which sends a form: with the
         // gate on, that is for press, which asks.
-        if browser.prefs.agentGate, request["keys"] as? Bool == true, text.contains(where: \.isNewline) {
+        if request["keys"] as? Bool == true, text.contains(where: \.isNewline) {
             throw AgentRefusal(code: "bad_text", message: "No new lines when typing as keys",
                                hint: "Type the text without them, then use press Enter.")
         }

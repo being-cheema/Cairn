@@ -101,9 +101,8 @@ final class AgentGateTests: XCTestCase {
         XCTAssertEqual(button("Pay").fingerprint, button("Pay").fingerprint)
     }
 
-    @MainActor func testBothSwitchesAreOffByDefault() {
-        let prefs = Preferences()
-        XCTAssertFalse(prefs.agentGate)
-        XCTAssertFalse(prefs.agentLeave)
+    func testEveryAgentRunsUnderBothGates() {
+        XCTAssertTrue(AgentGate.Rules.standard.commits)
+        XCTAssertTrue(AgentGate.Rules.standard.leaves)
     }
 }

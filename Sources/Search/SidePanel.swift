@@ -174,7 +174,7 @@ extension Browser {
             closeSidePanel()
             return
         }
-        guard prefs.claudePanel, !isPopup else { return }
+        guard !isPopup else { return }
         if case .page(_, _, let tab?) = sidePanel { SidePanelPages.shared.unbind(tab, in: self) }
         SidePanelPages.shared.drop(in: self)
         sidePanel = .claude
@@ -702,7 +702,9 @@ struct SidePanelView: View {
                            close: { browser.closeSidePanel() })
                 .environment(\.asTab, true)
         case .claude:
-            ClaudePanel(session: browser.claude, clean: browser.prefs.taskSpaces, close: { browser.closeSidePanel() },
+            ClaudePanel(session: browser.claude,
+                        model: Binding(get: { browser.prefs.claudeModel }, set: { browser.prefs.claudeModel = $0 }),
+                        close: { browser.closeSidePanel() },
                         openSettings: { browser.tuning = true })
         case nil:
             Color.clear

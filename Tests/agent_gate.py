@@ -152,7 +152,7 @@ t = sv.T()
 def main():
     a = None
     try:
-        sv.setup(**{"agents": True, "agents.gate": True})
+        sv.setup(**{"agents": True})
         sv.launch()
         a = Client()
         n = a.call("open_tab", url=f"{BASE}/post")

@@ -6,10 +6,6 @@ import WebKit
 /// nothing of the page behind when they close, and none of yours in them.
 @MainActor
 final class TaskSpaceTests: XCTestCase {
-    func testSwitchIsOffByDefault() {
-        XCTAssertFalse(Preferences().taskSpaces)
-    }
-
     func testATaskTabUsesTheStoreItIsGiven() {
         let browser = Browser(record: WindowRecord())
         let space = WKWebsiteDataStore.nonPersistent()

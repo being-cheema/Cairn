@@ -313,8 +313,12 @@ def main():
 
         # ---- a real click and where it leads
         again, _ = a.tool("read_page", page="p1")
-        x, err = a.tool("click", element=node(again, "button", "Send")["element"])
-        t.ok("a real click submits the form", not err and x.get("navigated") is True, x)
+        # Its password form's button is held for the person's click (AgentGate).
+        n_send = a.send("tools/call", {"name": "click", "arguments": {"element": node(again, "button", "Send")["element"]}})
+        t.ok("the sign-in form's button is held for you", until(lambda: agents().get("held")), agents())
+        agents("approve")
+        x, err = said("click", {}, a.answer(n_send))
+        t.ok("a real click submits the form, once approved", not err and x.get("navigated") is True, x)
         t.ok("L3: the address it is given keeps the password out", "new-secret-9" not in json.dumps(x) and "pw=redacted" in x.get("url", ""), x)
         time.sleep(1)
         t.ok("L7: no offer to save the password it signed in with", sv.cmd({"do": "probe"}).get("offering") is False)

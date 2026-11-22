@@ -2,8 +2,7 @@ import Foundation
 
 // Commit gates: what an agent may propose and only you may commit.
 //
-// With Settings › About › Developer › Ask me before an agent submits, pays,
-// posts or signs in on, the browser holds an agent's action that would commit
+// Always on, for every agent: the browser holds an agent's action that would commit
 // something (a form sent, a payment, a message posted, a sign-in submitted)
 // and performs it only after a fresh click of yours on the question in the
 // window (AgentControl, AgentApproval). The agent is told it is waiting and
@@ -83,6 +82,8 @@ enum AgentGate {
         var commits = false
         /// A site that isn't one of the task's.
         var leaves = false
+        /// What every agent runs under: no switch turns it off.
+        static let standard = Rules(commits: true, leaves: true)
     }
 
     // MARK: - words

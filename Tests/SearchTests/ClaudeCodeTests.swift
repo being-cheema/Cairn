@@ -22,6 +22,22 @@ final class ClaudeCodeTests: XCTestCase {
         }
     }
 
+    func testTheModelIsPassedOnlyIfItIsOneWeOffer() {
+        let config = URL(fileURLWithPath: "/tmp/mcp.json")
+        for entry in ClaudeCode.models {
+            let args = ClaudeCode.arguments(config: config, options: .init(model: entry.alias))
+            let at = args.firstIndex(of: "--model")
+            XCTAssertNotNil(at)
+            XCTAssertEqual(at.map { args[$0 + 1] }, entry.alias)
+        }
+        XCTAssertFalse(ClaudeCode.arguments(config: config).contains("--model"), "the person's own default otherwise")
+        // Whatever else is stored or typed is not an argument.
+        for odd in ["--dangerously-skip-permissions", "opus; rm -rf", "", "OPUS"] {
+            XCTAssertFalse(ClaudeCode.arguments(config: config, options: .init(model: odd)).contains("--model"))
+            XCTAssertNil(ClaudeCode.model(named: odd))
+        }
+    }
+
     func testItHasOneMCPServerAndNoneOfThePersonsSettings() {
         let args = ClaudeCode.arguments(config: config)
         XCTAssertTrue(args.contains("--strict-mcp-config"), "only the server named here")

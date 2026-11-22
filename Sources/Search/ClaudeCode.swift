@@ -33,11 +33,27 @@ enum ClaudeCode {
 
     /// What the person has allowed, read when a run starts.
     struct Options: Equatable {
-        /// Do the whole task without stopping to ask first (Settings › About ›
-        /// Developer › Claude acts without asking first).
+        /// Do the whole task without stopping to ask first. What the browser
+        /// holds for your click (AgentGate) is held whatever this says.
         var acts = false
         /// `sign_in` may fill a saved login (AgentControl); Claude never sees it.
         var signIn = false
+        /// Which model, by one of `models`' aliases; nil is whatever the
+        /// person's own Claude Code uses.
+        var model: String?
+    }
+
+    /// The models the panel offers, as the aliases `claude --model` takes and
+    /// the names the picker shows. Only these are ever passed on: what is
+    /// stored or typed anywhere else never becomes an argument.
+    static let models: [(alias: String, name: String)] = [
+        ("opus", "Opus"), ("sonnet", "Sonnet"), ("haiku", "Haiku"),
+    ]
+
+    /// A stored name as one of the aliases, or nil.
+    static func model(named text: String?) -> String? {
+        guard let text, models.contains(where: { $0.alias == text }) else { return nil }
+        return text
     }
 
     /// What it is told it is: a pair of hands in a browser, whose reading is
@@ -142,7 +158,8 @@ enum ClaudeCode {
 
     /// The arguments, in full: see the top of this file for what each is for.
     static func arguments(config: URL, options: Options = Options()) -> [String] {
-        [
+        let model = model(named: options.model).map { ["--model", $0] } ?? []
+        return model + [
             "-p",
             "--input-format", "stream-json",
             "--output-format", "stream-json",

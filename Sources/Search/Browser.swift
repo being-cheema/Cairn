@@ -520,8 +520,10 @@ final class Browser: NSObject, ObservableObject {
     /// the panel first asks for it. Nothing runs until something is sent.
     lazy var claude = ClaudeSession(
         agentsOn: { [weak self] in self?.prefs.agents ?? false },
+        // The agent's browser rules (clean browser, commit gates, saved
+        // logins by the browser) are always on; what it is told matches.
         options: { [weak self] in
-            ClaudeCode.Options(acts: self?.prefs.claudeActs ?? false, signIn: self?.prefs.agentLogins ?? false)
+            ClaudeCode.Options(acts: true, signIn: true, model: self?.prefs.claudeModel)
         })
     /// The Settings page it opens on next.
     var settingsPage: SettingsPanel.Page {

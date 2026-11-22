@@ -219,7 +219,7 @@ struct TabBar: View {
                         }
                         BookmarkDoor(browser: browser, arrowEdge: .bottom)
                         // Claude, at the far end, once it is on.
-                        ClaudeDoor(browser: browser, prefs: browser.prefs)
+                        ClaudeDoor(browser: browser)
                     }
                     .background {
                         GeometryReader { box in
