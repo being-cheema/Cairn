@@ -1071,6 +1071,9 @@ struct SettingsPanel: View {
                 Text(Brand.name)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Palette.ink)
+                Text(Brand.tagline)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Palette.ink)
                 // The credit the MIT licence and the upstream's request ask for.
                 Text("A fork of Search by Office Commun (MIT) · version \(Updater.version)")
                     .font(.system(size: 12))

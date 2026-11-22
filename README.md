@@ -1,5 +1,8 @@
 # Cairn
 
+*A browser made by Claude, for Claude.* An agentic browser: Claude does the work
+in tabs of its own, and you approve anything that matters.
+
 A small, fast, quiet web browser for the Mac, and a personal fork of
 [Search](https://github.com/driceroland/Search) by [Office Commun](https://officecommun.com),
 which is MIT-licensed. The browser is theirs; the renaming and what is built on

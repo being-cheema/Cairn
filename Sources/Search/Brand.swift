@@ -19,6 +19,9 @@ enum Brand {
     /// What people see: the menu bar, About, dialogs.
     static let name = "Cairn"
 
+    /// What it is for, said in the About pane and the README.
+    static let tagline = "A browser made by Claude, for Claude"
+
     /// The bundle id, and so the defaults domain, the WebKit container and
     /// every keychain service below. build.sh reads this line for its own
     /// default, so CAIRN_BUNDLE_ID is only needed to build a copy under
