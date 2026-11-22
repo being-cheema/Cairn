@@ -229,6 +229,18 @@ def main():
         x, err = a.result(n)
         t.ok("and sends nothing when declined", err and code(x) == "declined" and hits() == [], (x, HITS))
 
+        # ---- waiting for the person is not the page being slow
+        go("/post")
+        form = read()
+        n = a.call("click", element=node(form, "button", "Next")["element"])
+        t.ok("held for a long answer", until(lambda: agents().get("held")))
+        del HITS[:]
+        time.sleep(70)
+        t.ok("still waiting after a minute (the agent was not told no_answer)", agents().get("held") != "", agents())
+        agents("approve")
+        x, err = a.result(n)
+        t.ok("approved after a minute: it goes through", not err and x.get("navigated") is True, x)
+
         # ---- not held
         go("/search")
         form = read()

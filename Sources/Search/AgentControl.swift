@@ -457,6 +457,9 @@ final class AgentSession: ObservableObject, Identifiable {
     fileprivate var sites = Set<String>()
     /// An action held for your click (AgentGate), and what to do with the answer.
     @Published fileprivate(set) var held: HeldAction?
+    /// Seconds spent waiting for you to answer held actions, so that a slow
+    /// person is not counted as a slow page.
+    fileprivate var heldTime: TimeInterval = 0
     /// p1 → the number of its last read.
     fileprivate var snaps: [String: Int] = [:]
     private var counter = 0
@@ -777,9 +780,20 @@ final class AgentControl: ObservableObject {
             // question, are not on a clock.
             if verb != "hello" {
                 let patience = min(60, (request["timeout"] as? Double ?? 20) + 15)
-                DispatchQueue.main.asyncAfter(deadline: .now() + patience) {
-                    answer(AgentRefusal(code: "no_answer", message: "No answer within \(Int(patience)) s").said)
+                let began = ProcessInfo.processInfo.systemUptime
+                let heldBefore = session.heldTime
+                // Time spent waiting for you to answer a held action (AgentGate)
+                // is not the page being slow: it has its own limit (holdFor).
+                @MainActor func wait(_ seconds: TimeInterval) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { [weak session] in
+                        guard let session else { return answer(AgentRefusal(code: "no_answer", message: "No answer within \(Int(patience)) s").said) }
+                        if session.held != nil { return wait(5) }
+                        let used = ProcessInfo.processInfo.systemUptime - began - (session.heldTime - heldBefore)
+                        if used < patience { return wait(patience - used) }
+                        answer(AgentRefusal(code: "no_answer", message: "No answer within \(Int(patience)) s").said)
+                    }
                 }
+                wait(patience)
             }
             self.run(verb, request, in: session, answer)
         }
@@ -1092,9 +1106,11 @@ final class AgentControl: ObservableObject {
     /// agent's call waits for it, and gets the result, or why not.
     private func ask(_ hold: AgentGate.Hold, _ session: AgentSession, then: @escaping (HeldAction.Answer) -> Void) {
         var answered = false
-        let held = HeldAction(hold: hold, since: ProcessInfo.processInfo.systemUptime) { [weak session] verdict in
+        let began = ProcessInfo.processInfo.systemUptime
+        let held = HeldAction(hold: hold, since: began) { [weak session] verdict in
             guard !answered else { return }
             answered = true
+            session?.heldTime += ProcessInfo.processInfo.systemUptime - began
             session?.held = nil
             if verdict == .approved, let site = hold.site { session?.sites.insert(site) }
             then(verdict)
