@@ -148,13 +148,18 @@ enum PageScripts {
     """#
 
     private static let readBody = #"""
-    (function (key, snap, most, longest, withText) {
-      var found = candidates(), els = [], nodes = [], cut = false, vw = innerWidth, vh = innerHeight;
+    (function (key, snap, most, longest, withText, nodeOffset, viewportOnly, textOffset) {
+      var found = candidates(), els = [], nodes = [], cut = false, vw = innerWidth, vh = innerHeight, seen = 0;
       for (var i = 0; i < found.length; i++) {
         var el = found[i], r0 = wanted(el);
         if (!r0 || !visible(el)) continue;
+        var r = el.getBoundingClientRect();
+        // Only what is on screen, when asked; and from the nodeOffset'th on,
+        // to page through a long list without the first ones again.
+        if (viewportOnly && !(r.bottom > 0 && r.right > 0 && r.top < vh && r.left < vw)) continue;
+        if (seen++ < nodeOffset) continue;
         if (nodes.length >= most) { cut = true; break; }
-        var r = el.getBoundingClientRect(), n = { e: els.length, role: r0, name: name(el) };
+        var n = { e: els.length, role: r0, name: name(el) };
         if (r0 === 'heading') n.level = +(el.getAttribute('aria-level') || el.tagName.slice(1)) || 2;
         if (/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) && !/^(submit|button|reset|image|checkbox|radio)$/i.test(el.type || '')) {
           if (secret(el)) { n.redacted = true; n.filled = !!el.value; } else n.value = String(el.value).slice(0, 500);
@@ -173,12 +178,16 @@ enum PageScripts {
       }
       globalThis[key] = { snap: snap, els: els };
       var out = { url: location.href, title: document.title, nodes: nodes, nodesTruncated: cut,
+        nodeOffset: nodeOffset, nextNodeOffset: cut ? nodeOffset + nodes.length : null,
         viewport: { width: vw, height: vh, scrollY: Math.round(scrollY),
           scrollHeight: document.documentElement ? document.documentElement.scrollHeight : 0 } };
       if (withText) {
         var text = document.body ? document.body.innerText : '';
-        out.textTruncated = text.length > longest;
-        out.text = text.slice(0, longest);
+        out.textLength = text.length;
+        out.textOffset = textOffset;
+        out.textTruncated = textOffset + longest < text.length;
+        out.nextTextOffset = out.textTruncated ? textOffset + longest : null;
+        out.text = text.slice(textOffset, textOffset + longest);
       }
       return JSON.stringify(out);
     })
@@ -391,8 +400,9 @@ enum PageScripts {
 
     /// The page's visible controls and headings, with the element list kept
     /// under `key` for touch.
-    static func read(key: String, snap: Int, most: Int, longest: Int, text: Bool) -> String {
-        call(readBody, [key, snap, most, longest, text])
+    static func read(key: String, snap: Int, most: Int, longest: Int, text: Bool,
+                     nodeOffset: Int = 0, viewportOnly: Bool = false, textOffset: Int = 0) -> String {
+        call(readBody, [key, snap, most, longest, text, nodeOffset, viewportOnly, textOffset])
     }
 
     /// One element of the last read under `key`: "click", "press", "scroll",

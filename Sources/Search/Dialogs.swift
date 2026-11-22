@@ -139,6 +139,13 @@ extension Browser {
         initiatedByFrame frame: WKFrameInfo,
         completionHandler: @escaping () -> Void
     ) {
+        // A coding agent's page asking: answered as dismissed at once, and the
+        // agent told what it said, rather than held until you visit that tab
+        // while its call waits (AgentControl.dialog).
+        if let tab = tab(for: webView), tab.agent {
+            AgentControl.shared.dialog(on: tab, kind: "alert", text: message)
+            return completionHandler()
+        }
         if let tab = paneAsking(webView) {
             return askInPane(tab, frame: frame, message: message, kind: .alert) { _, _ in completionHandler() }
         }
@@ -155,6 +162,10 @@ extension Browser {
         initiatedByFrame frame: WKFrameInfo,
         completionHandler: @escaping (Bool) -> Void
     ) {
+        if let tab = tab(for: webView), tab.agent {
+            AgentControl.shared.dialog(on: tab, kind: "confirm", text: message)
+            return completionHandler(false)
+        }
         if let tab = paneAsking(webView) {
             return askInPane(tab, frame: frame, message: message, kind: .confirm) { ok, _ in completionHandler(ok) }
         }
@@ -175,6 +186,10 @@ extension Browser {
         initiatedByFrame frame: WKFrameInfo,
         completionHandler: @escaping (String?) -> Void
     ) {
+        if let tab = tab(for: webView), tab.agent {
+            AgentControl.shared.dialog(on: tab, kind: "prompt", text: prompt)
+            return completionHandler(nil)
+        }
         if let tab = paneAsking(webView) {
             return askInPane(tab, frame: frame, message: prompt, kind: .prompt(defaultText ?? "")) { ok, text in
                 completionHandler(ok ? (text ?? "") : nil)

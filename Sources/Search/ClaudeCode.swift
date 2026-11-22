@@ -61,6 +61,7 @@ enum ClaudeCode {
         } else {
             parts.append("Before anything that sends, pays, posts, signs in or downloads, stop, say what you are about to do, and wait for the person to say yes.")
         }
+        parts.append("A page read that says it was truncated has more: read again from the offset it gives. Answers may also say a page opened a tab (new_tabs) or asked a dialog (dialogs).")
         parts.append("Be quick: do not narrate each step. Answer in short plain text, with no markdown.")
         return parts.joined(separator: " ")
     }
