@@ -166,7 +166,7 @@ struct WelcomePanel: View {
             HStack(spacing: 12) {
                 if isDefault {
                     HStack(spacing: 8) {
-                        Image(systemName: "checkmark")
+                        Ink("checkmark", size: 11)
                             .font(.system(size: 11, weight: .medium))
                         Text("Search is the default browser")
                     }

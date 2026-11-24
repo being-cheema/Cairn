@@ -81,7 +81,7 @@ struct FindBar: View {
                     .disabled(browser.findResult?.nativeFallback == true && !browser.wholeWords)
                     .help("Match complete words. This option is unavailable for PDF pages.")
             } label: {
-                Image(systemName: "ellipsis")
+                Ink("ellipsis", size: 10)
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(browser.matchCase || browser.wholeWords ? Palette.ink : Palette.muted)
                     .frame(width: 24, height: 24)

@@ -142,7 +142,7 @@ struct SplitTabItem: View {
     private var cross: some View {
         if interactive, let id = hovered, let tab = pages.first(where: { $0.id == id }),
            browser.editingTab == nil {
-            Image(systemName: "xmark")
+            Ink("xmark", size: 8)
                 .font(.system(size: 8, weight: .semibold))
                 .foregroundStyle(Palette.muted)
                 .frame(width: 15, height: 15)
@@ -328,7 +328,7 @@ private struct SplitTabHalf: View {
                         .frame(width: stacked ? 15 : 13, height: stacked ? 15 : 13)
                 }
                 if tab.shy {
-                    Image(systemName: "eye.slash")
+                    Ink("eye.slash", size: 9)
                         .font(.system(size: 9))
                         .foregroundStyle(Palette.muted)
                 }
@@ -365,7 +365,7 @@ private struct SplitTabHalf: View {
     }
 
     private var closeButton: some View {
-        Image(systemName: "xmark")
+        Ink("xmark", size: 8)
             .font(.system(size: 8, weight: .semibold))
             .foregroundStyle(Palette.muted)
             .frame(width: 15, height: 15)

@@ -207,7 +207,7 @@ struct SettingsPanel: View {
 
         var body: some View {
             HStack(spacing: 7) {
-                Image(systemName: "magnifyingglass")
+                Ink("magnifyingglass", size: 11)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(Palette.muted)
                 ZStack(alignment: .leading) {
@@ -426,7 +426,7 @@ struct SettingsPanel: View {
                         Text("\(group.page.title)  ›  \(group.title)".uppercased())
                             .font(.system(size: 10.5, weight: .semibold))
                             .tracking(0.4)
-                        Image(systemName: "arrow.right").font(.system(size: 9, weight: .semibold)).opacity(0.6)
+                        Ink("arrow.right", size: 13).font(.system(size: 9, weight: .semibold)).opacity(0.6)
                     }
                     .foregroundStyle(Palette.muted)
                     .padding(.leading, 2)
@@ -501,7 +501,7 @@ struct SettingsPanel: View {
         switch id {
         case "general.default":
             if isDefault {
-                Image(systemName: "checkmark")
+                Ink("checkmark", size: 12)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(Palette.ink)
                     .frame(width: 24)
@@ -525,7 +525,7 @@ struct SettingsPanel: View {
             .fixedSize()
         case "mail.default":
             if mailDefault {
-                Image(systemName: "checkmark")
+                Ink("checkmark", size: 12)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(Palette.ink)
                     .frame(width: 24)

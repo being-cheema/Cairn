@@ -568,7 +568,7 @@ struct SpaceLookPicker: View {
                     withAnimation(Motion.quick) { customOpen.toggle() }
                 } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: "chevron.right")
+                        Ink("chevron.right", size: 9)
                             .font(.system(size: 9, weight: .semibold))
                             .rotationEffect(.degrees(customOpen ? 90 : 0))
                         Text("Custom gradient")
@@ -691,7 +691,7 @@ struct SpaceLookPicker: View {
                         Circle().fill(colour(pick.hex))
                             .frame(width: Self.dot, height: Self.dot)
                             .overlay {
-                                if on { Image(systemName: "checkmark").font(.system(size: 9, weight: .bold)).foregroundStyle(.white) }
+                                if on { Ink("checkmark", size: 13).font(.system(size: 9, weight: .bold)).foregroundStyle(.white) }
                             }
                     }
                     .buttonStyle(.plain)

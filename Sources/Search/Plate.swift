@@ -203,7 +203,7 @@ struct Hunt: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass")
+            Ink("magnifyingglass", size: 11)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(Palette.muted)
             ZStack(alignment: .leading) {

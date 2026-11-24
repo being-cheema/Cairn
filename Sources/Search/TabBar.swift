@@ -184,7 +184,7 @@ struct TabBar: View {
                     // at the end of their run, so it is there however far the
                     // run has scrolled. Out of sight until the pointer is up here.
                     Button { browser.launch() } label: {
-                        Image(systemName: "plus")
+                        Ink("plus", size: 10)
                             .font(.system(size: 10, weight: .medium))
                             .foregroundStyle(Palette.muted)
                             .frame(width: 15, height: 15)
@@ -896,7 +896,7 @@ private struct TabPill: View, Equatable {
         if compact {
             ZStack {
                 if live && hovering {
-                    Image(systemName: "xmark")
+                    Ink("xmark", size: 8)
                         .font(.system(size: 8, weight: .semibold))
                         .foregroundStyle(Palette.muted)
                         .frame(width: 15, height: 15)
@@ -947,7 +947,7 @@ private struct TabPill: View, Equatable {
                 }
                 if tab.shy {
                     // Quiet, and only on the tabs that keep nothing.
-                    Image(systemName: "eye.slash")
+                    Ink("eye.slash", size: 9)
                         .font(.system(size: 9))
                         .foregroundStyle(colour.opacity(0.7))
                 }
@@ -987,7 +987,7 @@ private struct TabPill: View, Equatable {
                 // ring while the page is still coming, never both.
                 ZStack {
                     if hovering {
-                        Image(systemName: "xmark")
+                        Ink("xmark", size: 8)
                             .font(.system(size: 8, weight: .semibold))
                             .foregroundStyle(Palette.muted)
                             .frame(width: 15, height: 15)

@@ -228,7 +228,7 @@ private struct HistoryList: View {
         if let image = Favicons.shared.cached(for: url) {
             Image(nsImage: image).resizable().interpolation(.high)
         } else {
-            Image(systemName: "globe")
+            Ink("globe", size: 11)
                 .font(.system(size: 11))
                 .foregroundStyle(Palette.muted)
         }

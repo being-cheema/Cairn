@@ -248,7 +248,7 @@ struct AssistantPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
-                Image(systemName: "sparkles")
+                Ink("sparkles", size: 11)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(Palette.muted)
                 Text(assistant.summary ? "Summary" : "About this page")
@@ -318,7 +318,7 @@ struct AssistantPanel: View {
 
     private func caution(_ text: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Image(systemName: "exclamationmark.triangle").font(.system(size: 10, weight: .medium))
+            Ink("exclamationmark.triangle", size: 13).font(.system(size: 10, weight: .medium))
             Text(verbatim: text).font(.system(size: 11.5)).fixedSize(horizontal: false, vertical: true)
         }
         .foregroundStyle(Palette.muted)
@@ -386,7 +386,7 @@ struct AssistantPanel: View {
                 }
                 if !turn.strays.isEmpty {
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Image(systemName: "exclamationmark.triangle")
+                        Ink("exclamationmark.triangle", size: 10)
                             .font(.system(size: 10, weight: .medium))
                         Text(verbatim: "Not on the page: " + turn.strays.joined(separator: ", "))
                             .font(.system(size: 11.5))
@@ -560,7 +560,7 @@ struct AISettings: View {
         var body: some View {
             HStack(spacing: 5) {
                 Text(text).font(.system(size: 12)).foregroundStyle(menu ? Palette.ink : Palette.faint)
-                if menu { Image(systemName: "chevron.up.chevron.down").font(.system(size: 8, weight: .semibold)).foregroundStyle(Palette.muted) }
+                if menu { Ink("chevron.up.chevron.down", size: 13).font(.system(size: 8, weight: .semibold)).foregroundStyle(Palette.muted) }
             }
             .frame(width: width, alignment: .leading)
             .padding(.horizontal, 8)

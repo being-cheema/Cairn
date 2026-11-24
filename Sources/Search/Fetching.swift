@@ -703,7 +703,7 @@ struct FetchDoor: View {
                             .foregroundStyle(hovering ? Palette.ink.opacity(0.7) : Palette.muted)
                             .transition(.opacity)
                     } else if fetches.done {
-                        Image(systemName: "arrow.down")
+                        Ink("arrow.down", size: 10)
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(Palette.ink.opacity(0.75))
                             .transition(.opacity)

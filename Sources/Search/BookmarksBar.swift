@@ -135,7 +135,7 @@ struct BookmarksBar: View {
         var body: some View {
             HStack(spacing: 6) {
                 if node.isFolder {
-                    Image(systemName: "folder")
+                    Ink("folder", size: 10.5)
                         .font(.system(size: 10.5))
                         .foregroundStyle(Palette.muted)
                 } else {
@@ -150,7 +150,7 @@ struct BookmarksBar: View {
                         .fixedSize(horizontal: true, vertical: false)
                 }
                 if node.isFolder {
-                    Image(systemName: "chevron.down")
+                    Ink("chevron.down", size: 7.5)
                         .font(.system(size: 7.5, weight: .semibold))
                         .foregroundStyle(Palette.faint)
                 }

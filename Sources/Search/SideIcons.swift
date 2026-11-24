@@ -121,7 +121,7 @@ struct IconTile: View {
             } else if tab.loading {
                 Ring()
             } else if tab.isBlank {
-                Image(systemName: "plus.magnifyingglass")
+                Ink("plus.magnifyingglass", size: 11)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(live ? Palette.ink : Palette.muted)
             } else {

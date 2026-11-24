@@ -653,7 +653,7 @@ struct SiteCard: View {
                         .fixedSize()
                 }
                 if submenu {
-                    Image(systemName: "chevron.right")
+                    Ink("chevron.right", size: 10)
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(hovering ? Color.white : Color(nsColor: .secondaryLabelColor))
                 }

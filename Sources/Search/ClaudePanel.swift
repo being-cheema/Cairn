@@ -46,7 +46,7 @@ struct ClaudePanel: View {
 
     private var header: some View {
         HStack(spacing: 8) {
-            Image(systemName: "sparkles")
+            Ink("sparkles", size: 11)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(Palette.muted)
             VStack(alignment: .leading, spacing: 1) {
@@ -219,7 +219,7 @@ struct ClaudePanel: View {
         } label: {
             HStack(spacing: 3) {
                 Text(verbatim: shown)
-                Image(systemName: "chevron.up.chevron.down").font(.system(size: 7.5, weight: .semibold))
+                Ink("chevron.up.chevron.down", size: 13).font(.system(size: 7.5, weight: .semibold))
             }
             .font(.system(size: 10.5, weight: .medium))
             .foregroundStyle(Palette.muted)
@@ -292,7 +292,7 @@ struct ClaudePanel: View {
                                 if live {
                                     ProgressView().controlSize(.mini).frame(width: 9, height: 9)
                                 } else {
-                                    Image(systemName: "checkmark").font(.system(size: 8.5, weight: .semibold))
+                                    Ink("checkmark", size: 13).font(.system(size: 8.5, weight: .semibold))
                                 }
                                 Text(verbatim: step)
                                     .font(.system(size: 11.5))
@@ -324,7 +324,7 @@ struct ClaudePanel: View {
 
                 if let failed = turn.failed {
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Image(systemName: "exclamationmark.triangle").font(.system(size: 10, weight: .medium))
+                        Ink("exclamationmark.triangle", size: 13).font(.system(size: 10, weight: .medium))
                         Text(verbatim: failed).font(.system(size: 11.5)).fixedSize(horizontal: false, vertical: true)
                     }
                     .foregroundStyle(Palette.muted)

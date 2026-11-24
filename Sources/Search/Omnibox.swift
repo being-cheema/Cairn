@@ -303,7 +303,7 @@ private struct SiteIcon: View {
                 .frame(width: 14, height: 14)
                 .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
         } else {
-            Image(systemName: "magnifyingglass")
+            Ink("magnifyingglass", size: 10)
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(Palette.muted)
                 .frame(width: 14, height: 14)

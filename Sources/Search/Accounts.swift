@@ -203,7 +203,7 @@ struct AccountList: View {
             HStack(spacing: 8) {
                 Button(action: use) {
                     HStack(spacing: 8) {
-                        Image(systemName: "key")
+                        Ink("key", size: 9)
                             .font(.system(size: 9, weight: .medium))
                             .frame(width: 22)
                         Text("Use your Apple passwords?")
@@ -217,7 +217,7 @@ struct AccountList: View {
                 .buttonStyle(.plain)
                 .help("Turns on Apple Passwords and pairs with a code from your Mac. Settings › Passwords turns it off.")
                 Button(action: never) {
-                    Image(systemName: "xmark")
+                    Ink("xmark", size: 7.5)
                         .font(.system(size: 7.5, weight: .semibold))
                         .foregroundStyle(Palette.faint)
                         .frame(width: 16, height: 16)

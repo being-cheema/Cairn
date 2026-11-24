@@ -1007,7 +1007,7 @@ struct BookmarkOutline: View {
         var body: some View {
             HStack(spacing: 8) {
                 if node.isFolder {
-                    Image(systemName: "chevron.right")
+                    Ink("chevron.right", size: 9)
                         .font(.system(size: 9, weight: .semibold))
                         .foregroundStyle(Palette.faint)
                         .rotationEffect(.degrees(isOpen ? 90 : 0))
@@ -1202,7 +1202,7 @@ struct BookmarkCard: View {
             }
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: "folder")
+                Ink("folder", size: 10.5)
                     .font(.system(size: 10.5))
                     .foregroundStyle(Palette.muted)
                 Text(here?.title ?? "Top Level")
@@ -1210,7 +1210,7 @@ struct BookmarkCard: View {
                     .foregroundStyle(Palette.ink)
                     .lineLimit(1)
                 Spacer(minLength: 4)
-                Image(systemName: "chevron.up.chevron.down")
+                Ink("chevron.up.chevron.down", size: 8.5)
                     .font(.system(size: 8.5, weight: .semibold))
                     .foregroundStyle(Palette.muted)
             }

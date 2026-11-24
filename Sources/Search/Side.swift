@@ -1768,7 +1768,7 @@ private struct SideRow: View, Equatable {
                             .help("Opened by a script")
                     }
                     if tab.shy {
-                        Image(systemName: "eye.slash")
+                        Ink("eye.slash", size: 9)
                             .font(.system(size: 9))
                             .foregroundStyle(colour.opacity(0.7))
                     }
@@ -2018,7 +2018,7 @@ struct KeepLine: View {
             if clears && hovering {
                 Button(action: act) {
                     HStack(spacing: 3) {
-                        Image(systemName: "arrow.down")
+                        Ink("arrow.down", size: 8)
                             .font(.system(size: 8, weight: .semibold))
                         Text("Clear")
                             .font(.system(size: 11))

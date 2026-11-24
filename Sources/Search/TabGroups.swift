@@ -137,7 +137,7 @@ struct GroupHeading: View {
         HStack(spacing: 2) {
             Text(group.name.first.map { String($0).uppercased() } ?? "•")
                 .font(.system(size: 9.5, weight: .semibold))
-            Image(systemName: "chevron.down")
+            Ink("chevron.down", size: 6.5)
                 .font(.system(size: 6.5, weight: .bold))
                 .rotationEffect(.degrees(group.collapsed ? -90 : 0))
         }
@@ -195,7 +195,7 @@ struct GroupHeading: View {
                 }
             }
             if !editing && !horizontal {
-                Image(systemName: "chevron.down")
+                Ink("chevron.down", size: 9)
                     .font(.system(size: 9, weight: .medium))
                     .rotationEffect(.degrees(group.collapsed ? -90 : 0))
                     .opacity(hovering ? 1 : 0)

@@ -185,7 +185,7 @@ struct ExtensionsPage: View {
                     // width, and wrapped a letter at a time when they tried. One
                     // menu holds them all, there without hovering to find it.
                     Menu { actions(context) } label: {
-                        Image(systemName: "ellipsis")
+                        Ink("ellipsis", size: 11)
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(hovering ? Palette.ink : Palette.muted)
                             .frame(width: 26, height: 26)
@@ -288,7 +288,7 @@ private struct RunsOn: View {
             HStack(spacing: 3) {
                 Text(access.mode.title)
                     .font(.system(size: 11.5))
-                Image(systemName: "chevron.up.chevron.down")
+                Ink("chevron.up.chevron.down", size: 8)
                     .font(.system(size: 8, weight: .semibold))
             }
             .foregroundStyle(access.restricted ? Palette.ink : Palette.muted)
@@ -328,7 +328,7 @@ private struct SiteList: View {
                         Button {
                             extensions.setSiteAccess(item.id, access.removing(host))
                         } label: {
-                            Image(systemName: "xmark")
+                            Ink("xmark", size: 9)
                                 .font(.system(size: 9, weight: .semibold))
                                 .foregroundStyle(Palette.muted)
                                 .frame(width: 18, height: 18)

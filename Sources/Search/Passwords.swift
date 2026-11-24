@@ -157,7 +157,7 @@ struct PasswordsPanel: View {
                             .truncationMode(.middle)
                     }
                     Spacer(minLength: 8)
-                    Image(systemName: "chevron.right")
+                    Ink("chevron.right", size: 9)
                         .font(.system(size: 9, weight: .semibold))
                         .foregroundStyle(Palette.muted)
                         .rotationEffect(.degrees(open ? 90 : 0))

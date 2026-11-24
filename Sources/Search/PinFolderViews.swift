@@ -55,7 +55,7 @@ struct PinFolderHeading: View {
         HStack(spacing: 2) {
             Text(folder.name.first.map { String($0).uppercased() } ?? "•")
                 .font(.system(size: 9.5, weight: .semibold))
-            Image(systemName: "chevron.down")
+            Ink("chevron.down", size: 6.5)
                 .font(.system(size: 6.5, weight: .bold))
                 .rotationEffect(.degrees(folder.collapsed ? -90 : 0))
         }
@@ -77,7 +77,7 @@ struct PinFolderHeading: View {
 
     private var long: some View {
         HStack(spacing: 6) {
-            Image(systemName: "chevron.right")
+            Ink("chevron.right", size: 13)
                 .font(.system(size: prefs.roomyTabs ? 9.5 : 8.5, weight: .semibold))
                 .rotationEffect(.degrees(folder.collapsed ? 0 : 90))
                 .frame(width: 10)
@@ -197,12 +197,12 @@ struct FeedItemRow: View {
     var body: some View {
         Group {
             if compact {
-                Image(systemName: "doc.text")
+                Ink("doc.text", size: 11)
                     .font(.system(size: 11))
                     .frame(width: Metrics.iconTile, height: Metrics.iconTile)
             } else {
                 HStack(spacing: 8) {
-                    Image(systemName: "doc.text")
+                    Ink("doc.text", size: 10)
                         .font(.system(size: 10))
                         .frame(width: 15)
                     Text(item.title)
