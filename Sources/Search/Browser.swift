@@ -982,6 +982,8 @@ final class Browser: NSObject, ObservableObject {
         var nameOnly = false
         /// Under a box for a new password: offer to make one.
         var suggestsNew = false
+        /// Under a box for a verification code: the accounts that keep a setup key here.
+        var codes: [Kept] = []
         /// When it came up. A page can put the caret in a sign-in box
         /// itself, an invisible one under the pointer included: a click that
         /// was already on its way is not a choice, so the list takes none for
@@ -1083,9 +1085,21 @@ final class Browser: NSObject, ObservableObject {
             return
         }
         looked = (tab.id, host, inTheClear, name, wide, code, fill)
-        // A box for a verification code: nothing of ours goes in one.
+        // A box for a verification code: the accounts of this site that keep a
+        // setup key, each offering its code now. Never in a private or an
+        // agent's tab, never over plain http (as for a password).
         if code {
-            suggesting = nil
+            guard prefs.fillsPasswords, !tab.shy, !tab.agent else { suggesting = nil; return }
+            let withCode = Vault.kept(matching: host, wide: wide).filter { !inTheClear || $0.clear }.filter {
+                Vault.item(of: $0)?.extras.totp.flatMap(TOTP.key(from:)) != nil
+            }
+            guard !withCode.isEmpty else { suggesting = nil; return }
+            if let up = suggesting, up.tab == tab.id, up.codes == Array(withCode.prefix(5)), up.wide == wide {
+                suggesting?.spot = spot
+                return
+            }
+            suggesting = Suggesting(tab: tab.id, spot: spot, logins: [], host: host, clear: inTheClear,
+                                    codes: Array(withCode.prefix(5)), wide: wide)
             return
         }
         // Passwords only for a box that goes with one: a box for passkeys
@@ -1150,6 +1164,35 @@ final class Browser: NSObject, ObservableObject {
     func testSuggest(_ list: Suggesting) {
         guard Store.testing else { return }
         suggesting = list
+    }
+
+    /// A verification code, picked from under a box for one: made now from the
+    /// account's setup key, put into the page if it is still the one it was
+    /// offered on, and not kept. Asks first when Settings says so, as a
+    /// password does.
+    func chooseCode(_ account: Kept) {
+        lowering?.cancel()
+        guard let list = suggesting, let tab = tabs.first(where: { $0.id == list.tab }) else { return }
+        guard Date().timeIntervalSince(list.shown) > 0.5 else { return }
+        suggesting = nil
+        guard curtain.host(of: tab.pageAddress) == list.host,
+              (tab.pageAddress?.scheme?.lowercased() == "http") == list.clear, let page = tab.pageAddress
+        else { return }
+        pickedInto = tab.id
+        let put: () -> Void = { [weak self] in
+            guard let item = Vault.item(of: account), let key = item.extras.totp.flatMap(TOTP.key(from:)) else {
+                self?.announce("That account has no code key")
+                return
+            }
+            tab.fillCode(TOTP.code(for: key), onlyOn: page) { worked in
+                if !worked { self?.announce("Couldn't find the box for the code anymore") }
+            }
+        }
+        if prefs.asksBeforeFilling {
+            Vault.FillProof.ask(list.host, shy: tab.shy) { ok in if ok { put() } }
+        } else {
+            put()
+        }
     }
 
     /// "Suggest a strong password", picked: one is made here and put into the
@@ -1271,6 +1314,7 @@ final class Browser: NSObject, ObservableObject {
         case .passkey(let passkey): choose(passkey)
         case .login(let login): choose(login)
         case .suggest: useSuggestion()
+        case .code(let account): chooseCode(account)
         case .contact(let contact): choose(contact, alone: alone)
         }
         return true

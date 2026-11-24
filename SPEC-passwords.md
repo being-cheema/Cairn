@@ -1,6 +1,6 @@
 # Spec: Cairn's own passwords
 
-Status: approved ("do it"). Steps 0 to 5 are done. Branch per step, off `main`.
+Status: approved ("do it"). Steps 0 to 6 are done. Branch per step, off `main`.
 Defaults taken for the open questions: unlock for 5 minutes, the encrypted
 file is the backup, health shows counts only.
 
@@ -123,7 +123,7 @@ under the box when a password changes ("Update the saved one?").
 3. **The page.** Done (branch `passwords-3-page`): list and detail side by side, add and edit with name, code setup key, other addresses and notes; tabs All and Bring in. Codes and Health get their tabs when they work (steps 6 and 7), not as empty shells.
 4. **Import.** Done (branch `passwords-4-import`): drop or pick a file, kind told from its columns (Apple Passwords/Safari, Chrome family, Firefox, Bitwarden CSV and JSON, 1Password CSV, LastPass, KeePass, Dashlane), a preview (new / same / different / can't be taken, no secrets in the reasons), Keep mine or Use the file's for duplicates, then a Trash offer. "Keep both" is not offered: an item is named by site and account, so two can't exist. 1Password's `.1pux` is not read (its CSV is).
 5. **Generator.** Done (branch `passwords-5-generator`): random (12 to 40 characters, no look-alikes, symbols optional) or a passphrase (4 to 8 words from a bundled list, one capitalised, two digits), made from the system's secure random numbers, with a strength word; controls in the Add and Edit form; and under a box the page marks `autocomplete=new-password` a row "Suggest a strong password" (https only, never private or agent tabs) that fills the box and its confirm box. Kept by the existing save question when the form is sent, not before. Settings › Passwords › Suggest strong passwords turns it off.
-6. **Codes.** TOTP, live display, fill under code boxes.
+6. **Codes.** Done (branch `passwords-6-codes`): RFC 6238 codes (SHA-1/256/512, 6 to 8 digits, any period) from an `otpauth://` link or a setup key, checked against the RFC's own vectors; live code with seconds left in an account's detail and in a Codes tab (read after one unlock, held only while the tab is up); and under a box for a verification code a row per account that keeps a key, which fills the code (asks first when Touch ID before filling is on; never in private or agent tabs or over plain http).
 7. **Export and health.** CSV, encrypted file, the health counts.
 
 ## Not doing

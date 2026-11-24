@@ -127,6 +127,9 @@ struct AccountList: View {
         case .login(let login):
             Row(mark: .letter(login.user.first.map { String($0).uppercased() } ?? "•"),
                 name: login.user.isEmpty ? "No name" : login.user, detail: login.host, lit: lit) { browser.choose(login) }
+        case .code(let account):
+            Row(mark: .symbol("number"), name: account.user.isEmpty ? "Verification code" : account.user,
+                detail: "Verification code", lit: lit) { browser.chooseCode(account) }
         case .suggest:
             Row(mark: .symbol("key"), name: "Suggest a strong password",
                 detail: "Made here. Also fills the confirm box", lit: lit) { browser.useSuggestion() }
@@ -146,6 +149,7 @@ struct AccountList: View {
 
     private var footer: String {
         if contactsOnly { return "From your card in Contacts" }
+        if !asked.codes.isEmpty && asked.logins.isEmpty && asked.passkeys.isEmpty { return "Codes made on this Mac" }
         if asked.suggestsNew && asked.logins.isEmpty && asked.passkeys.isEmpty { return "Made on this Mac, never sent anywhere" }
         if asked.logins.isEmpty { return "Passkeys on this Mac" }
         return "From your keychain"
@@ -223,13 +227,15 @@ extension Browser.Suggesting {
         case login(Kept)
         /// "Suggest a strong password", under a box for a new one.
         case suggest
+        /// A verification code for this account, made from its setup key.
+        case code(Kept)
         case contact(MeCard.Offer)
     }
 
     /// The rows top to bottom, as drawn and as ↓ walks them.
     var choices: [Choice] {
         passkeys.map(Choice.passkey) + ownLogins.map(Choice.login)
-            + siteLogins.map(Choice.login) + (suggestsNew ? [.suggest] : []) + contacts.map(Choice.contact)
+            + siteLogins.map(Choice.login) + codes.map(Choice.code) + (suggestsNew ? [.suggest] : []) + contacts.map(Choice.contact)
     }
 
     /// Where "Other accounts on …" goes, before the first of the rest of the

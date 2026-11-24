@@ -8,6 +8,7 @@ struct PasswordsPanel: View {
 
     enum Tab: String, CaseIterable, Identifiable {
         case all = "All"
+        case codes = "Codes"
         case bring = "Bring in"
         var id: String { rawValue }
     }
@@ -34,6 +35,10 @@ struct PasswordsPanel: View {
     @State private var writing = false
     @State private var finished: PasswordImport.Result?
     @State private var trashed = false
+    /// Accounts with a code, while the Codes tab is up: their keys are held
+    /// only then, and let go on leaving it.
+    @State private var coded: [CodeItem] = []
+    @State private var loadingCodes = false
 
     /// The list as the search leaves it, one row per account.
     private var rows: [Kept] { browser.shownSites.flatMap(\.logins) }
@@ -45,6 +50,7 @@ struct PasswordsPanel: View {
                 tabs
                 switch tab {
                 case .all: all
+                case .codes: codesTab
                 case .bring: bring
                 }
             }
@@ -57,6 +63,7 @@ struct PasswordsPanel: View {
             }
         }
         .fromSettings()
+        .onChange(of: tab) { _, now in if now == .codes { loadCodes() } else { coded = [] } }
         .animation(Motion.settle, value: tab)
         .animation(Motion.settle, value: editing)
         .onAppear { hunting = true }
@@ -167,6 +174,93 @@ struct PasswordsPanel: View {
                 Spacer()
             }
             .frame(maxWidth: .infinity, minHeight: 300)
+        }
+    }
+
+    // MARK: - codes
+
+    private struct CodeItem: Identifiable {
+        let id: String
+        let name: String
+        let detail: String
+        let key: TOTP.Key
+    }
+
+    @ViewBuilder
+    private var codesTab: some View {
+        if coded.isEmpty {
+            Card {
+                Nothing(loadingCodes ? "Reading…" : "No verification codes yet. Add a setup key to a password (Edit), or bring in a file that has them.",
+                        art: "approval")
+            }
+        } else {
+            ScrollView(showsIndicators: false) {
+                Card {
+                    ForEach(Array(coded.enumerated()), id: \.element.id) { index, item in
+                        if index > 0 { Rule() }
+                        HStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(item.name).font(.system(size: 13)).foregroundStyle(Palette.ink).lineLimit(1)
+                                Text(item.detail).font(.system(size: 11.5)).foregroundStyle(Palette.muted).lineLimit(1)
+                            }
+                            Spacer(minLength: 8)
+                            CodeLine(key: item.key)
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                    }
+                }
+            }
+            .frame(maxHeight: 440)
+        }
+    }
+
+    /// Asks once (Vault.Unlock), then reads the accounts that keep a setup
+    /// key, off the main thread. Gone again when the tab is left.
+    private func loadCodes() {
+        guard !loadingCodes else { return }
+        loadingCodes = true
+        let all = browser.saved
+        Vault.Unlock.ask("show your verification codes") { ok in
+            guard ok else { loadingCodes = false; tab = .all; return }
+            Task {
+                let found: [CodeItem] = await Task.detached(priority: .userInitiated) {
+                    all.compactMap { kept -> CodeItem? in
+                        guard let item = Vault.item(of: kept), let text = item.extras.totp, let key = TOTP.key(from: text) else { return nil }
+                        let title = item.extras.title.flatMap { $0.isEmpty ? nil : $0 } ?? kept.host
+                        return CodeItem(id: kept.id, name: title, detail: kept.user.isEmpty ? kept.host : kept.user, key: key)
+                    }
+                }.value
+                loadingCodes = false
+                if tab == .codes { coded = found }
+            }
+        }
+    }
+
+    /// The six digits now, how long they last, and Copy. Ticks every second;
+    /// the key is the only thing held.
+    private struct CodeLine: View {
+        let key: TOTP.Key
+
+        var body: some View {
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                let code = TOTP.code(for: key, at: context.date)
+                let left = TOTP.secondsLeft(key, at: context.date)
+                HStack(spacing: 10) {
+                    Text(TOTP.spaced(code))
+                        .font(.system(size: 15, weight: .medium, design: .monospaced))
+                        .foregroundStyle(Palette.ink)
+                        .textSelection(.enabled)
+                    Text("\(left)s")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(left <= 5 ? Palette.accent : Palette.muted)
+                        .frame(width: 26, alignment: .trailing)
+                    Quick("Copy") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(code, forType: .string)
+                    }
+                }
+            }
         }
     }
 
@@ -528,10 +622,14 @@ struct PasswordsPanel: View {
                             Spacer(minLength: 0)
                         }
                     }
-                    if item.extras.totp?.isEmpty == false {
+                    if let text = item.extras.totp, !text.isEmpty {
                         field("Verification code") {
-                            Text("A setup key is kept").font(.system(size: 12.5)).foregroundStyle(Palette.muted)
-                            Spacer(minLength: 0)
+                            if let key = TOTP.key(from: text) {
+                                CodeLine(key: key)
+                            } else {
+                                Text("The setup key isn't one this can read").font(.system(size: 12.5)).foregroundStyle(Palette.muted)
+                                Spacer(minLength: 0)
+                            }
                         }
                     }
                 }
