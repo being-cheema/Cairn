@@ -519,7 +519,7 @@ final class ApplePasswords: ObservableObject {
         switch error {
         case let error as Unavailable: return error.errorDescription ?? "Apple Passwords isn't available"
         case ApplePasswordsError.timedOut: return "Apple's Passwords helper didn't answer"
-        case ApplePasswordsError.gone: return "Apple's Passwords helper wouldn't run for this copy of \(Brand.name)"
+        case ApplePasswordsError.gone: return "Apple's Passwords helper only runs for a Developer ID–signed \(Brand.name), and this copy isn't. Copy the password from the Passwords app instead."
         case ApplePasswordsError.notTheHelper: return "The pairing couldn't be checked. Connect again."
         case ApplePasswordsError.badHello, ApplePasswordsError.malformed:
             return "Apple's Passwords helper answered in a way \(Brand.name) doesn't know"

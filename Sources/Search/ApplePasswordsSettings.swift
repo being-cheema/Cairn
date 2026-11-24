@@ -131,6 +131,9 @@ struct ApplePairingCard: View {
                             if digits.count == 6 { send() }
                         }
                         .onSubmit(send)
+                } else if apple.state == .idle, apple.trouble == ApplePasswords.words(for: ApplePasswordsError.gone) {
+                    // Trying again can't help: the helper refuses this copy every time.
+                    Pill("Open Passwords", filled: true) { openPasswordsApp() }
                 } else if apple.state == .idle {
                     Pill("Try again", filled: true) { Task { await apple.connect() } }
                 }
@@ -153,6 +156,11 @@ struct ApplePairingCard: View {
             code = ""
             if state == .code { typing = true }
         }
+    }
+
+    private func openPasswordsApp() {
+        guard let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Passwords") else { return }
+        NSWorkspace.shared.openApplication(at: app, configuration: NSWorkspace.OpenConfiguration())
     }
 
     private var title: String {
