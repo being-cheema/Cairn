@@ -131,7 +131,7 @@ enum ProxySecret {
         item[kSecValueData as String] = Data(password.utf8)
         item[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
         item[kSecAttrSynchronizable as String] = false
-        item[kSecAttrLabel as String] = "Search — proxy password"
+        item[kSecAttrLabel as String] = "\(Brand.keychainLabel) — proxy password"
         let status = SecItemAdd(item as CFDictionary, nil)
         guard status == errSecSuccess else {
             throw NSError(domain: NSOSStatusErrorDomain, code: Int(status), userInfo: [
@@ -294,7 +294,7 @@ final class BrowserProxy: ObservableObject {
 
     func save(_ proposed: ProxySettingsValue, password: String) throws {
         if let message = proposed.validation {
-            throw NSError(domain: "SearchProxy", code: 1, userInfo: [NSLocalizedDescriptionKey: message])
+            throw NSError(domain: "CairnProxy", code: 1, userInfo: [NSLocalizedDescriptionKey: message])
         }
         let secret = proposed.mode == .system || proposed.username.isEmpty ? "" : password
         // The secret first: a keychain that refuses leaves the proxy as it

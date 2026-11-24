@@ -30,7 +30,7 @@ struct PasswordsPanel: View {
                     Card {
                         Nothing(browser.saved.isEmpty
                                 ? "Nothing kept yet. Sign in somewhere and say yes, or bring yours in below."
-                                : "Nothing matches.")
+                                : "Nothing matches.", art: browser.saved.isEmpty ? "approval" : "search")
                     }
                 } else {
                     ScrollView(showsIndicators: false) {

@@ -728,7 +728,7 @@ final class Bookmarks {
     }
 
     /// The list was saved: Sync takes it to the other Macs.
-    static let saved = Notification.Name("SearchBookmarksSaved")
+    static let saved = Notification.Name("CairnBookmarksSaved")
 
     /// The list as another Mac left it (see Sync.swift).
     func adopt(_ nodes: [Bookmark]) {

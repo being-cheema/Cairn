@@ -6530,7 +6530,7 @@ enum ExtensionAuth {
         static let longest: TimeInterval = 60
 
         static func failure(_ why: String) -> Error {
-            NSError(domain: "Search", code: 1, userInfo: [NSLocalizedDescriptionKey: why])
+            NSError(domain: Brand.name, code: 1, userInfo: [NSLocalizedDescriptionKey: why])
         }
 
         let extensionID: String

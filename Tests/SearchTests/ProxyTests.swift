@@ -22,7 +22,7 @@ final class ProxyTests: XCTestCase {
     }
 
     private func settings(_ name: String = #function) throws -> (UserDefaults, String) {
-        let suite = "SearchProxyTests.\(name).\(UUID())"
+        let suite = "CairnProxyTests.\(name).\(UUID())"
         return (try XCTUnwrap(UserDefaults(suiteName: suite)), suite)
     }
 

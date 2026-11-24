@@ -196,7 +196,7 @@ enum Spaces {
     }
 
     /// The list of spaces changed, in one window or another.
-    static let changed = Notification.Name("SearchSpacesChanged")
+    static let changed = Notification.Name("CairnSpacesChanged")
 
     /// The space new tabs are made in: the one on screen.
     @MainActor static var current = Space.firstID

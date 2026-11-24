@@ -41,7 +41,7 @@ enum Pins {
     private static var loaded = false
 
     /// A space's pins changed in one window; the others follow.
-    static let changed = Notification.Name("SearchPinsChanged")
+    static let changed = Notification.Name("CairnPinsChanged")
 
     /// Where pins.json keeps the shared pins, beside the spaces' ids.
     nonisolated static let sharedKey = "shared"

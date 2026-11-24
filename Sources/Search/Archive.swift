@@ -174,7 +174,7 @@ struct ArchivePanel: View {
         let listed = self.listed
         Plate("Archived Tabs", width: 600, close: { browser.archiving = false }) {
             VStack(alignment: .leading, spacing: 14) {
-                Hunt(text: $hunt, prompt: "Search the tabs Search closed", focus: $hunting)
+                Hunt(text: $hunt, prompt: "Search the tabs \(Brand.name) closed", focus: $hunting)
                 if listed.isEmpty {
                     Card { Nothing(hunt.isEmpty ? empty : "Nothing matches.") }
                 } else {

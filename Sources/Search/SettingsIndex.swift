@@ -110,7 +110,7 @@ enum SettingsIndex {
     static let items: [SettingsItem] = ([
         // General
         .init(id: "general.default", group: "browser", icon: "link.badge.plus",
-              title: "Open links from other apps", detail: "Make Search the browser Mail, Slack and the rest send links to",
+              title: "Open links from other apps", detail: "Make \(Brand.name) the browser Mail, Slack and the rest send links to",
               words: ["default browser"]),
         .init(id: "mail.webmail", group: "browser", icon: "envelope",
               title: "Email links open in", detail: "Write in Gmail or another webmail, in a tab, instead of your mail app",

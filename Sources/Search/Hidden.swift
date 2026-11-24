@@ -11,7 +11,7 @@ struct HiddenPanel: View {
     var body: some View {
         Plate(browser.hereHost ?? "This page", width: 380, close: { browser.reviewing = false }) {
             if browser.hereVeils.isEmpty {
-                Card { Nothing("Nothing is hidden here.") }
+                Card { Nothing("Nothing is hidden here.", art: "reading") }
             } else {
                 VStack(alignment: .leading, spacing: 6) {
                     Caption("Hidden on this site — rest on a line to see it")

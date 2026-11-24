@@ -7,7 +7,7 @@ import SwiftUI
 // `Ink("xmark", size: 12)` takes the symbol's own name, so a place that wore a
 // system symbol changes by one word. A name with no drawing here is still the
 // system's symbol, sized the same, so nothing is ever missing: the set grows a
-// name at a time. Filled and circled symbols are not drawn yet.
+// name at a time. A filled symbol is drawn as its outline.
 
 struct Ink: View {
     let name: String
@@ -86,7 +86,10 @@ struct InkGlyph {
         return p
     }
 
-    static let drawn: [String: InkGlyph] = [
+    /// The names drawn here; `more` (GlyphsMore.swift) holds the rest.
+    static let drawn: [String: InkGlyph] = base.merging(more) { first, _ in first }
+
+    private static let base: [String: InkGlyph] = [
         "xmark": lines([[(3.5, 3.5), (12.5, 12.5)], [(12.5, 3.5), (3.5, 12.5)]]),
         "plus": lines([[(8, 3), (8, 13)], [(3, 8), (13, 8)]]),
         "checkmark": lines([[(3, 8.6), (6.6, 12), (13, 4.6)]]),

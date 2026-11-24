@@ -21,7 +21,7 @@ enum Web {
     /// that with a CAPTCHA every few searches, and refused sign-ins as "not
     /// secure" (24 Sep 2026). Only Search's passkey patch has to stand in
     /// the page's own world, and nothing there leads back to it.
-    @MainActor static let world = WKContentWorld.world(name: "Search")
+    @MainActor static let world = WKContentWorld.world(name: Brand.name)
 
     /// Every handler of Search's taken off a controller: in its own world,
     /// and in the page's, where they all were before 24 Sep 2026 — a tab
@@ -2429,7 +2429,7 @@ final class PageView: WKWebView {
             // it when the action reaches it.
             if Shared.prefs.splitView, let beside = item.copy() as? NSMenuItem {
                 beside.title = "Open Link in Split View"
-                beside.identifier = NSUserInterfaceItemIdentifier("SearchOpenLinkInSplitView")
+                beside.identifier = NSUserInterfaceItemIdentifier("CairnOpenLinkInSplitView")
                 beside.keyEquivalentModifierMask = []
                 beside.isAlternate = false
                 beside.target = self
@@ -2453,7 +2453,7 @@ final class PageView: WKWebView {
             if let clean = item.copy() as? NSMenuItem {
                 copyLink = (item.target, item.action)
                 clean.title = "Copy Clean Link"
-                clean.identifier = NSUserInterfaceItemIdentifier("SearchCopyCleanLink")
+                clean.identifier = NSUserInterfaceItemIdentifier("CairnCopyCleanLink")
                 clean.target = self
                 clean.action = #selector(copyCleanLink(_:))
                 menu.insertItem(clean, at: index + 1)
@@ -2461,7 +2461,7 @@ final class PageView: WKWebView {
         } else if let url, CleanLink.clean(url) != url,
                   let index = menu.items.firstIndex(where: { $0.identifier?.rawValue == "WKMenuItemIdentifierReload" }) {
             let clean = NSMenuItem(title: "Copy Clean Link", action: #selector(copyCleanPage(_:)), keyEquivalent: "")
-            clean.identifier = NSUserInterfaceItemIdentifier("SearchCopyCleanLink")
+            clean.identifier = NSUserInterfaceItemIdentifier("CairnCopyCleanLink")
             clean.target = self
             clean.representedObject = url
             menu.insertItem(clean, at: index + 1)

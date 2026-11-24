@@ -515,7 +515,7 @@ enum PageHands {
         web.takeSnapshot(with: shot) { image, error in
             MainActor.assumeIsolated {
                 guard let image, let tiff = image.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff) else {
-                    done(.failure(error ?? NSError(domain: "Search", code: 1, userInfo: [NSLocalizedDescriptionKey: "no picture"])))
+                    done(.failure(error ?? NSError(domain: Brand.name, code: 1, userInfo: [NSLocalizedDescriptionKey: "no picture"])))
                     return
                 }
                 done(.success(rep))

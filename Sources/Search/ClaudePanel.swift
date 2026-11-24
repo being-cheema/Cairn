@@ -139,6 +139,7 @@ struct ClaudePanel: View {
 
     private func notice(_ problem: ClaudeSession.Problem) -> some View {
         VStack(alignment: .leading, spacing: 10) {
+            ArtPicture(name: "error", size: 56)
             Text(verbatim: Self.say(problem))
                 .font(.system(size: 12))
                 .foregroundStyle(Palette.muted)

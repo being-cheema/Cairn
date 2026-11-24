@@ -54,7 +54,7 @@ enum Twins {
     private static var live = false
 
     /// A space's open tabs changed in one window; the others follow.
-    static let changed = Notification.Name("SearchTwinsChanged")
+    static let changed = Notification.Name("CairnTwinsChanged")
 
     static func row(_ space: UUID) -> [TwinDef]? { rows[space] }
     static func groups(_ space: UUID) -> [TabGroup] { groupsBy[space] ?? [] }
