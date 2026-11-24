@@ -1122,7 +1122,7 @@ final class Preferences: ObservableObject {
         asksWhereToSave = store.bool(forKey: "downloads.ask")
         savesPasswords = store.object(forKey: "passwords.save") as? Bool ?? true
         fillsPasswords = store.object(forKey: "passwords.fill") as? Bool ?? true
-        applePasswords = store.bool(forKey: "passwords.apple")
+        applePasswords = false
         claudeModel = ClaudeCode.model(named: store.string(forKey: "claude.model"))
         let contacts = store.bool(forKey: "contacts.fill")
         fillsContacts = contacts

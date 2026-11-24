@@ -36,10 +36,11 @@ struct ApplePasswordsOffer {
 
     /// Whether this Mac can reach Apple's helper: worked out once, since it
     /// reads a signature from disk.
-    static let helperHere: Bool = {
-        guard #available(macOS 15.4, *) else { return false }
-        return AppleHelper.program() != nil
-    }()
+    /// Off for good in Cairn: the helper refuses any copy that isn't Developer
+    /// ID–signed, so the offer under a sign-in box could only ever fail. Cairn
+    /// keeps its own passwords instead (Vault.swift). The code is left for the
+    /// change that removes it.
+    static let helperHere: Bool = false
 
     /// What the decision is made from, gathered by the browser for the box
     /// the caret is in.
