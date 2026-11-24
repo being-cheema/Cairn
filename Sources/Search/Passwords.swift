@@ -10,6 +10,7 @@ struct PasswordsPanel: View {
     enum Tab: String, CaseIterable, Identifiable {
         case all = "All"
         case codes = "Codes"
+        case passkeys = "Passkeys"
         case health = "Health"
         case bring = "Import & export"
         var id: String { rawValue }
@@ -45,6 +46,8 @@ struct PasswordsPanel: View {
     /// flagged and why; dropped when the list changes.
     @State private var report: PasswordHealth.Report?
     @State private var checking = false
+    /// The passkeys Cairn keeps (no keys: listing reads none).
+    @State private var passkeyList: [PasskeyRecord] = []
     @State private var healthFilter: PasswordHealth.Kind?
     /// A backup file waiting for its passphrase, and the passphrase being typed.
     @State private var vaultData: Data?
@@ -78,6 +81,7 @@ struct PasswordsPanel: View {
                 switch tab {
                 case .all: all
                 case .codes: codesTab
+                case .passkeys: passkeysTab
                 case .health: healthTab
                 case .bring: bring
                 }
@@ -94,6 +98,7 @@ struct PasswordsPanel: View {
         .onChange(of: tab) { _, now in
             if now == .codes { loadCodes() } else { coded = [] }
             if now == .health { checkHealth() }
+            if now == .passkeys { passkeyList = PasskeyStore.all() }
         }
         .onChange(of: browser.saved) { _, _ in report = nil; if tab == .health { checkHealth() } }
         .animation(Motion.settle, value: tab)
@@ -293,6 +298,70 @@ struct PasswordsPanel: View {
                     }
                 }
             }
+        }
+    }
+
+    // MARK: - passkeys
+
+    private static let when: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.timeStyle = .none
+        return f
+    }()
+
+    @ViewBuilder
+    private var passkeysTab: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            if passkeyList.isEmpty {
+                Card {
+                    Nothing("No passkeys kept here yet. When a site offers to make one, say yes and \(Brand.name) keeps it, behind Touch ID.",
+                            art: "approval")
+                }
+            } else {
+                ScrollView(showsIndicators: false) {
+                    Card {
+                        ForEach(Array(passkeyList.enumerated()), id: \.element.id) { index, record in
+                            if index > 0 { Rule() }
+                            HStack(spacing: 12) {
+                                Mark(icon: Favicons.shared.cached(record.rp), letter: record.rp.first.map { String($0).uppercased() } ?? "•", size: 16)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(record.rp).font(.system(size: 13)).foregroundStyle(Palette.ink).lineLimit(1)
+                                    Text(record.userName.isEmpty ? record.displayName : record.userName)
+                                        .font(.system(size: 11.5)).foregroundStyle(Palette.muted).lineLimit(1).truncationMode(.middle)
+                                }
+                                Spacer(minLength: 8)
+                                Text(record.lastUsed.map { "Used \(Self.when.string(from: $0))" } ?? "Made \(Self.when.string(from: record.created))")
+                                    .font(.system(size: 11.5)).foregroundStyle(Palette.muted)
+                                Quick("Remove") { removePasskey(record) }
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                        }
+                    }
+                }
+                .frame(maxHeight: 330)
+            }
+            Text("These are made and kept by \(Brand.name) alone, in your keychain on this Mac, and signed only after Touch ID. Passkeys in iCloud Keychain or the Passwords app can't be moved here: Apple lets only a paid developer's app use those. For such a site, sign in another way once and let \(Brand.name) make a new passkey.")
+                .font(.system(size: 11.5))
+                .foregroundStyle(Palette.muted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// Asks the Mac, then asks again in words: a site's passkey is not a
+    /// thing to get back.
+    private func removePasskey(_ record: PasskeyRecord) {
+        Vault.Unlock.ask("remove the passkey for \(record.rp)") { ok in
+            guard ok else { return }
+            let alert = NSAlert()
+            alert.messageText = "Remove the passkey for \(record.rp)?"
+            alert.informativeText = "\(record.userName.isEmpty ? "The account" : record.userName) can no longer sign in with it. If the site has no other way in for you, you may be locked out."
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: "Remove")
+            alert.addButton(withTitle: "Keep")
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+            if PasskeyStore.remove(record) { passkeyList = PasskeyStore.all() } else { browser.announce("Couldn't remove it") }
         }
     }
 

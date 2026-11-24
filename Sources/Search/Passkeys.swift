@@ -185,6 +185,9 @@ final class Passkeys: NSObject {
         if Store.testing {
             return settle(key, token: body["token"] as? String, [Offered(id: Passkeys.rehearsalID, name: "probe@\(rp)", provider: "Test")])
         }
+        if SoftPasskeys.on {
+            return settle(key, token: body["token"] as? String, SoftPasskeys.offered(for: body, rp: rp))
+        }
         // Not asked for here: a site loading is no time for macOS's question.
         // Until it has been answered, the field offers none.
         guard Passkeys.access == .authorized else { return }
@@ -232,6 +235,9 @@ final class Passkeys: NSObject {
                                                  second: nil, for: Passkeys.pageKey(waiting.body))
             }
             return waiting.answer(reply)
+        }
+        if SoftPasskeys.on {
+            return SoftPasskeys.get(waiting.body, rp: waiting.rp, clientData: waiting.clientData, chosen: id, answer: waiting.answer)
         }
         let request = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: waiting.rp)
             .createCredentialAssertionRequest(clientData: waiting.clientData)
@@ -371,6 +377,12 @@ final class Passkeys: NSObject {
                                                  second: nil, for: Passkeys.pageKey(body))
             }
             return answer(reply)
+        }
+        // No entitlement for the Mac's own: Cairn keeps and signs with its own.
+        if SoftPasskeys.on {
+            if kind == "create" { SoftPasskeys.create(body, rp: rp, clientData: clientData, answer: answer) }
+            else { SoftPasskeys.get(body, rp: rp, clientData: clientData, answer: answer) }
+            return
         }
 
         let token = body["token"] as? String
@@ -691,7 +703,7 @@ final class Passkeys: NSObject {
             .replacingOccurrences(of: "=", with: "")
     }
 
-    fileprivate static func descriptors(_ value: Any?) -> [(id: Data, transports: [ASAuthorizationSecurityKeyPublicKeyCredentialDescriptor.Transport])] {
+    static func descriptors(_ value: Any?) -> [(id: Data, transports: [ASAuthorizationSecurityKeyPublicKeyCredentialDescriptor.Transport])] {
         (value as? [[String: Any]] ?? []).compactMap { item in
             guard let id = data(item["id"]) else { return nil }
             let named = (item["transports"] as? [String] ?? []).compactMap { name -> ASAuthorizationSecurityKeyPublicKeyCredentialDescriptor.Transport? in

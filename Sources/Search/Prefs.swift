@@ -1421,15 +1421,23 @@ final class Preferences: ObservableObject {
         // set under; before it there was only "passkeys.entitled", which a
         // build that couldn't wrote on its first run as well.
         let entitled = Preferences.entitledToPasskeys
-        passkeysPossible = entitled
+        // A build with nothing of the Mac's own to offer used to write the
+        // switch off; with Cairn's own passkeys it is on, once, then the
+        // person's again.
+        if store.object(forKey: "passkeys.soft") == nil {
+            store.set(true, forKey: "passkeys.soft")
+            store.set(true, forKey: "passkeys")
+        }
+        // Always: with the Mac's own out of reach, Cairn keeps its own (SoftPasskeys).
+        passkeysPossible = true
         let settledFor = store.object(forKey: "passkeys.for") as? Bool
             ?? (entitled && store.bool(forKey: "passkeys.entitled") ? true : nil)
         let offers: Bool
         if settledFor != entitled {
-            offers = entitled
-            store.set(entitled, forKey: "passkeys")
+            offers = true
+            store.set(true, forKey: "passkeys")
         } else {
-            offers = store.object(forKey: "passkeys") as? Bool ?? entitled
+            offers = store.object(forKey: "passkeys") as? Bool ?? true
         }
         passkeys = offers
         FormRelay.passkeysOffered = offers

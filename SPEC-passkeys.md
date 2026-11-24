@@ -47,3 +47,7 @@ lastUsed, with `id`. The private key is never in it.
         static func authenticatorData(rp: String, flags: UInt8, counter: UInt32, attested: (credentialID: Data, coseKey: Data)?) -> Data
         static func cbor(_ value: CBORValue) -> Data   // minimal writer: uint, negative int, bytes, text, array, map (canonical key order)
     }
+
+## Status
+
+Built on branch `passkeys-1`: SoftAuthenticator (7 tests, CBOR vectors from RFC 8949, signatures verified), PasskeyStore (5 tests, in the test world), the hooks in `Passkeys.perform` / `wait` / `sign` through `SoftPasskeys`, a Passkeys tab on the Passwords page, and the Settings line. Not tried against a real site yet.

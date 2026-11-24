@@ -487,8 +487,8 @@ struct SettingsPanel: View {
         case "search.keywords": return keywordDetail
         case "passwords.save": return savingDetail
         case "passkeys":
-            return !prefs.passkeysPossible
-                ? "Needs an Apple entitlement this build doesn't have"
+            return SoftPasskeys.on
+                ? "Kept by \(Brand.name) in your keychain, with Touch ID. Passkeys from iCloud can't be used here"
                 : Passkeys.access == .denied
                 ? "macOS was told no: System Settings › Privacy & Security › Passkeys"
                 : item.detail
