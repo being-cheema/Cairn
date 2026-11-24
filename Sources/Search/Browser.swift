@@ -1291,6 +1291,20 @@ final class Browser: NSObject, ObservableObject {
         announce("Kept for \(host)")
     }
 
+    /// An item made or changed on the Passwords page, with everything it holds.
+    /// Moved to another site or name: the old one is taken out once the new
+    /// one is safely in.
+    func keep(_ item: Item, replacing old: Kept? = nil) {
+        guard Vault.save(host: item.host, user: item.user, password: item.password, used: item.used, clear: item.clear,
+                         extras: item.extras) else {
+            announce("The keychain refused it")
+            return
+        }
+        if let old, old.host != item.host || old.user != item.user { Vault.forget(host: old.host, user: old.user) }
+        relist()
+        announce("Kept for \(item.host)")
+    }
+
     func forget(_ login: Kept) {
         Vault.forget(host: login.host, user: login.user)
         relist()

@@ -1,6 +1,6 @@
 # Spec: Cairn's own passwords
 
-Status: approved ("do it"). Steps 0, 1 and 2 are done. Branch per step, off `main`.
+Status: approved ("do it"). Steps 0 to 3 are done. Branch per step, off `main`.
 Defaults taken for the open questions: unlock for 5 minutes, the encrypted
 file is the backup, health shows counts only.
 
@@ -120,7 +120,7 @@ under the box when a password changes ("Update the saved one?").
 0. **Apple card off.** Done.
 1. **Delete the Apple Passwords code** and its tests. Done (branch `passwords-1-remove-apple`).
 2. **Items and locking.** Done (branch `passwords-2-items-lock`): items carry title, notes, code secret, other addresses (a marked value, plain items unchanged, extras survive a sign-in re-save); one Touch ID covers show/copy/remove for five minutes, ended by sleep and lock, with a Settings switch. Filling keeps its own existing setting.
-3. **The page.** List, detail, add/edit, search, the four tabs' shells.
+3. **The page.** Done (branch `passwords-3-page`): list and detail side by side, add and edit with name, code setup key, other addresses and notes; tabs All and Bring in. Codes and Health get their tabs when they work (steps 6 and 7), not as empty shells.
 4. **Import.** Format detection, preview, duplicate choice, trash offer.
 5. **Generator.** On sign-up boxes and in the Add form.
 6. **Codes.** TOTP, live display, fill under code boxes.

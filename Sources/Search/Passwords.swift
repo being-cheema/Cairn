@@ -1,109 +1,217 @@
 import SwiftUI
 
-/// Every password kept, by site. The same white-and-hairline panel as the
-/// rest, and the same rule: a password is never shown until you have proved
-/// you are you, and never for longer than it takes to read it.
+/// Every password kept: a list on the left, the one picked on the right. The
+/// same rule as ever: a password is never shown until you have proved you are
+/// you (Vault.Unlock), and never for longer than it takes to read it.
 struct PasswordsPanel: View {
     @ObservedObject var browser: Browser
 
+    enum Tab: String, CaseIterable, Identifiable {
+        case all = "All"
+        case bring = "Bring in"
+        var id: String { rawValue }
+    }
+
+    /// What the right side is doing besides showing one.
+    enum Editing: Equatable {
+        case new
+        case existing(Item)
+    }
+
     @FocusState private var hunting: Bool
-    @State private var open: String?
-    @State private var adding = false
+    @State private var tab = Tab.all
+    @State private var selected: String?
+    @State private var editing: Editing?
     /// What Search kept under its own label, not yet copied (Vault.legacy).
     @State private var legacy: [Kept] = []
     @State private var copying = false
 
+    /// The list as the search leaves it, one row per account.
+    private var rows: [Kept] { browser.shownSites.flatMap(\.logins) }
+    private var picked: Kept? { rows.first { $0.id == selected } }
+
     var body: some View {
-        Plate("Passwords", width: 620, close: { browser.managing = false }) {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(spacing: 10) {
-                    Hunt(text: $browser.hunting, prompt: "Search sites and accounts", focus: $hunting)
-                    Pill(adding ? "Cancel" : "Add", filled: !adding) { adding.toggle() }
-                }
-
-                if adding {
-                    Card { AddForm(browser: browser) { adding = false } }
-                        .transition(.opacity)
-                }
-
-                if browser.shownSites.isEmpty {
-                    Card {
-                        Nothing(browser.saved.isEmpty
-                                ? "Nothing kept yet. Sign in somewhere and say yes, or bring yours in below."
-                                : "Nothing matches.", art: browser.saved.isEmpty ? "approval" : "search")
-                    }
-                } else {
-                    ScrollView {
-                        Card {
-                            ForEach(Array(browser.shownSites.enumerated()), id: \.element.host) { index, site in
-                                if index > 0 { Rule() }
-                                Site(
-                                    host: site.host,
-                                    logins: site.logins,
-                                    open: open == site.host,
-                                    toggle: { open = open == site.host ? nil : site.host },
-                                    copy: { browser.copy($0) },
-                                    forget: { browser.forget($0) }
-                                )
-                            }
-                        }
-                        .padding(.bottom, 2)
-                    }
-                    .listHeight(400)
+        Plate("Passwords", width: 860, close: { browser.managing = false }) {
+            VStack(alignment: .leading, spacing: 16) {
+                tabs
+                switch tab {
+                case .all: all
+                case .bring: bring
                 }
             }
         } foot: {
-            VStack(alignment: .leading, spacing: 10) {
-                // Only while there is something to copy, which is only for a
-                // person who had used the app this one comes from.
-                if !legacy.isEmpty {
-                    HStack(spacing: 8) {
-                        Text(legacy.count == 1
-                             ? "1 password was kept by \(Brand.name), the app this one comes from."
-                             : "\(legacy.count) passwords were kept by \(Brand.name), the app this one comes from.")
-                            .font(.system(size: 12))
-                            .foregroundStyle(Palette.ink)
-                        Spacer(minLength: 0)
-                        Pill(copying ? "Copying…" : "Copy to \(Brand.name)…") { copyLegacy() }
-                            .disabled(copying)
-                    }
-                    Text("macOS asks for your login password to let each one go; Always Allow asks once. Nothing in \(Brand.name) is changed or removed.")
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(Palette.muted)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                HStack(spacing: 8) {
-                    Text("Bring in from")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Palette.muted)
-                    // Which browser, which profile and what of it: the sheet.
-                    Pill("Bring in…") { browser.lead(to: InternalPage(.importing)) }
-                    Pill("File…") { browser.importFile() }
-                    Spacer(minLength: 0)
-                    // What the list shows, all of it or what the search
-                    // leaves: never more than can be seen (Browser.forgetShown).
-                    let shown = browser.shownSites.reduce(0) { $0 + $1.logins.count }
-                    if shown > 0 {
-                        Pill(browser.hunting.trimmingCharacters(in: .whitespaces).isEmpty ? "Remove All…" : "Remove \(shown)…") {
-                            browser.forgetShown()
-                        }
-                        .disabled(browser.forgetting)
-                    }
-                    Text(browser.saved.count == 1 ? "1 password" : "\(browser.saved.count) passwords")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Palette.muted)
-                }
-                Text("macOS asks once for that browser's keychain key. Nothing is changed there; everything lands in your own keychain, under \(Brand.name).")
-                    .font(.system(size: 11.5))
+            HStack {
+                Text(browser.saved.count == 1 ? "1 password" : "\(browser.saved.count) passwords")
+                    .font(.system(size: 12))
                     .foregroundStyle(Palette.muted)
-                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
             }
         }
         .fromSettings()
-        .animation(Motion.settle, value: adding)
-        .animation(Motion.settle, value: open)
+        .animation(Motion.settle, value: tab)
+        .animation(Motion.settle, value: editing)
         .onAppear { hunting = true }
         .task { await refreshLegacy() }
+        .onChange(of: browser.hunting) { _, _ in
+            // The one picked fell out of the search: nothing is picked.
+            if let selected, !rows.contains(where: { $0.id == selected }) { self.selected = nil; editing = nil }
+        }
+    }
+
+    // MARK: - the tabs
+
+    private var tabs: some View {
+        HStack(spacing: 18) {
+            ForEach(Tab.allCases) { each in
+                Button { tab = each } label: {
+                    VStack(spacing: 5) {
+                        Text(each.rawValue)
+                            .font(.system(size: 13, weight: tab == each ? .medium : .regular))
+                            .foregroundStyle(tab == each ? Palette.ink : Palette.muted)
+                        Rectangle()
+                            .fill(tab == each ? Palette.accent : .clear)
+                            .frame(height: 2)
+                    }
+                    .fixedSize()
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    // MARK: - all of them
+
+    private var all: some View {
+        HStack(alignment: .top, spacing: 16) {
+            VStack(spacing: 10) {
+                HStack(spacing: 8) {
+                    Hunt(text: $browser.hunting, prompt: "Search sites and accounts", focus: $hunting)
+                    Pill("Add", filled: true) { selected = nil; editing = .new }
+                }
+                list
+            }
+            .frame(width: 300)
+
+            Card { detail }
+                .frame(maxWidth: .infinity)
+        }
+        .frame(height: 440)
+    }
+
+    @ViewBuilder
+    private var list: some View {
+        if rows.isEmpty {
+            Card {
+                Nothing(browser.saved.isEmpty
+                        ? "Nothing kept yet. Sign in somewhere and say yes, or add one."
+                        : "Nothing matches.", art: browser.saved.isEmpty ? "approval" : "search")
+            }
+            Spacer(minLength: 0)
+        } else {
+            ScrollView(showsIndicators: false) {
+                Card {
+                    ForEach(Array(rows.enumerated()), id: \.element.id) { index, login in
+                        if index > 0 { Rule() }
+                        Row(login: login, picked: selected == login.id) {
+                            editing = nil
+                            selected = login.id
+                        }
+                    }
+                }
+                .padding(.bottom, 2)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var detail: some View {
+        if let editing {
+            EditForm(browser: browser, editing: editing) { saved in
+                self.editing = nil
+                if let saved { selected = saved.id }
+            }
+            .id(editing == .new ? "new" : "edit-\(selected ?? "")")
+        } else if let login = picked {
+            Detail(
+                login: login,
+                edit: { item in editing = .existing(item) },
+                copy: { browser.copy(login) },
+                forget: { browser.forget(login); selected = nil }
+            )
+            .id(login.id)
+        } else {
+            VStack {
+                Spacer()
+                Text(browser.saved.isEmpty ? "Add a password, or bring yours in." : "Pick one to see it.")
+                    .font(Typeface.heading(14))
+                    .foregroundStyle(Palette.muted)
+                Spacer()
+            }
+            .frame(maxWidth: .infinity, minHeight: 300)
+        }
+    }
+
+    // MARK: - bringing them in
+
+    private var bring: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Card {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("From another browser or app")
+                        .font(Typeface.heading(15, weight: .medium))
+                        .foregroundStyle(Palette.ink)
+                    Text("Pick a browser and a profile, or a file exported from one: Chrome, Firefox, Safari, 1Password, Bitwarden, the Passwords app and others write a CSV. macOS asks once for that browser's keychain key. Nothing is changed there; everything lands in your own keychain, under \(Brand.name).")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Palette.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: 8) {
+                        Pill("Bring in…", filled: true) { browser.lead(to: InternalPage(.importing)) }
+                        Pill("File…") { browser.importFile() }
+                    }
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            // Only while there is something to copy, which is only for a
+            // person who had used the app this one comes from.
+            if !legacy.isEmpty {
+                Card {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 8) {
+                            Text(legacy.count == 1
+                                 ? "1 password was kept by \(Brand.name), the app this one comes from."
+                                 : "\(legacy.count) passwords were kept by \(Brand.name), the app this one comes from.")
+                                .font(.system(size: 12))
+                                .foregroundStyle(Palette.ink)
+                            Spacer(minLength: 0)
+                            Pill(copying ? "Copying…" : "Copy to \(Brand.name)…") { copyLegacy() }
+                                .disabled(copying)
+                        }
+                        Text("macOS asks for your login password to let each one go; Always Allow asks once. Nothing in \(Brand.name) is changed or removed.")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(Palette.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(14)
+                }
+            }
+
+            // What the list shows, all of it or what the search leaves: never
+            // more than can be seen (Browser.forgetShown).
+            let shown = rows.count
+            if shown > 0 {
+                HStack {
+                    Spacer(minLength: 0)
+                    Pill(browser.hunting.trimmingCharacters(in: .whitespaces).isEmpty ? "Remove All…" : "Remove \(shown)…", tint: .red.opacity(0.75)) {
+                        browser.forgetShown()
+                    }
+                    .disabled(browser.forgetting)
+                }
+            }
+        }
     }
 
     private func refreshLegacy() async {
@@ -127,126 +235,149 @@ struct PasswordsPanel: View {
         }
     }
 
-    /// A site, and under it its accounts once opened.
-    private struct Site: View {
-        let host: String
-        let logins: [Kept]
-        let open: Bool
-        let toggle: () -> Void
-        let copy: (Kept) -> Void
-        let forget: (Kept) -> Void
+    // MARK: - one row of the list
 
-        @State private var hovering = false
-
-        var body: some View {
-            VStack(spacing: 0) {
-                HStack(spacing: 10) {
-                    Mark(icon: Favicons.shared.cached(host), letter: host.first.map { String($0).uppercased() } ?? "•", size: 16)
-                    Text(host)
-                        .font(.system(size: 13))
-                        .foregroundStyle(Palette.ink)
-                        .lineLimit(1)
-                    if logins.count > 1 {
-                        Text("\(logins.count) accounts")
-                            .font(.system(size: 11.5))
-                            .foregroundStyle(Palette.muted)
-                    } else if let only = logins.first, !only.user.isEmpty, !open {
-                        Text(only.user)
-                            .font(.system(size: 11.5))
-                            .foregroundStyle(Palette.muted)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
-                    Spacer(minLength: 8)
-                    Ink("chevron.right", size: 9)
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(Palette.muted)
-                        .rotationEffect(.degrees(open ? 90 : 0))
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(open ? Palette.wash.opacity(0.6) : (hovering ? Palette.hover : .clear))
-                .contentShape(Rectangle())
-                .onTapGesture(perform: toggle)
-                .onHover { hovering = $0 }
-                .animation(Motion.quick, value: hovering)
-
-                if open {
-                    VStack(spacing: 0) {
-                        ForEach(logins) { login in
-                            Account(login: login, copy: { copy(login) }, forget: { forget(login) })
-                        }
-                    }
-                    .padding(.leading, 30)
-                    .padding(.trailing, 6)
-                    .padding(.vertical, 4)
-                    .transition(.opacity)
-                }
-            }
-        }
-    }
-
-    /// One account: the name, the password as dots, and the three things to
-    /// do with it. Show asks the Mac who you are first.
-    private struct Account: View {
+    private struct Row: View {
         let login: Kept
-        let copy: () -> Void
-        let forget: () -> Void
-
+        let picked: Bool
+        let pick: () -> Void
         @State private var hovering = false
-        @State private var shown = false
-        /// The secret, from the moment it is shown to the moment it is hidden
-        /// again. Read on that click rather than with the list: see `Kept`.
-        @State private var secret: String?
-        @State private var hide: DispatchWorkItem?
 
         var body: some View {
             HStack(spacing: 10) {
-                Text(login.user.isEmpty ? "No username" : login.user)
-                    .font(.system(size: 12))
-                    .foregroundStyle(login.user.isEmpty ? Palette.faint : Palette.ink)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .frame(minWidth: 120, alignment: .leading)
-                    // Selectable, as the password beside it is: a username is
-                    // not a secret, and it is the half of a sign-in you are
-                    // most often asked to type somewhere else.
-                    .textSelection(.enabled)
-
-                // Ten dots whatever it is: the row does not know the length
-                // until the secret is read, and a count that changed with it
-                // told anyone looking over a shoulder how long it was.
-                Text(shown ? (secret ?? "") : String(repeating: "•", count: 10))
-                    .font(.system(size: shown ? 12.5 : 10, design: .monospaced))
-                    .foregroundStyle(shown ? Palette.ink : Palette.muted)
-                    .lineLimit(1)
-                    .textSelection(.enabled)
-
-                Spacer(minLength: 8)
-
-                if hovering || shown {
-                    Quick(shown ? "Hide" : "Show") { shown ? conceal() : reveal() }
-                    Quick("Copy", act: copy)
-                    Quick("Remove", tint: .red.opacity(0.75), act: forget)
+                Mark(icon: Favicons.shared.cached(login.host), letter: login.host.first.map { String($0).uppercased() } ?? "•", size: 16)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(login.host)
+                        .font(.system(size: 13))
+                        .foregroundStyle(Palette.ink)
+                        .lineLimit(1)
+                    Text(login.user.isEmpty ? "No username" : login.user)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Palette.muted)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                 }
+                Spacer(minLength: 0)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .background(hovering ? Palette.hover : .clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(picked ? Palette.accent.opacity(0.12) : (hovering ? Palette.hover : .clear))
             .contentShape(Rectangle())
+            .onTapGesture(perform: pick)
             .onHover { hovering = $0 }
             .animation(Motion.quick, value: hovering)
-            .animation(Motion.quick, value: shown)
+        }
+    }
+
+    // MARK: - the one picked
+
+    /// One account: what it is, its password as dots, and what to do with
+    /// it. Show asks the Mac who you are first (once for five minutes), and is
+    /// when the notes and the rest are read; until then the item's value has
+    /// not been touched.
+    private struct Detail: View {
+        let login: Kept
+        let edit: (Item) -> Void
+        let copy: () -> Void
+        let forget: () -> Void
+
+        /// The whole item, from the moment it is shown to the moment it is
+        /// hidden again. The only place it is held, and only while on screen.
+        @State private var item: Item?
+        @State private var hide: DispatchWorkItem?
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(spacing: 12) {
+                    Mark(icon: Favicons.shared.cached(login.host), letter: login.host.first.map { String($0).uppercased() } ?? "•", size: 24)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(item?.extras.title.flatMap { $0.isEmpty ? nil : $0 } ?? login.host)
+                            .font(Typeface.heading(19, weight: .medium))
+                            .foregroundStyle(Palette.ink)
+                            .lineLimit(1)
+                        if item?.extras.title.map({ !$0.isEmpty }) == true {
+                            Text(login.host).font(.system(size: 11.5)).foregroundStyle(Palette.muted)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                }
+
+                field("Username") {
+                    Text(login.user.isEmpty ? "No username" : login.user)
+                        .font(.system(size: 13))
+                        .foregroundStyle(login.user.isEmpty ? Palette.faint : Palette.ink)
+                        .textSelection(.enabled)
+                    Spacer(minLength: 8)
+                    if !login.user.isEmpty { Quick("Copy") { copyText(login.user) } }
+                }
+
+                field("Password") {
+                    // Ten dots whatever it is: a count that changed with it
+                    // told anyone looking over a shoulder how long it was.
+                    Text(item.map(\.password) ?? String(repeating: "•", count: 10))
+                        .font(.system(size: item == nil ? 11 : 13, design: .monospaced))
+                        .foregroundStyle(item == nil ? Palette.muted : Palette.ink)
+                        .lineLimit(1)
+                        .textSelection(.enabled)
+                    Spacer(minLength: 8)
+                    Quick(item == nil ? "Show" : "Hide") { item == nil ? reveal() : conceal() }
+                    Quick("Copy", act: copy)
+                }
+
+                if let item {
+                    if let urls = item.extras.urls, !urls.isEmpty {
+                        field("Also used on") {
+                            Text(urls.joined(separator: "\n")).font(.system(size: 12.5)).foregroundStyle(Palette.ink).textSelection(.enabled)
+                            Spacer(minLength: 0)
+                        }
+                    }
+                    if let notes = item.extras.notes, !notes.isEmpty {
+                        field("Notes") {
+                            Text(notes).font(.system(size: 12.5)).foregroundStyle(Palette.ink).textSelection(.enabled)
+                            Spacer(minLength: 0)
+                        }
+                    }
+                    if item.extras.totp?.isEmpty == false {
+                        field("Verification code") {
+                            Text("A setup key is kept").font(.system(size: 12.5)).foregroundStyle(Palette.muted)
+                            Spacer(minLength: 0)
+                        }
+                    }
+                }
+
+                Spacer(minLength: 0)
+
+                HStack(spacing: 8) {
+                    Pill("Edit") { editNow() }
+                    Spacer(minLength: 0)
+                    Pill("Remove", tint: .red.opacity(0.75), action: forget)
+                }
+            }
+            .padding(18)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .onDisappear { conceal() }
         }
 
+        private func field<Content: View>(_ label: String, @ViewBuilder _ content: () -> Content) -> some View {
+            VStack(alignment: .leading, spacing: 5) {
+                Text(label)
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(Palette.muted)
+                HStack(alignment: .firstTextBaseline, spacing: 6) { content() }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(Palette.wash, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            }
+        }
+
+        private func copyText(_ text: String) {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+        }
+
         private func reveal() {
-            Vault.Unlock.ask("show the password for \(login.host)") { ok in
-                // Read after the Mac has said who this is, not before: the
-                // secret is asked for here and let go with the row.
-                guard ok, let password = Vault.secret(of: login) else { return }
-                secret = password
-                shown = true
+            load { loaded in
+                item = loaded
                 // Long enough to read or type across, and not a minute more.
                 let work = DispatchWorkItem { conceal() }
                 hide?.cancel()
@@ -255,76 +386,123 @@ struct PasswordsPanel: View {
             }
         }
 
-        /// Hidden again, and the secret with it: this is the only place it is
-        /// held, and only while it is on screen.
+        private func editNow() {
+            if let item { edit(item); return }
+            load(edit)
+        }
+
+        /// Read after the Mac has said who this is, not before.
+        private func load(_ then: @escaping (Item) -> Void) {
+            Vault.Unlock.ask("show the password for \(login.host)") { ok in
+                guard ok, let loaded = Vault.item(of: login) else { return }
+                then(loaded)
+            }
+        }
+
+        /// Hidden again, and the secret with it.
         private func conceal() {
             hide?.cancel()
-            shown = false
-            secret = nil
+            item = nil
         }
     }
 
-    /// Typing one in by hand. The site, the name, the password, and Save.
-    private struct AddForm: View {
+    // MARK: - adding and editing
+
+    /// Typing one in by hand, or changing one. For a change the whole item is
+    /// already in hand (it was read when Edit was pressed, after the Mac said
+    /// who you are).
+    private struct EditForm: View {
         @ObservedObject var browser: Browser
-        let done: () -> Void
+        let editing: Editing
+        let done: (Kept?) -> Void
 
         @State private var site = ""
         @State private var user = ""
         @State private var password = ""
+        @State private var title = ""
+        @State private var notes = ""
+        @State private var code = ""
+        @State private var urls = ""
+        @State private var showing = false
         @FocusState private var focus: Int?
 
+        private var existing: Item? { if case .existing(let item) = editing { item } else { nil } }
+
         var body: some View {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 8) {
-                    field("Site", text: $site, tag: 0)
-                    field("Username", text: $user, tag: 1)
+            VStack(alignment: .leading, spacing: 10) {
+                Text(existing == nil ? "New password" : "Edit")
+                    .font(Typeface.heading(17, weight: .medium))
+                    .foregroundStyle(Palette.ink)
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        row("Site") { TextField("example.com", text: $site).focused($focus, equals: 0) }
+                        row("Username") { TextField("", text: $user).focused($focus, equals: 1) }
+                        row("Password") {
+                            Group {
+                                if showing { TextField("", text: $password) } else { SecureField("", text: $password) }
+                            }
+                            .font(.system(size: 12.5, design: .monospaced))
+                            .focused($focus, equals: 2)
+                            Quick(showing ? "Hide" : "Show") { showing.toggle() }
+                        }
+                        row("Name (optional)") { TextField("", text: $title) }
+                        row("Verification code setup key (optional)") {
+                            SecureField("otpauth:// link or setup key", text: $code)
+                        }
+                        row("Also used on (optional, one per line)", tall: true) {
+                            TextEditor(text: $urls).scrollContentBackground(.hidden).frame(height: 44)
+                        }
+                        row("Notes (optional)", tall: true) {
+                            TextEditor(text: $notes).scrollContentBackground(.hidden).frame(height: 64)
+                        }
+                    }
                 }
                 HStack(spacing: 8) {
-                    ZStack(alignment: .leading) {
-                        if password.isEmpty {
-                            Text("Password").foregroundStyle(Palette.ink.opacity(0.3))
-                                .padding(.leading, 10)
-                        }
-                        SecureField("", text: $password)
-                            .textFieldStyle(.plain)
-                            .font(.system(size: 12.5, design: .monospaced))
-                            .foregroundStyle(Palette.ink)
-                            .focused($focus, equals: 2)
-                            .onSubmit(keep)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 7)
-                    }
-                    .background(Palette.wash, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    Pill("Cancel") { done(nil) }
+                    Spacer(minLength: 0)
                     Pill("Save", filled: true, action: keep)
                         .disabled(Vault.host(of: site).isEmpty || password.isEmpty)
                 }
             }
-            .padding(14)
-            .onAppear { focus = 0 }
+            .padding(18)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .onAppear {
+                if let item = existing {
+                    site = item.host; user = item.user; password = item.password
+                    title = item.extras.title ?? ""; notes = item.extras.notes ?? ""
+                    code = item.extras.totp ?? ""; urls = (item.extras.urls ?? []).joined(separator: "\n")
+                }
+                focus = existing == nil ? 0 : 2
+            }
         }
 
-        private func field(_ name: String, text: Binding<String>, tag: Int) -> some View {
-            ZStack(alignment: .leading) {
-                if text.wrappedValue.isEmpty {
-                    Text(name).foregroundStyle(Palette.ink.opacity(0.3)).padding(.leading, 10)
-                }
-                TextField("", text: text)
-                    .textFieldStyle(.plain)
+        private func row<Content: View>(_ label: String, tall: Bool = false, @ViewBuilder _ content: () -> Content) -> some View {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(label).font(.system(size: 11.5, weight: .medium)).foregroundStyle(Palette.muted)
+                HStack(spacing: 6) { content().textFieldStyle(.plain) }
+                    .font(.system(size: 12.5))
                     .foregroundStyle(Palette.ink)
-                    .focused($focus, equals: tag)
                     .padding(.horizontal, 10)
-                    .padding(.vertical, 7)
+                    .padding(.vertical, tall ? 4 : 7)
+                    .background(Palette.wash, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
             }
-            .font(.system(size: 12.5))
-            .background(Palette.wash, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
         }
 
         private func keep() {
             let host = Vault.host(of: site)
             guard !host.isEmpty, !password.isEmpty else { return }
-            browser.keep(host: host, user: user.trimmingCharacters(in: .whitespaces), password: password)
-            done()
+            func clean(_ text: String) -> String? {
+                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                return trimmed.isEmpty ? nil : trimmed
+            }
+            let others = urls.split(whereSeparator: \.isNewline).compactMap { clean(String($0)) }
+            let extras = Extras(title: clean(title), notes: clean(notes), totp: clean(code),
+                                urls: others.isEmpty ? nil : others, changed: Date())
+            let item = Item(host: host, user: user.trimmingCharacters(in: .whitespaces), password: password, extras: extras,
+                            used: existing?.used, clear: existing?.clear ?? false)
+            let old = existing.map { Kept(host: $0.host, user: $0.user, used: $0.used, clear: $0.clear) }
+            browser.keep(item, replacing: old)
+            done(Kept(host: item.host, user: item.user, used: item.used, clear: item.clear))
         }
     }
 }
