@@ -537,11 +537,42 @@ struct PasswordsPanel: View {
                 }
                 .frame(maxHeight: 330)
             }
-            Text("Passkeys made here stay on this Mac, and are signed only after Touch ID. iCloud Keychain passkeys can't be used here: sign in another way once, then make a new one.")
+            Text("Passkeys made here stay on this Mac, and are signed only after Touch ID. An iCloud Keychain passkey can be used here only once it is brought in; otherwise sign in another way once, then make a new one.")
                 .font(.system(size: 11.5))
                 .foregroundStyle(Palette.muted)
                 .fixedSize(horizontal: false, vertical: true)
-                .help("Apple lets only a paid developer's app use passkeys kept in iCloud Keychain or the Passwords app, so \(Brand.name) can't read or move them.")
+            bringPasskeysCard
+        }
+        .onReceive(NotificationCenter.default.publisher(for: PasskeyImport.changed)) { _ in
+            passkeyList = PasskeyStore.all()
+        }
+    }
+
+    /// How to hand passkeys over from the Passwords app (PasskeyImport). Only
+    /// words: the export starts there, not here, and macOS decides whether
+    /// this app is among those offered.
+    private var bringPasskeysCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Bring in from Apple Passwords")
+                    .font(Typeface.heading(15, weight: .medium))
+                    .foregroundStyle(Palette.ink)
+                Text("""
+                    1. Open the Passwords app.
+                    2. Choose File › Export Data to Another App (on macOS 26 or later).
+                    3. Pick the passkeys and passwords to move, then choose \(Brand.name).
+                    4. \(Brand.name) asks for Touch ID, then keeps them here.
+                    """)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Palette.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("macOS decides which apps that list offers, and it may not include \(Brand.name). Only ES256 passkeys can be used here; any others are counted and left out. Passwords already kept here stay as they are.")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Palette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 

@@ -248,9 +248,14 @@ final class Links: NSObject, NSApplicationDelegate {
     /// A page handed off from your iPhone or another Mac, Search being the
     /// default browser: opened as a link from another app is, and only an
     /// http or https address (see Handoff.incoming). A test run takes none.
+    ///
+    /// Also how passkeys exported from the Passwords app arrive (macOS 26+,
+    /// PasskeyImport): the system launches us with that activity.
     func application(_ application: NSApplication, continue userActivity: NSUserActivity,
                      restorationHandler: @escaping ([any NSUserActivityRestoring]) -> Void) -> Bool {
-        guard !Store.testing, let url = Handoff.incoming(userActivity) else { return false }
+        guard !Store.testing else { return false }
+        if #available(macOS 26.0, *), MainActor.assumeIsolated({ PasskeyImport.receive(userActivity) }) { return true }
+        guard let url = Handoff.incoming(userActivity) else { return false }
         Links.take(url)
         return true
     }

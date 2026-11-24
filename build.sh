@@ -329,9 +329,16 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>NSAppleScriptEnabled</key><true/>
   <key>OSAScriptingDefinition</key><string>Search.sdef</string>
   <!-- Handoff of web pages (Handoff.swift): a page picked up from another
-       device opens here when Search is the default browser. -->
+       device opens here when Search is the default browser.
+       ASCredentialExchangeActivity (macOS 26+, PasskeyImport.swift): what
+       the Passwords app's Export to Another App launches the receiving app
+       with. It is the value of AuthenticationServices' constant of that
+       name; macOS still decides whether to offer this app at all. -->
   <key>NSUserActivityTypes</key>
-  <array><string>NSUserActivityTypeBrowsingWeb</string></array>
+  <array>
+    <string>NSUserActivityTypeBrowsingWeb</string>
+    <string>ASCredentialExchangeActivity</string>
+  </array>
   <!-- Owning http and https is what sends a link clicked in Mail here.
        Appearing in Desktop & Dock → Default web browser also needs the
        XHTML document type below. -->
