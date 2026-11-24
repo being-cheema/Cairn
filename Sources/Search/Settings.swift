@@ -303,7 +303,7 @@ struct SettingsPanel: View {
                         .foregroundStyle(Palette.ink)
                 }
                 Text(searching ? "Settings matching “\(query.trimmingCharacters(in: .whitespaces))”" : page.title)
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(Typeface.heading(19, weight: .medium))
                     .foregroundStyle(Palette.ink)
                     .lineLimit(1)
                 Spacer()
@@ -1063,13 +1063,14 @@ struct SettingsPanel: View {
 
     private var aboutHeader: some View {
         HStack(spacing: 14) {
+            if Art.image("browser") != nil { ArtPicture(name: "browser", size: 84) }
             Logomark()
                 .fill(Palette.ink, style: FillStyle(eoFill: true))
                 .aspectRatio(Logomark.canvas.width / Logomark.canvas.height, contentMode: .fit)
                 .frame(height: 34)
             VStack(alignment: .leading, spacing: 3) {
                 Text(Brand.name)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(Typeface.heading(19, weight: .medium))
                     .foregroundStyle(Palette.ink)
                 Text(Brand.tagline)
                     .font(.system(size: 12))
@@ -1503,7 +1504,7 @@ struct Switch: View {
 
     var body: some View {
         Capsule()
-            .fill(on ? Palette.ink : Palette.faint)
+            .fill(on ? Palette.accent : Palette.faint)
             .frame(width: 30, height: 18)
             .overlay(alignment: on ? .trailing : .leading) {
                 Circle()
@@ -1598,7 +1599,7 @@ struct Pill: View {
                 .foregroundStyle(filled ? Palette.ground : tint)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
-                .background(filled ? Palette.ink : (hovering ? Palette.hover : Palette.ground), in: Capsule())
+                .background(filled ? Palette.accent : (hovering ? Palette.hover : Palette.ground), in: Capsule())
                 .overlay(Capsule().strokeBorder(filled ? .clear : Palette.hairline, lineWidth: 1))
                 .contentShape(Capsule())
         }

@@ -347,7 +347,7 @@ struct WelcomePanel: View {
                     .foregroundStyle(filled ? Palette.ground : Palette.ink)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 9)
-                    .background(filled ? Palette.ink : (hovering ? Palette.hover : Palette.wash), in: Capsule())
+                    .background(filled ? Palette.accent : (hovering ? Palette.hover : Palette.wash), in: Capsule())
                     .contentShape(Capsule())
             }
             .buttonStyle(.plain)

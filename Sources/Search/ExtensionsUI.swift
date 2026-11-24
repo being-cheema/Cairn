@@ -420,7 +420,7 @@ struct StoreOffer: View {
                             .foregroundStyle(Palette.ground)
                             .padding(.horizontal, 11)
                             .padding(.vertical, 5)
-                            .background(Palette.ink, in: Capsule())
+                            .background(Palette.accent, in: Capsule())
                     }
                 }
                 .padding(.leading, 16)
