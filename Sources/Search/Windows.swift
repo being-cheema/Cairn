@@ -206,7 +206,7 @@ enum Browsers {
             view.sizingOptions = [.minSize]
             host = view
         } else {
-            let view = NSHostingView(rootView: ContentView(browser: browser).frame(minWidth: 640, minHeight: 420))
+            let view = NSHostingView(rootView: ContentView(browser: browser).tint(Palette.accent).frame(minWidth: 640, minHeight: 420))
             view.sizingOptions = [.minSize]
             host = view
         }

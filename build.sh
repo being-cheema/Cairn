@@ -93,6 +93,13 @@ case "${SEARCH_DEV:-}" in
   *) echo "SEARCH_DEV is 0 or 1, not “$SEARCH_DEV”" >&2; exit 1 ;;
 esac
 [ "$STEP" != "app" ] && [ "$DEV" = 1 ] && { echo "a dev build doesn't go in a DMG" >&2; exit 1; }
+# The pictures in Local/Art/ are icons8's, which are not MIT: they go into an
+# app built here for the owner's own use, never into one that is handed out.
+ART_FILES="$(find Local/Art -type f ! -iname 'README*' ! -name '.DS_Store' 2>/dev/null || true)"
+if [ "$STEP" != "app" ] && [ -n "$ART_FILES" ]; then
+  echo "Local/Art/ has icons8 pictures, which are not for distribution: move them out before a DMG or a ship" >&2
+  exit 1
+fi
 SHOWN="$NAME"
 if [ "$DEV" = 1 ]; then
   # The feature: SEARCH_FEATURE, or the branch's last part, without the

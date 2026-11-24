@@ -136,7 +136,7 @@ struct AgentMark: View {
     var body: some View {
         if tab.agentWorking {
             Circle()
-                .fill(Color.accentColor)
+                .fill(Palette.accent)
                 .frame(width: 6, height: 6)
                 .padding(1.5)
                 .background(Circle().fill(Palette.ground))
@@ -344,7 +344,7 @@ private struct AgentApproval: View {
                         .foregroundStyle(Palette.ground)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
-                        .background(Palette.ink, in: Capsule())
+                        .background(Palette.accent, in: Capsule())
                         .background(ClickSpot { AgentControl.shared.approveButton = $0 })
                 }
             }

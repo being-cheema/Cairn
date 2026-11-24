@@ -38,11 +38,14 @@ enum Palette {
     /// way, and one anybody can (see SiteCard.swift).
     static let safe = Color(nsColor: NS.safe)           // green-700 · green-400
     static let unsafe = Color(nsColor: NS.unsafe)       // amber-700 · amber-400
+    /// Coral: the live marks, links, focus and the one button that matters.
+    static let accent = Color(nsColor: NS.accent)
 
     /// The same colours for the AppKit corners of the app — a text field's
     /// ink, a window's background — which want an NSColor and keep it.
     enum NS {
-        static let ground = pair(1.0, 0.11)
+        /// Paper, not white: the page's card stays the page's own white.
+        static let ground = tint(light: (0.980, 0.969, 0.949), dark: (0.118, 0.106, 0.094))
         static let ink = pair(0.09, 0.93)
         static let muted = pair(0.55, 0.58)
         static let faint = pair(0.83, 0.32)
@@ -59,6 +62,10 @@ enum Palette {
         static let resting = pair(0.80, 0.30)
         static let safe = tint(light: (0.08, 0.50, 0.24), dark: (0.29, 0.87, 0.50))
         static let unsafe = tint(light: (0.71, 0.33, 0.04), dark: (0.98, 0.75, 0.14))
+        /// The one colour of the hand: coral, as on Anthropic's own pages.
+        /// Light is deep enough to read as text on paper; dark is the lighter
+        /// coral for a dark ground.
+        static let accent = tint(light: (0.784, 0.380, 0.247), dark: (0.898, 0.561, 0.439))
 
         private static func tint(light: (CGFloat, CGFloat, CGFloat), dark: (CGFloat, CGFloat, CGFloat)) -> NSColor {
             NSColor(name: nil) { appearance in
@@ -67,10 +74,17 @@ enum Palette {
             }
         }
 
+        /// A grey of the same step as before, with the warmth of paper in it:
+        /// a touch more red and a touch less blue, most in the middle greys,
+        /// least at the extremes (ink stays near black, not brown).
         private static func pair(_ light: CGFloat, _ dark: CGFloat) -> NSColor {
             NSColor(name: nil) { appearance in
                 let dim = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-                return NSColor(white: dim ? dark : light, alpha: 1)
+                let g = dim ? dark : light
+                let mid = 4 * g * (1 - g)   // 0 at black and white, 1 in the middle
+                let warmth = (dim ? 0.016 : 0.03) * (0.35 + 0.65 * mid)
+                return NSColor(srgbRed: min(1, g + warmth * 0.7), green: min(1, g + warmth * 0.2),
+                               blue: max(0, g - warmth), alpha: 1)
             }
         }
     }
@@ -173,6 +187,14 @@ enum Look: String, CaseIterable, Identifiable {
     }
 }
 
+/// Type: the system's sans for the chrome, its serif (New York) for the few
+/// places that speak in a sentence: a welcome, an empty shelf, About.
+enum Typeface {
+    static func heading(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
+        .system(size: size, weight: weight, design: .serif)
+    }
+}
+
 enum Metrics {
     /// The tab strip. The window's title bar is grown to match it so the
     /// traffic lights come down with the tabs — otherwise giving the row room
@@ -187,7 +209,7 @@ enum Metrics {
     /// window's edges (and from the column, folded away), and its corners
     /// this round.
     static let cardGap: CGFloat = 8
-    static let cardRadius: CGFloat = 10
+    static let cardRadius: CGFloat = 12
     /// Where the first tab starts. The traffic lights run from 19 to 79 —
     /// measured, not guessed — so this leaves them the same air on their right
     /// that the window gives them on their left.

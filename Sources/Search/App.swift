@@ -2015,6 +2015,7 @@ struct SceneRoot: View {
 
     var body: some View {
         ContentView(browser: slot.browser)
+            .tint(Palette.accent)
             .id(ObjectIdentifier(slot.browser))
             .onAppear { Browsers.restoreOnce() }
     }

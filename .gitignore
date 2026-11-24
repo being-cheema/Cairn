@@ -13,3 +13,7 @@ __pycache__/
 *.provisionprofile
 *.p12
 *.mobileprovision
+
+# icons8 pictures for the redesign are not MIT: they stay on the owner's Mac
+# (Local/README.md says why, and is the one file there that is tracked).
+Local/Art/
