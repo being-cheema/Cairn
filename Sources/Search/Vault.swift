@@ -636,7 +636,7 @@ enum Vault {
 
     /// Quoted fields, doubled quotes inside them, and newlines inside those —
     /// all three turn up in a real export.
-    private static func parse(csv text: String, control: ImportFile.Control? = nil) -> [[String]] {
+    nonisolated static func parse(csv text: String, control: ImportFile.Control? = nil) -> [[String]] {
         var rows: [[String]] = []
         var row: [String] = []
         var field = ""

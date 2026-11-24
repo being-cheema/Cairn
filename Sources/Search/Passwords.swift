@@ -25,6 +25,15 @@ struct PasswordsPanel: View {
     /// What Search kept under its own label, not yet copied (Vault.legacy).
     @State private var legacy: [Kept] = []
     @State private var copying = false
+    /// A passwords file read and waiting for Bring in: what it would do, held
+    /// in memory with its passwords until it is taken in or cancelled.
+    @State private var pending: PasswordImport.Plan?
+    @State private var pendingFile: URL?
+    @State private var choice = PasswordImport.Duplicates.skip
+    @State private var reading = false
+    @State private var writing = false
+    @State private var finished: PasswordImport.Result?
+    @State private var trashed = false
 
     /// The list as the search leaves it, one row per account.
     private var rows: [Kept] { browser.shownSites.flatMap(\.logins) }
@@ -52,6 +61,14 @@ struct PasswordsPanel: View {
         .animation(Motion.settle, value: editing)
         .onAppear { hunting = true }
         .task { await refreshLegacy() }
+        .onDrop(of: [.fileURL], isTargeted: nil) { providers in
+            guard let provider = providers.first else { return false }
+            _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                guard let url else { return }
+                DispatchQueue.main.async { tab = .bring; readFile(url) }
+            }
+            return true
+        }
         .onChange(of: browser.hunting) { _, _ in
             // The one picked fell out of the search: nothing is picked.
             if let selected, !rows.contains(where: { $0.id == selected }) { self.selected = nil; editing = nil }
@@ -157,22 +174,34 @@ struct PasswordsPanel: View {
 
     private var bring: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Card {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("From another browser or app")
-                        .font(Typeface.heading(15, weight: .medium))
-                        .foregroundStyle(Palette.ink)
-                    Text("Pick a browser and a profile, or a file exported from one: Chrome, Firefox, Safari, 1Password, Bitwarden, the Passwords app and others write a CSV. macOS asks once for that browser's keychain key. Nothing is changed there; everything lands in your own keychain, under \(Brand.name).")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Palette.muted)
-                        .fixedSize(horizontal: false, vertical: true)
-                    HStack(spacing: 8) {
-                        Pill("Bring in…", filled: true) { browser.lead(to: InternalPage(.importing)) }
-                        Pill("File…") { browser.importFile() }
+            if let finished {
+                doneCard(finished)
+            } else if let plan = pending {
+                previewCard(plan)
+            } else {
+                Card {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("From another manager or browser")
+                            .font(Typeface.heading(15, weight: .medium))
+                            .foregroundStyle(Palette.ink)
+                        Text("Drop a passwords file here, or pick one. The Passwords app, Safari, Chrome, Edge, Brave, Firefox, Bitwarden, 1Password, LastPass, KeePass and Dashlane all export one; its kind is worked out from its columns. You see what it would do before anything is kept.")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Palette.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                        HStack(spacing: 8) {
+                            Pill(reading ? "Reading…" : "Passwords file…", filled: true) { chooseFile() }
+                                .disabled(reading)
+                            Pill("Another browser…") { browser.lead(to: InternalPage(.importing)) }
+                            Pill("Bookmarks and history file…") { browser.importFile() }
+                        }
+                        Text("Another browser reads its saved passwords straight from its profile: macOS asks once for that browser's keychain key, and nothing is changed there.")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(Palette.muted)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
+                    .padding(14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .padding(14)
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             // Only while there is something to copy, which is only for a
@@ -210,6 +239,168 @@ struct PasswordsPanel: View {
                     }
                     .disabled(browser.forgetting)
                 }
+            }
+        }
+    }
+
+    // MARK: - a passwords file
+
+    private func count(_ n: Int, _ one: String, _ many: String) -> String { n == 1 ? "1 \(one)" : "\(n) \(many)" }
+
+    private func summary(of result: PasswordImport.Result) -> String {
+        var parts: [String] = []
+        if result.added > 0 { parts.append(count(result.added, "new password", "new passwords")) }
+        if result.updated > 0 { parts.append("\(result.updated) updated") }
+        if result.skipped > 0 { parts.append("\(result.skipped) left as they were") }
+        if result.failed > 0 { parts.append("\(result.failed) the keychain refused") }
+        return parts.isEmpty ? "Nothing was added." : parts.joined(separator: " · ")
+    }
+
+    private func previewCard(_ plan: PasswordImport.Plan) -> some View {
+        Card {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Ready to bring in")
+                    .font(Typeface.heading(15, weight: .medium))
+                    .foregroundStyle(Palette.ink)
+                Text("\(pendingFile?.lastPathComponent ?? "The file") looks like \(plan.source).")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Palette.muted)
+                VStack(alignment: .leading, spacing: 4) {
+                    line("\(plan.fresh.count)", "new")
+                    if !plan.same.isEmpty { line("\(plan.same.count)", "already here, the same password") }
+                    if !plan.different.isEmpty { line("\(plan.different.count)", "already here, with another password") }
+                    if !plan.problems.isEmpty { line("\(plan.problems.count)", "can't be taken") }
+                }
+                if !plan.different.isEmpty {
+                    HStack(spacing: 8) {
+                        Text("Where a password is already here:")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Palette.ink)
+                        Picker("", selection: $choice) {
+                            ForEach(PasswordImport.Duplicates.allCases) { Text($0.rawValue).tag($0) }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.segmented)
+                        .frame(width: 260)
+                    }
+                }
+                if !plan.problems.isEmpty {
+                    VStack(alignment: .leading, spacing: 2) {
+                        ForEach(Array(plan.problems.prefix(4).enumerated()), id: \.offset) { _, problem in
+                            Text(problem.row > 0 ? "Row \(problem.row): \(problem.why)" : problem.why)
+                                .font(.system(size: 11.5))
+                                .foregroundStyle(Palette.muted)
+                        }
+                        if plan.problems.count > 4 {
+                            Text("and \(plan.problems.count - 4) more")
+                                .font(.system(size: 11.5))
+                                .foregroundStyle(Palette.faint)
+                        }
+                    }
+                }
+                HStack(spacing: 8) {
+                    Pill(writing ? "Bringing in…" : "Bring in", filled: true) { runImport(plan) }
+                        .disabled(writing || plan.total == 0)
+                    Pill("Cancel") { pending = nil; pendingFile = nil }
+                        .disabled(writing)
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func line(_ number: String, _ what: String) -> some View {
+        HStack(spacing: 8) {
+            Text(number)
+                .font(.system(size: 13, weight: .medium, design: .monospaced))
+                .foregroundStyle(Palette.ink)
+                .frame(minWidth: 34, alignment: .trailing)
+            Text(what).font(.system(size: 12.5)).foregroundStyle(Palette.ink)
+        }
+    }
+
+    private func doneCard(_ result: PasswordImport.Result) -> some View {
+        Card {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Brought in")
+                    .font(Typeface.heading(15, weight: .medium))
+                    .foregroundStyle(Palette.ink)
+                Text(summary(of: result))
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Palette.ink)
+                Text("The file still holds every password in plain text. \(Brand.name) keeps no copy of it: move it to the Trash now.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Palette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 8) {
+                    if pendingFile != nil, !trashed {
+                        Pill("Move the file to the Trash", filled: true) { moveToTrash() }
+                    } else if trashed {
+                        Text("In the Trash").font(.system(size: 12)).foregroundStyle(Palette.muted)
+                    }
+                    Pill("Done") { finished = nil; pendingFile = nil; trashed = false }
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func chooseFile() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.commaSeparatedText, .json, .plainText]
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Read"
+        panel.message = "A passwords file another manager or browser exported (.csv, or Bitwarden's .json). Nothing is kept until you say so."
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        readFile(url)
+    }
+
+    /// Reads and sorts it off the main thread; only the plan comes back.
+    private func readFile(_ url: URL) {
+        guard !reading, !writing else { return }
+        reading = true
+        finished = nil
+        trashed = false
+        Task {
+            let plan: PasswordImport.Plan? = await Task.detached(priority: .userInitiated) {
+                guard let data = try? Data(contentsOf: url), let parsed = PasswordImport.parse(data) else { return nil }
+                return PasswordImport.plan(parsed, kept: Vault.all(), secret: { Vault.secret(of: $0) })
+            }.value
+            reading = false
+            guard let plan else {
+                browser.announce("That doesn't look like a passwords file")
+                return
+            }
+            pendingFile = url
+            pending = plan
+            choice = .skip
+        }
+    }
+
+    private func runImport(_ plan: PasswordImport.Plan) {
+        writing = true
+        let chosen = choice
+        Task {
+            let result = await Task.detached(priority: .userInitiated) {
+                PasswordImport.commit(plan, duplicates: chosen) { candidate, keep in
+                    Vault.save(host: candidate.host, user: candidate.user, password: candidate.password, clear: candidate.clear,
+                               extras: keep ? nil : candidate.extras)
+                }
+            }.value
+            writing = false
+            pending = nil
+            finished = result
+            browser.relist()
+        }
+    }
+
+    private func moveToTrash() {
+        guard let url = pendingFile else { return }
+        NSWorkspace.shared.recycle([url]) { _, error in
+            DispatchQueue.main.async {
+                if error == nil { trashed = true } else { browser.announce("Couldn't move it to the Trash") }
             }
         }
     }

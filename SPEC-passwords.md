@@ -1,6 +1,6 @@
 # Spec: Cairn's own passwords
 
-Status: approved ("do it"). Steps 0 to 3 are done. Branch per step, off `main`.
+Status: approved ("do it"). Steps 0 to 4 are done. Branch per step, off `main`.
 Defaults taken for the open questions: unlock for 5 minutes, the encrypted
 file is the backup, health shows counts only.
 
@@ -121,7 +121,7 @@ under the box when a password changes ("Update the saved one?").
 1. **Delete the Apple Passwords code** and its tests. Done (branch `passwords-1-remove-apple`).
 2. **Items and locking.** Done (branch `passwords-2-items-lock`): items carry title, notes, code secret, other addresses (a marked value, plain items unchanged, extras survive a sign-in re-save); one Touch ID covers show/copy/remove for five minutes, ended by sleep and lock, with a Settings switch. Filling keeps its own existing setting.
 3. **The page.** Done (branch `passwords-3-page`): list and detail side by side, add and edit with name, code setup key, other addresses and notes; tabs All and Bring in. Codes and Health get their tabs when they work (steps 6 and 7), not as empty shells.
-4. **Import.** Format detection, preview, duplicate choice, trash offer.
+4. **Import.** Done (branch `passwords-4-import`): drop or pick a file, kind told from its columns (Apple Passwords/Safari, Chrome family, Firefox, Bitwarden CSV and JSON, 1Password CSV, LastPass, KeePass, Dashlane), a preview (new / same / different / can't be taken, no secrets in the reasons), Keep mine or Use the file's for duplicates, then a Trash offer. "Keep both" is not offered: an item is named by site and account, so two can't exist. 1Password's `.1pux` is not read (its CSV is).
 5. **Generator.** On sign-up boxes and in the Add form.
 6. **Codes.** TOTP, live display, fill under code boxes.
 7. **Export and health.** CSV, encrypted file, the health counts.
