@@ -490,6 +490,48 @@ extension Browser {
 
 // MARK: - the picker
 
+/// The solid colours used by both the Space and tab group pickers.
+struct ColourSwatches: View {
+    let selected: Int?
+    let choose: (Int) -> Void
+    static let dot: CGFloat = 22
+
+    var body: some View {
+        HStack(spacing: 10) {
+            ForEach(Spaces.colours.indices, id: \.self) { index in
+                Self.swatch(selected: selected == index, name: Spaces.colourNames[index],
+                            action: { choose(index) }) {
+                    if index == 0 {
+                        ZStack {
+                            Circle().strokeBorder(Palette.faint, lineWidth: 1)
+                            Rectangle().fill(Palette.faint).frame(width: 1, height: Self.dot - 4)
+                                .rotationEffect(.degrees(45))
+                        }
+                    } else {
+                        Circle().fill(Spaces.colours[index])
+                    }
+                }
+            }
+        }
+    }
+
+    /// One size for every choice: the dot, and a ring round the one chosen.
+    static func swatch(selected: Bool, name: String, action: @escaping () -> Void,
+                        @ViewBuilder _ fill: () -> some View) -> some View {
+        Button(action: action) {
+            fill()
+                .frame(width: Self.dot, height: Self.dot)
+                .padding(3)
+                .overlay(Circle().strokeBorder(selected ? Palette.ink.opacity(0.75) : .clear, lineWidth: 1.5))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .help(name)
+        .accessibilityLabel(name)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
 /// Colour…: everything a space can wear, in one popover by its icon. At the
 /// top, the space's icon on its look and the look's name; under it the
 /// colours with None, then the ready-made gradients, then a gradient of
@@ -504,7 +546,6 @@ struct SpaceLookPicker: View {
     @State private var well = 0
 
     static let width: CGFloat = 288
-    static let dot: CGFloat = 22
 
     init(browser: Browser, id: UUID, customOpen: Bool? = nil) {
         self.browser = browser
@@ -515,6 +556,13 @@ struct SpaceLookPicker: View {
 
     private var space: Space { browser.spaces.first { $0.id == id } ?? browser.space }
     private var choice: SpaceLookChoice { space.lookChoice }
+    private var solidColour: Int? {
+        switch choice {
+        case .none: return 0
+        case .colour(let index): return index
+        default: return nil
+        }
+    }
     /// The gradient the custom part shows: the space's, or the one a first
     /// change would make.
     private var shownGradient: SpaceGradient {
@@ -532,19 +580,8 @@ struct SpaceLookPicker: View {
             preview
 
             section("Colour") {
-                HStack(spacing: 10) {
-                    swatch(selected: choice == .none, name: "None", action: { browser.chooseLook(id, .none) }) {
-                        ZStack {
-                            Circle().strokeBorder(Palette.faint, lineWidth: 1)
-                            Rectangle().fill(Palette.faint).frame(width: 1, height: Self.dot - 4).rotationEffect(.degrees(45))
-                        }
-                    }
-                    ForEach(1..<Spaces.colours.count, id: \.self) { index in
-                        swatch(selected: choice == .colour(index), name: Spaces.colourNames[index],
-                               action: { browser.chooseLook(id, .colour(index)) }) {
-                            Circle().fill(Spaces.colours[index])
-                        }
-                    }
+                ColourSwatches(selected: solidColour) { index in
+                    browser.chooseLook(id, index == 0 ? .none : .colour(index))
                 }
             }
 
@@ -552,8 +589,8 @@ struct SpaceLookPicker: View {
                 HStack(spacing: 10) {
                     ForEach(SpaceGradient.presets.indices, id: \.self) { at in
                         let preset = SpaceGradient.presets[at]
-                        swatch(selected: choice == .preset(at), name: preset.name,
-                               action: { browser.chooseLook(id, .preset(at)) }) {
+                        ColourSwatches.swatch(selected: choice == .preset(at), name: preset.name,
+                                              action: { browser.chooseLook(id, .preset(at)) }) {
                             Circle().fill(LinearGradient(stops: preset.gradient.stops(count: 8),
                                                          startPoint: .topLeading, endPoint: .bottomTrailing))
                         }
@@ -562,6 +599,18 @@ struct SpaceLookPicker: View {
             }
 
             section("Strength") { strengthControl }
+
+            // With the window as glass (Settings › Appearance › Window ›
+            // Glass): how much of the colour lies over it, and its grain.
+            // For every space alike, as the glass is the window's.
+            if browser.prefs.glass {
+                section("Glass") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        GlassSlider(name: "Transparency", value: Binding(get: { browser.prefs.glassClear }, set: { browser.prefs.glassClear = $0 }))
+                        GlassSlider(name: "Grain", value: Binding(get: { browser.prefs.glassGrain }, set: { browser.prefs.glassGrain = $0 }))
+                    }
+                }
+            }
 
             VStack(alignment: .leading, spacing: 12) {
                 Button {
@@ -592,34 +641,37 @@ struct SpaceLookPicker: View {
     // MARK: pieces
 
     /// The space's icon on its look, as large as the eye needs to see which
-    /// it is, and the look's name.
+    /// it is, and the look's name. The look as the window wears it: the
+    /// column's ground under the colour at the space's strength, or the
+    /// glass's tint at its transparency. The colour itself at full, it read
+    /// far brighter than the column turned out, above all in dark mode
+    /// (idea 1040); the dots below still show the hues to pick from.
     private var preview: some View {
         let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+        let none = choice == .none
         return ZStack(alignment: .bottomLeading) {
-            switch choice {
-            case .none: shape.fill(Palette.hover)
-            case .colour(let colour): shape.fill(Spaces.colours[colour])
-            case .preset, .custom:
-                let ends = shownGradient.points(frame: CGRect(x: 0, y: 0, width: 1, height: 1), room: .zero)
-                shape.fill(LinearGradient(stops: shownGradient.stops(), startPoint: ends.start, endPoint: ends.end))
-                    .overlay {
-                        if shownGradient.grain {
-                            Image(nsImage: Grain.tile).resizable(resizingMode: .tile).opacity(0.10).clipShape(shape)
-                        }
-                    }
+            shape.fill(browser.glassy || browser.asCards ? Palette.frame : Palette.ground)
+            if !none {
+                if browser.glassy {
+                    PickerGlassTint(look: space.look, clear: browser.prefs.glassClear)
+                        .clipShape(shape)
+                } else {
+                    SpaceWash(look: space.look)
+                        .clipShape(shape)
+                }
             }
             Ink(space.symbol, size: 20)
                 .font(.system(size: 20, weight: .medium))
-                .foregroundStyle(choice == .none ? Palette.muted : Color.white)
-                .shadow(color: .black.opacity(choice == .none ? 0 : 0.18), radius: 2, y: 1)
+                .foregroundStyle(none ? Palette.muted : Palette.ink)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             Text(space.lookName)
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(choice == .none ? Palette.muted : Color.white.opacity(0.92))
-                .shadow(color: .black.opacity(choice == .none ? 0 : 0.18), radius: 2, y: 1)
+                .foregroundStyle(Palette.muted)
                 .padding(.horizontal, 10)
                 .padding(.bottom, 8)
         }
+        .environment(\.washStrength, space.washStrength)
+        .overlay(shape.strokeBorder(Palette.hairline, lineWidth: 1))
         .frame(height: 76)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(space.name): \(space.lookName)")
@@ -666,7 +718,7 @@ struct SpaceLookPicker: View {
         return VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
                 ForEach(gradient.colours.indices, id: \.self) { index in
-                    swatch(selected: well == index, name: "Colour \(index + 1)", action: { well = index }) {
+                    ColourSwatches.swatch(selected: well == index, name: "Colour \(index + 1)", action: { well = index }) {
                         Circle().fill(colour(gradient.colours[index]))
                     }
                 }
@@ -682,14 +734,14 @@ struct SpaceLookPicker: View {
                     }
                 }
             }
-            LazyVGrid(columns: Array(repeating: GridItem(.fixed(Self.dot), spacing: 10), count: 7), alignment: .leading, spacing: 10) {
+            LazyVGrid(columns: Array(repeating: GridItem(.fixed(ColourSwatches.dot), spacing: 10), count: 7), alignment: .leading, spacing: 10) {
                 ForEach(SpaceGradient.swatches, id: \.hex) { pick in
                     let on = gradient.colours.indices.contains(well) && gradient.colours[well] == pick.hex
                     Button {
                         browser.editGradient(id) { if $0.colours.indices.contains(well) { $0.colours[well] = pick.hex } }
                     } label: {
                         Circle().fill(colour(pick.hex))
-                            .frame(width: Self.dot, height: Self.dot)
+                            .frame(width: ColourSwatches.dot, height: ColourSwatches.dot)
                             .overlay {
                                 if on { Ink("checkmark", size: 13).font(.system(size: 9, weight: .bold)).foregroundStyle(.white) }
                             }
@@ -723,13 +775,16 @@ struct SpaceLookPicker: View {
             }
             .padding(2)
             .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Palette.hover))
-            HStack {
-                Text("Grain").font(.system(size: 12)).foregroundStyle(Palette.ink)
-                Spacer()
-                Toggle("Grain", isOn: Binding(get: { gradient.grain }, set: { on in browser.editGradient(id) { $0.grain = on } }))
-                    .toggleStyle(.switch)
-                    .controlSize(.mini)
-                    .labelsHidden()
+            // On glass the glass's own Grain, above, is the grain there is.
+            if !browser.glassy {
+                HStack {
+                    Text("Grain").font(.system(size: 12)).foregroundStyle(Palette.ink)
+                    Spacer()
+                    Toggle("Grain", isOn: Binding(get: { gradient.grain }, set: { on in browser.editGradient(id) { $0.grain = on } }))
+                        .toggleStyle(.switch)
+                        .controlSize(.mini)
+                        .labelsHidden()
+                }
             }
         }
     }
@@ -743,28 +798,12 @@ struct SpaceLookPicker: View {
         }
     }
 
-    /// One size for every choice: the dot, and a ring round the one chosen.
-    private func swatch(selected: Bool, name: String, action: @escaping () -> Void,
-                        @ViewBuilder _ fill: () -> some View) -> some View {
-        Button(action: action) {
-            fill()
-                .frame(width: Self.dot, height: Self.dot)
-                .padding(3)
-                .overlay(Circle().strokeBorder(selected ? Palette.ink.opacity(0.75) : .clear, lineWidth: 1.5))
-                .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .help(name)
-        .accessibilityLabel(name)
-        .accessibilityAddTraits(selected ? .isSelected : [])
-    }
-
     private func round(_ symbol: String, _ name: String, _ run: @escaping () -> Void) -> some View {
         Button(action: run) {
             Ink(symbol, size: 9)
                 .font(.system(size: 9, weight: .bold))
                 .foregroundStyle(Palette.muted)
-                .frame(width: Self.dot, height: Self.dot)
+                .frame(width: ColourSwatches.dot, height: ColourSwatches.dot)
                 .background(Circle().fill(Palette.hover))
                 .padding(3)
                 .contentShape(Circle())
@@ -778,6 +817,31 @@ struct SpaceLookPicker: View {
         guard let lab = OKLab(hex: hex) else { return .gray }
         let (r, g, b) = lab.srgb
         return Color(.sRGB, red: r, green: g, blue: b)
+    }
+}
+
+/// The glass's tint as GlassGround lays it, for the picker's preview: the
+/// colour or gradient, toned at the strength, at what Transparency leaves.
+private struct PickerGlassTint: View {
+    let look: SpaceLook?
+    let clear: Double
+    @Environment(\.washStrength) private var strength
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let dark = scheme == .dark
+        Group {
+            switch look {
+            case .colour(let colour)?:
+                Spaces.toned(colour, strength, dark: dark)
+            case .gradient(let gradient)?:
+                let ends = gradient.points(frame: CGRect(x: 0, y: 0, width: 1, height: 1), room: .zero)
+                LinearGradient(stops: gradient.stops(strength: strength, dark: dark), startPoint: ends.start, endPoint: ends.end)
+            case nil:
+                Color.clear
+            }
+        }
+        .opacity((1 - clear) * GlassGround.mostTint)
     }
 }
 
@@ -836,5 +900,24 @@ enum SpaceLookPopover {
             ? (browser.prefs.sidePosition == .right ? .minX : .maxX)
             : (flipped ? .maxY : .minY)
         popover.show(relativeTo: spot, of: content, preferredEdge: edge)
+    }
+}
+
+/// One of the glass's amounts: its name, and under it a plain slider as
+/// wide as there is room for.
+struct GlassSlider: View {
+    let name: String
+    @Binding var value: Double
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(name)
+                .font(.system(size: 12))
+                .foregroundStyle(Palette.ink)
+            Slider(value: $value, in: 0...1)
+                .controlSize(.small)
+                .labelsHidden()
+                .accessibilityLabel(name)
+        }
     }
 }

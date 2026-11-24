@@ -52,7 +52,7 @@ final class Updater: ObservableObject {
     /// Whether this copy updates itself at all.
     static var configured: Bool { feed != nil }
 
-    private static var overridden: Bool {
+    static var overridden: Bool {
         Store.testing && ProcessInfo.processInfo.environment["SEARCH_FEED"] != nil
     }
 
@@ -294,6 +294,13 @@ final class Updater: ObservableObject {
             : "\(Brand.name) \(release.version) is out — choose Download Update in the \(Brand.name) menu")
     }
 
+    /// A test run's stage, set as told (the bench's `update stage`, and the
+    /// notice's tests): never in the browser people use.
+    func setStageForTest(_ stage: Stage) {
+        guard Store.testing else { return }
+        self.stage = stage
+    }
+
     /// Quit, and come back as the new one. A shell waits for this process
     /// to be gone before asking macOS to open the bundle again — `open` on a
     /// running app only brings it forward. Quitting goes through NSApp so
@@ -361,6 +368,12 @@ final class Updater: ObservableObject {
                 AIEngine.shared.refreshState()
             }
         }
+        // Developer tools packages for this Mac, when the feed lists any (see
+        // DevToolsPackages): the list in Settings follows it.
+        // https on the feed's host, as the update's own links; plain http
+        // only for a test run handed SEARCH_FEED, as the feed itself.
+        let offers = DevToolsPackages.offers(from: json["devtools"]) { link($0) }
+        await MainActor.run { DevToolsPackages.shared.offered = offers }
         return release
     }
 

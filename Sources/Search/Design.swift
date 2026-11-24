@@ -17,23 +17,11 @@ enum Palette {
     static let faint = Color(nsColor: NS.faint)         // neutral-300 · neutral-700
     static let hairline = Color(nsColor: NS.hairline)   // neutral-200 · neutral-800
     static let wash = Color(nsColor: NS.wash)           // the live tab
-    /// The live pin: among squares that already wear a faint grey, the one
-    /// you are on stands out from them as a live row does from the white.
-    static let pinLive = Color(nsColor: NS.pinLive)
     static let hover = Color(nsColor: NS.hover)         // the one under the pointer
     /// Around the page's card, with the tabs down the side: the column, the
     /// bookmarks bar and the gaps share it, a touch off the page's white, so
     /// the card reads as one (see CardEdge).
     static let frame = Color(nsColor: NS.frame)
-    /// The column's own greys, on that ground: the live tab, the one under the
-    /// pointer, the resting pin squares and the live pin. The white column's
-    /// wash, hover and pinLive all but vanished on it (Drice: the pins' squares
-    /// and the open tab no longer showed), so these keep the same steps of
-    /// contrast from the frame that those kept from the white.
-    static let sideWash = Color(nsColor: NS.sideWash)
-    static let sideHover = Color(nsColor: NS.sideHover)
-    static let sideTile = Color(nsColor: NS.sideTile)
-    static let sidePinLive = Color(nsColor: NS.sidePinLive)
     /// The only two that aren't grey: a connection nobody can read on the
     /// way, and one anybody can (see SiteCard.swift).
     static let safe = Color(nsColor: NS.safe)           // green-700 · green-400
@@ -54,13 +42,8 @@ enum Palette {
         static let faint = pair(0.83, 0.32)
         static let hairline = pair(0.91, 0.20)
         static let wash = pair(0.937, 0.175)
-        static let pinLive = pair(0.90, 0.21)
         static let hover = pair(0.965, 0.15)
         static let frame = pair(0.955, 0.075)
-        static let sideWash = pair(0.895, 0.155)
-        static let sideHover = pair(0.915, 0.13)
-        static let sideTile = pair(0.925, 0.115)
-        static let sidePinLive = pair(0.86, 0.19)
         /// The resting traffic lights, drawn by hand when the app is behind.
         static let resting = pair(0.80, 0.30)
         static let safe = tint(light: (0.08, 0.50, 0.24), dark: (0.29, 0.87, 0.50))
@@ -229,11 +212,21 @@ enum Metrics {
     /// first item sits in Safari. A column too narrow for that gives back
     /// what it must (SideBar.lights), down to where it was.
     static let sideLights: CGFloat = 80
+    /// The least of it the fold door may have: its box 3 points clear of
+    /// the zoom button (SideBar.folds).
+    static let sideLightsLeast: CGFloat = 72
     /// The three doors' own width, without the air after them.
     static let helmDoors: CGFloat = 3 * 26 + 2 * 4
-    /// The band left at the top when there is no strip: just enough for the
-    /// traffic lights to sit in, and nothing else.
-    static let bare: CGFloat = 34
+    /// The same two, for the doors Settings leaves shown (idea 815): all
+    /// three unless some are hidden, nothing when none is.
+    @MainActor static func helm(_ prefs: Preferences) -> CGFloat {
+        let n = CGFloat(prefs.helmDoors)
+        return n == 0 ? 0 : n * 26 + (n - 1) * 2 + 8
+    }
+    @MainActor static func helmDoors(_ prefs: Preferences) -> CGFloat {
+        let n = CGFloat(prefs.helmDoors)
+        return n == 0 ? 0 : n * 26 + (n - 1) * 4
+    }
     /// Tabs are a fixed width rather than the width of their titles, so the
     /// cross always lands in the same place and the row never rearranges
     /// itself while you read it. They give way when there are too many:
@@ -241,18 +234,50 @@ enum Metrics {
     /// stop at tabMinWidth, the mark and its air. Past that the row scrolls,
     /// inside its own edges.
     static let tabWidth: CGFloat = 186
-    static let tabTitled: CGFloat = 80
+    /// A titled tab's own parts, end to end (TabPill.titled): its air at
+    /// the left, the mark, a gap, the title, a gap, the spring at its
+    /// least, a gap, the slot the cross and the ring take (kept while
+    /// empty, so the title doesn't move under the pointer), its air at the
+    /// right. Everything but the title.
+    static let tabLead: CGFloat = 11
+    static let tabTrail: CGFloat = 7
+    static let tabMark: CGFloat = 15
+    static let tabSpacing: CGFloat = 6
+    static let tabSpring: CGFloat = 2
+    static let tabCloseSlot: CGFloat = 15
+    static let tabFixed: CGFloat = tabLead + tabMark + tabSpacing + tabSpacing + tabSpring + tabSpacing + tabCloseSlot + tabTrail
+    /// The least a title is given: three letters and the "…", as most
+    /// titles' letters run at 12.5 points ("Rec…" is 32, "Wea…" 35). Less
+    /// than that and a tab showed its mark and a lone "…", or a letter or
+    /// two, which says nothing a mark alone doesn't; it shows the mark
+    /// alone instead.
+    static let tabTitleRoom: CGFloat = 36
+    /// A sign before the title (a blocked window, a translation), framed
+    /// this wide; the bare ones (a script's flask, a private eye, the
+    /// recording dot) are a symbol of 9 or 10 points, about tabGlyph.
+    static let tabSign: CGFloat = 17
+    static let tabGlyph: CGFloat = 12
+    /// 104: narrower than this a tab is its mark alone.
+    static let tabTitled: CGFloat = tabFixed + tabTitleRoom
     static let tabMinWidth: CGFloat = 36
     static let tabGap: CGFloat = 2
     /// A pinned tab is a square the height of the row, holding one letter.
     static let pinWidth: CGFloat = 30
     /// The square at the end of the row that opens a new page.
     static let plusWidth: CGFloat = 30
+    /// What a full row of tabs still leaves past the plus to take the window
+    /// by, as Chrome's does: the tabs give way before it. Without it they ran
+    /// up to the buttons at the far end, and the corner the lights sit in was
+    /// all of the row that moved the window.
+    static let tabRowHold: CGFloat = 40
     /// The address field, in both the places it shows up.
     static let fieldWidth: CGFloat = 560
     /// The column of titles down the left, in the way that has one.
     static let side: CGFloat = 232
     static let sideMin: CGFloat = 176
+    /// Narrower than this, with Narrow to icons on, the column is the strip
+    /// of icons (Preferences.narrowStrip).
+    static let narrowLine: CGFloat = 200
     static let sideMax: CGFloat = 440
 }
 
@@ -380,6 +405,15 @@ enum Motion {
     /// in Core Animation's terms.
     static func fold(out: Bool) -> (response: Double, damping: Double) {
         out ? (0.14, 0.86) : (0.13, 1)
+    }
+
+    /// How long the folded column takes to slide back in, or fade, and
+    /// is still over the page: the spring's response (Motion.fold) runs a
+    /// little past it.
+    static var columnAway: TimeInterval {
+        if reduced { return 0 }
+        if fadesColumn { return fade }
+        return slide(out: false) ?? 0.2
     }
 
     static func folding(out: Bool) -> Animation? {
@@ -547,6 +581,16 @@ private struct PopoverGround: ViewModifier {
 /// card each, drawn by the stage that holds them (see PaneStage).
 struct CardEdge: ViewModifier {
     let on: Bool
+    /// Where the card lies in the view, for a card drawn over a page laid
+    /// out larger than it (the window's page as ⌘S moves the column): the
+    /// clip, ground and edge follow these, animated, and the page doesn't.
+    var insets = EdgeInsets()
+    var corner: CGFloat = Metrics.cardRadius
+    /// The screen's scale, for the window's page: its edges on whole
+    /// pixels, a hairline one pixel wide and no soft shadow around it, so
+    /// the white of the page meets the window's grey on a sharp line. Zero
+    /// keeps the soft card other cards are (the side panel, downloads).
+    var scale: CGFloat = 0
 
     // One shape of view, on or off: a page whose view were rebuilt as the
     // card comes and goes (the tabs across the top, a video taking the
@@ -554,16 +598,23 @@ struct CardEdge: ViewModifier {
     // full screen window. Off, the clip reaches far past the page and cuts
     // nothing, and the edge and shadow are clear.
     func body(content: Content) -> some View {
+        let shape = CardShape(on: on, insets: insets, corner: corner, scale: scale)
+        let crisp = scale > 0
         content
-            .clipShape(CardShape(on: on))
+            .clipShape(shape)
             .background {
-                CardShape(on: on)
-                    .fill(on ? Palette.ground : .clear)
-                    .shadow(color: .black.opacity(on ? CardEdge.shadow : 0), radius: 6, y: 1)
+                if crisp {
+                    shape.fill(on ? Palette.ground : .clear)
+                } else {
+                    shape
+                        .fill(on ? Palette.ground : .clear)
+                        .shadow(color: .black.opacity(on ? CardEdge.shadow : 0), radius: 6, y: 1)
+                }
             }
             .overlay {
-                CardShape(on: on)
-                    .strokeBorder(Color.primary.opacity(on ? CardEdge.edge : 0), lineWidth: 1)
+                shape
+                    .strokeBorder(Color.primary.opacity(on && corner > 0 ? CardEdge.edge : 0),
+                                  lineWidth: crisp ? 1 / scale : 1)
                     .allowsHitTesting(false)
             }
     }
@@ -577,17 +628,123 @@ struct CardEdge: ViewModifier {
 /// far past the page on every side.
 private struct CardShape: InsettableShape {
     let on: Bool
+    var insets = EdgeInsets()
+    var corner: CGFloat = Metrics.cardRadius
+    var scale: CGFloat = 0
     var inset: CGFloat = 0
+
+    var animatableData: AnimatablePair<AnimatablePair<CGFloat, CGFloat>, AnimatablePair<AnimatablePair<CGFloat, CGFloat>, CGFloat>> {
+        get { .init(.init(insets.top, insets.leading), .init(.init(insets.bottom, insets.trailing), corner)) }
+        set {
+            insets = EdgeInsets(top: newValue.first.first, leading: newValue.first.second,
+                                bottom: newValue.second.first.first, trailing: newValue.second.first.second)
+            corner = newValue.second.second
+        }
+    }
 
     func path(in rect: CGRect) -> Path {
         guard on else { return Path(rect.insetBy(dx: -10_000, dy: -10_000)) }
-        return RoundedRectangle(cornerRadius: Metrics.cardRadius, style: .continuous)
-            .path(in: rect.insetBy(dx: inset, dy: inset))
+        func pixel(_ x: CGFloat) -> CGFloat { scale > 0 ? (x * scale).rounded() / scale : x }
+        let card = CGRect(x: pixel(rect.minX + insets.leading), y: pixel(rect.minY + insets.top),
+                          width: pixel(rect.width - insets.leading - insets.trailing),
+                          height: pixel(rect.height - insets.top - insets.bottom))
+        return RoundedRectangle(cornerRadius: max(0, corner), style: .continuous)
+            .path(in: card.insetBy(dx: inset, dy: inset))
     }
 
     func inset(by amount: CGFloat) -> CardShape {
         var shape = self
         shape.inset += amount
         return shape
+    }
+}
+
+/// An offset kept to the screen's pixels while it animates, so what it
+/// moves is never drawn between two of them, resampled and soft.
+struct PixelOffset: GeometryEffect {
+    var offset: CGSize
+    var scale: CGFloat
+
+    var animatableData: CGSize.AnimatableData {
+        get { offset.animatableData }
+        set { offset.animatableData = newValue }
+    }
+
+    func effectValue(size: CGSize) -> ProjectionTransform {
+        func pixel(_ x: CGFloat) -> CGFloat { scale > 0 ? (x * scale).rounded() / scale : x }
+        return ProjectionTransform(CGAffineTransform(translationX: pixel(offset.width), y: pixel(offset.height)))
+    }
+}
+
+/// The window's page cut to its card on every frame the card moves (see
+/// StageView.clip): what the card is short of the page laid out under it,
+/// across and down, and its corners, handed on as SwiftUI works each frame
+/// out, so the page's edge and the card's are one.
+struct CardClip: ViewModifier, Animatable {
+    var card: EdgeInsets
+    var corner: CGFloat
+    let scale: CGFloat
+    let on: Bool
+
+    var animatableData: AnimatablePair<AnimatablePair<CGFloat, CGFloat>, AnimatablePair<AnimatablePair<CGFloat, CGFloat>, CGFloat>> {
+        get { .init(.init(card.top, card.leading), .init(.init(card.bottom, card.trailing), corner)) }
+        set {
+            card = EdgeInsets(top: newValue.first.first, leading: newValue.first.second,
+                              bottom: newValue.second.first.first, trailing: newValue.second.first.second)
+            corner = newValue.second.second
+        }
+    }
+
+    func body(content: Content) -> some View {
+        func pixel(_ x: CGFloat) -> CGFloat { scale > 0 ? (x * scale).rounded() / scale : x }
+        let across = CGSize(width: pixel(card.leading + card.trailing), height: pixel(card.top + card.bottom))
+        return content.background(Rider(across: on ? across : nil, corner: on ? max(0, corner) : 0))
+    }
+
+    /// The card, measured in the window: the room it leaves across and
+    /// down, inside this view's own size. Read as the stage lays itself
+    /// out, so the two are always of the same moment: handed a size worked
+    /// out before the stage had grown, the card was cut short for a frame.
+    private struct Rider: NSViewRepresentable {
+        let across: CGSize?
+        let corner: CGFloat
+
+        func makeNSView(context: Context) -> NSView { Unseen() }
+
+        func updateNSView(_ view: NSView, context: Context) {
+            guard let unseen = view as? Unseen, let window = view.window else { return }
+            // The window's stage: two pages' (PaneStage), or the one page's.
+            if unseen.stage?.window !== window {
+                unseen.stage = Self.find(in: window.contentView)
+            }
+            let card: (() -> CGSize)? = across.map { across in
+                { [weak unseen] in
+                    guard let unseen else { return .zero }
+                    return CGSize(width: unseen.bounds.width - across.width, height: unseen.bounds.height - across.height)
+                }
+            }
+            switch unseen.stage {
+            case let panes as PaneStage: panes.clip(card: card, corner: corner)
+            case let one as StageView: one.clip(card: card, corner: corner)
+            default: break
+            }
+        }
+
+        private static func find(in view: NSView?) -> NSView? {
+            guard let view else { return nil }
+            if view is PaneStage || view is StageView { return view }
+            for sub in view.subviews { if let found = find(in: sub) { return found } }
+            return nil
+        }
+
+        private final class Unseen: NSView {
+            weak var stage: NSView?
+            override func hitTest(_ point: NSPoint) -> NSView? { nil }
+            override func viewDidMoveToWindow() {
+                super.viewDidMoveToWindow()
+                // The first frame's update may come before the window does.
+                needsLayout = true
+            }
+        }
     }
 }

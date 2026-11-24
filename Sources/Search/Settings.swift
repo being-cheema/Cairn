@@ -21,6 +21,7 @@ struct SettingsPanel: View {
     @ObservedObject private var updater = Updater.shared
     @ObservedObject private var shield = Shield.shared
     @ObservedObject private var sync = Sync.shared
+    @ObservedObject private var icloud = ICloudSync.shared
     /// The keys rows name, as Settings › Shortcuts has them now.
     @ObservedObject private var shortcuts = ShortcutStore.shared
     @State private var isDefault = Links.isDefault
@@ -39,16 +40,16 @@ struct SettingsPanel: View {
     /// A row gone to from a result, lit for a moment.
     @State private var lit: String?
     /// What Set Up Like Arc changed, for Undo.
-    @State private var arcBefore: Preferences.ArcSetup? = SettingsPanel.arcBefore
-    @MainActor static var arcBefore: Preferences.ArcSetup?
+    @ObservedObject private var likeArc = LikeArc.shared
 
     enum Page: String, CaseIterable, Identifiable {
-        case general, appearance, tabs, browsing, spaces, passwords, privacy, ai, extensions, keyboard, about
+        case general, appearance, themes, tabs, browsing, spaces, passwords, privacy, ai, extensions, keyboard, about
         var id: String { rawValue }
         var title: String {
             switch self {
             case .general: return "General"
             case .appearance: return "Appearance"
+            case .themes: return "Themes"
             case .tabs: return "Tabs"
             case .browsing: return "Browsing"
             case .spaces: return "Spaces & Pins"
@@ -64,6 +65,7 @@ struct SettingsPanel: View {
             switch self {
             case .general: return "gearshape"
             case .appearance: return "paintbrush"
+            case .themes: return "photo.artframe"
             case .tabs: return "square.on.square"
             case .browsing: return "globe"
             case .spaces: return "square.stack"
@@ -87,7 +89,7 @@ struct SettingsPanel: View {
         }
         /// The rail's three blocks: the browser, your data and tools, About.
         static var blocks: [[Page]] {
-            [[.general, .appearance, .tabs, .browsing, .spaces],
+            [[.general, .appearance, .themes, .tabs, .browsing, .spaces],
              [.passwords, .privacy] + (AI.shipped ? [.ai] : []) + [.extensions, .keyboard],
              [.about]]
         }
@@ -317,7 +319,7 @@ struct SettingsPanel: View {
             .frame(maxWidth: .infinity)
 
             ScrollViewReader { reader in
-                ScrollView(showsIndicators: false) {
+                ScrollView {
                     VStack(alignment: .leading, spacing: 22) {
                         if searching { results } else { section(page) }
                     }
@@ -407,10 +409,15 @@ struct SettingsPanel: View {
 
     @ViewBuilder
     private var results: some View {
-        let found = hits
-        if found.isEmpty {
+        let all = hits
+        if all.isEmpty {
             Card { Nothing("No setting called that. Try other words, like dark, tabs or video") }
         }
+        // What is always there and has nothing to set comes apart, after
+        // the settings: among them its row with no switch read as a setting
+        // gone missing (idea 483).
+        let found = all.filter { $0.kind != .note }
+        let always = all.filter { $0.kind == .note }
         let byGroup = Dictionary(grouping: found, by: \.group)
         ForEach(SettingsIndex.groups.filter { byGroup[$0.id] != nil }) { group in
             VStack(alignment: .leading, spacing: 8) {
@@ -437,6 +444,19 @@ struct SettingsPanel: View {
                 Card { rows(byGroup[group.id] ?? [], searched: true) }
             }
         }
+        if !always.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.circle").font(.system(size: 10.5, weight: .medium))
+                    Text("Always on, nothing to set".uppercased())
+                        .font(.system(size: 10.5, weight: .semibold))
+                        .tracking(0.4)
+                }
+                .foregroundStyle(Palette.muted)
+                .padding(.leading, 2)
+                Card { rows(always, searched: true) }
+            }
+        }
     }
 
     // MARK: - words that change
@@ -459,7 +479,8 @@ struct SettingsPanel: View {
             return mailHandler.map { "Email links from other apps go to \($0) now" } ?? item.detail
         case "downloads.folder":
             return prefs.downloads.path.replacingOccurrences(of: NSHomeDirectory(), with: "~")
-        case "sync": return sync.on ? sync.summary : item.detail
+        case "sync": return icloud.on ? "Off while Sync with iCloud is on" : sync.on ? sync.summary : item.detail
+        case "icloud": return icloud.summary(folderSyncOn: sync.on, otherwise: item.detail)
         case "search.engine": return searchDetail
         case "search.shift": return shiftDetail
         case "search.suggest": return suggestDetail
@@ -487,6 +508,7 @@ struct SettingsPanel: View {
         switch item.page {
         case .general: generalControl(item.id)
         case .appearance: appearanceControl(item.id)
+        case .themes: ThemesPage(prefs: prefs)
         case .tabs: tabsControl(item.id)
         case .browsing: browsingControl(item.id)
         case .spaces: spacesControl(item.id)
@@ -545,7 +567,27 @@ struct SettingsPanel: View {
             Pill("Bring Things Over…") { browser.lead(to: InternalPage(.importing)) }
         case "sync":
             // On asks for the folder first; cancelled, it stays off.
+            // Never with Sync with iCloud: the two would undo each other.
             Switch(on: Binding(get: { sync.on }, set: { $0 ? sync.choose() : sync.turnOff() }))
+                .disabled(icloud.on && !sync.on)
+                .opacity(icloud.on && !sync.on ? 0.4 : 1)
+        case "handoff": Switch(on: $prefs.handoff)
+        case "icloud":
+            // Off limits in a build not signed for iCloud, and while the
+            // folder sync is on.
+            let locked = !icloud.on && (!icloud.available || sync.on)
+            Switch(on: Binding(get: { icloud.on }, set: { $0 ? icloud.turnOn() : icloud.turnOff() }))
+                .disabled(locked)
+                .opacity(locked ? 0.4 : 1)
+        case "icloud.erase":
+            Pill("Delete…") {
+                let alert = NSAlert()
+                alert.messageText = "Delete \(Brand.name)'s data from iCloud?"
+                alert.informativeText = "Open tabs, pins, spaces, bookmarks and settings leave iCloud for every device. What is on each device stays. Sync with iCloud turns off here and on your other devices."
+                alert.addButton(withTitle: "Delete")
+                alert.addButton(withTitle: "Cancel")
+                if alert.runModal() == .alertFirstButtonReturn { icloud.erase() }
+            }
         case "quit.confirm": Switch(on: $prefs.confirmsQuit)
         case "downloads.folder": Pill("Change…") { chooseFolder() }
         case "downloads.ask": Switch(on: $prefs.asksWhereToSave)
@@ -588,23 +630,61 @@ struct SettingsPanel: View {
                         set: { on in withAnimation(Motion.glide) { prefs.cards = on } }
                      ))
         case "layout.cardsFullScreen": Switch(on: $prefs.cardsInFullScreen)
+        case "address.shown": Switch(on: $prefs.addressLine)
+        case "scrollbars.fade": Switch(on: $prefs.scrollbarsFade)
+        case "address.width": Segmented(options: AddressWidth.allCases.map { ($0, $0.title) }, selection: $prefs.addressWidth)
+        case "window.glass": Switch(on: $prefs.glass)
+        case "window.glass.style": Segmented(options: GlassStyle.allCases.map { ($0, $0.title) }, selection: $prefs.glassStyle)
+        case "window.glass.clear": Slider(value: $prefs.glassClear, in: 0...1).controlSize(.small).frame(width: 160)
+        case "window.glass.grain": Slider(value: $prefs.glassGrain, in: 0...1).controlSize(.small).frame(width: 160)
         case "toolbar.left": Switch(on: $prefs.navigationLeft)
         case "tabs.compact":
             Switch(on: Binding(
                 get: { prefs.compactStrip },
                 set: { on in withAnimation(Motion.glide) { prefs.compactStrip = on } }
             ))
+        case "tabs.liquid": Switch(on: $prefs.liquidTabs)
         case "sidebar.roomy":
             Switch(on: Binding(
                 get: { prefs.roomyTabs },
                 set: { on in withAnimation(Motion.glide) { prefs.roomyTabs = on } }
             ))
         case "sidebar.player": Switch(on: $prefs.showsPlayer)
+        case "sidebar.foldButton": Switch(on: $prefs.foldButton)
+        case "sidebar.narrowIcons":
+            Switch(on: Binding(
+                get: { prefs.narrowsToIcons },
+                // Off, the column has its titles back, and on again it starts
+                // with them rather than as a strip from long ago.
+                set: { on in withAnimation(Motion.glide) { prefs.narrowsToIcons = on; if !on { prefs.narrowed = false } } }
+            ))
+        case "sidebar.doorsUp":
+            Switch(on: Binding(
+                get: { prefs.doorsUp },
+                set: { on in withAnimation(Motion.glide) { prefs.doorsUp = on } }
+            ))
+        case "helm.shown":
+            Ticks(items: [("Back", Binding(get: { !prefs.hidesBack }, set: { on in withAnimation(Motion.glide) { prefs.hidesBack = !on } })),
+                          ("Forward", Binding(get: { !prefs.hidesForward }, set: { on in withAnimation(Motion.glide) { prefs.hidesForward = !on } })),
+                          ("Reload", Binding(get: { !prefs.hidesReload }, set: { on in withAnimation(Motion.glide) { prefs.hidesReload = !on } }))])
+        case "foot.shown":
+            Ticks(items: [("Extensions", Binding(get: { !prefs.hidesExtensionsDoor }, set: { on in withAnimation(Motion.glide) { prefs.hidesExtensionsDoor = !on } })),
+                          ("Bookmarks", Binding(get: { !prefs.hidesBookmarksDoor }, set: { on in withAnimation(Motion.glide) { prefs.hidesBookmarksDoor = !on } })),
+                          ("Profile", Binding(get: { !prefs.hidesProfileDoor }, set: { on in withAnimation(Motion.glide) { prefs.hidesProfileDoor = !on } }))])
         case "glyph": Segmented(options: Glyph.allCases.map { ($0, $0.title) }, selection: $prefs.glyph)
         case "tabs.highContrast": Switch(on: $prefs.highContrastText)
         case "tabs.reading": Switch(on: $prefs.showsReading)
+        case "tabs.pinCounts": Switch(on: $prefs.showsPinCounts)
+        case "fold.loadingLine": Switch(on: $prefs.showsLoadingLine)
         case "tabs.give": Switch(on: $prefs.tabsGive)
         case "bookmarks.bar": Switch(on: $prefs.bookmarksBar)
+        case "bookmarks.iconsOnly": Switch(on: $prefs.bookmarksIconsOnly)
+        case "bookmarks.newTabOnly": Switch(on: $prefs.bookmarksNewTabOnly)
+        case "bookmarks.side":
+            Switch(on: Binding(
+                get: { prefs.bookmarksInSidebar },
+                set: { on in withAnimation(Motion.glide) { prefs.bookmarksInSidebar = on } }
+            ))
         case "motion.light": Switch(on: $prefs.lightMotion)
         case "motion.instant": Switch(on: $prefs.instantMotion)
         case "note.split": Always()
@@ -625,11 +705,14 @@ struct SettingsPanel: View {
             .pickerStyle(.menu)
             .fixedSize()
         case "tabs.newAfterLast": Switch(on: $prefs.newTabAfterLast)
+        case "tabs.keepWindow": Switch(on: $prefs.keepWindowAfterLast)
         case "tabs.closeGoesBack": Switch(on: $prefs.closeGoesBack)
+        case "home.grid": Switch(on: $prefs.homeGrid)
         case "tabs.undoReopens": Switch(on: $prefs.undoReopensTab)
         case "tabs.switcherBehindFirst": Switch(on: $prefs.switcherBehindFirst)
         case "tabs.switcherLeavesOutPins": Switch(on: $prefs.switcherLeavesOutPins)
         case "tabs.frontBeside": Switch(on: $prefs.frontLinksBeside)
+        case "tabs.swipeBackCloses": Switch(on: $prefs.swipeBackCloses)
         case "tabs.mirror": Switch(on: $prefs.mirrorsTabs)
         case "tabs.lazy": Switch(on: $prefs.lazyTabs)
         case "tabs.popupWindows": Switch(on: $prefs.popupWindows)
@@ -657,6 +740,8 @@ struct SettingsPanel: View {
                 get: { prefs.showsAddress },
                 set: { on in withAnimation(Motion.glide) { prefs.showsAddress = on } }
             ))
+        case "tabs.clickAddressOnly": Switch(on: $prefs.tabClickAddressOnly)
+        case "tabs.clickKeepsName": Switch(on: $prefs.tabClickKeepsName)
         case "note.groups", "note.awake": Always()
         default: EmptyView()
         }
@@ -698,7 +783,7 @@ struct SettingsPanel: View {
                 }
             }
         case "links.little": Switch(on: $prefs.littleLinks)
-        case "links.little.tabs": Switch(on: $prefs.littleFindsTabs)
+        case "links.little.tabs": Switch(on: $prefs.linksFindTabs)
         case "reader.twins": Switch(on: $prefs.readsTwins)
         case "reader.follows": Switch(on: $prefs.readerFollowsLook)
         case "float.style": Segmented(options: FloatStyle.allCases.map { ($0, $0.title) }, selection: $prefs.floatStyle)
@@ -707,6 +792,7 @@ struct SettingsPanel: View {
                 .frame(maxWidth: 340)
         case "float.minimize": Switch(on: $prefs.floatMinimizes)
         case "media.click": Switch(on: $prefs.waitsForPlay)
+        case "video.keys": Switch(on: $prefs.videoKeys)
         case "fullscreen.escapeTwice": Switch(on: $prefs.escapeTwice)
         case "fullscreen.keepsWindow": Switch(on: $prefs.keepsWindow)
         case "translate.target":
@@ -719,6 +805,7 @@ struct SettingsPanel: View {
         case "pages.capture": Switch(on: $prefs.capturesPages)
         case "sites.styles": SiteStylesControl(prefs: prefs)
         case "autocorrect": Switch(on: $prefs.autocorrect)
+        case "inlinePredictions": Switch(on: $prefs.inlinePredictions)
         case "note.panel", "note.translate", "note.sitesearch", "note.links", "note.flick": Always()
         default: EmptyView()
         }
@@ -728,11 +815,9 @@ struct SettingsPanel: View {
     private func spacesControl(_ id: String) -> some View {
         switch id {
         case "arc.setup":
-            if let before = arcBefore, prefs.looksLikeArc {
+            if likeArc.undoable(prefs) {
                 Pill("Undo") {
-                    withAnimation(Motion.glide) { prefs.restore(before) }
-                    arcBefore = nil
-                    SettingsPanel.arcBefore = nil
+                    withAnimation(Motion.glide) { likeArc.undo(prefs) }
                     browser.announce("Put back as it was")
                 }
             } else if prefs.looksLikeArc {
@@ -749,12 +834,17 @@ struct SettingsPanel: View {
         case "profiles": Pill("New Profile…") { ProfileMenu.askNew() }
         case "profiles.oneWindow": Switch(on: $prefs.profilesInOneWindow)
         case "spaces.links": Switch(on: $prefs.sendsLinksToSpaces)
+        case "spaces.buttons": Switch(on: $prefs.spaceButtons)
+        case "links.ask": Switch(on: $prefs.asksSpaceForLinks)
         case "pins.keep": Switch(on: $prefs.pinsKeepSite)
         case "pins.list": Switch(on: $prefs.listsPins)
         case "pins.folders": Switch(on: $prefs.pinFolders)
         case "pins.commandNewTab": Switch(on: $prefs.pinCommandOpensTab)
+        case "pins.linksNewTab": Switch(on: $prefs.pinLinksOpenTabs)
         case "newtab.floating": Switch(on: $prefs.floatingNewTab)
+        case "field.window": Switch(on: $prefs.fieldOnWindow)
         case "newtab.recent": Switch(on: $prefs.recentInNewTab)
+        case "newtab.arc": Switch(on: $prefs.arcTabPopup)
         case "commandbar": Switch(on: $prefs.commandBar)
         case "start.fresh": Switch(on: $prefs.startsFresh)
         case "note.sharedpins", "note.pinback": Always()
@@ -768,6 +858,7 @@ struct SettingsPanel: View {
         case "passwords.open": Pill("Open…") { browser.lead(to: InternalPage(.passwords)) }
         case "passwords.save": Switch(on: $prefs.savesPasswords)
         case "passwords.fill": Switch(on: $prefs.fillsPasswords)
+        case "passwords.fill.prove": Switch(on: $prefs.asksBeforeFilling)
         case "passkeys": Switch(on: $prefs.passkeys)
         case "passwords.apple": Switch(on: $prefs.applePasswords)
         // Turned on, macOS is asked whether Search may read Contacts; a no,
@@ -791,6 +882,7 @@ struct SettingsPanel: View {
         case "sites.keep": Switch(on: Binding(get: { !prefs.keepsSignIns }, set: { prefs.keepsSignIns = !$0 }))
         case "privacy.clickIDs": Switch(on: $prefs.removesClickIDs)
         case "privacy.gpc": Switch(on: $prefs.sendsPrivacySignal)
+        case "privacy.httpsFirst": Switch(on: $prefs.triesHTTPSFirst)
         case "notifications.ask": Switch(on: $prefs.siteNotifications)
         case "privacy.forget": Pill("Forget choices") { browser.forgetCaptureChoices() }
         case "clear.history": Pill("Clear") { browser.clearHistory() }
@@ -815,6 +907,7 @@ struct SettingsPanel: View {
         case "links.peek.stays": Switch(on: $prefs.peekStays)
         case "links.optionSplit": Switch(on: $prefs.optionClickSplits)
         case "autoscroll": Switch(on: $prefs.autoScroll)
+        case "wheel.smooth": Switch(on: $prefs.wheelGlides)
         case "pages.bounce": Switch(on: $prefs.bounces)
         case "swipe.history": Switch(on: $prefs.holdsHistory)
         case "launcher.on": Switch(on: $prefs.launcher)
@@ -823,10 +916,13 @@ struct SettingsPanel: View {
         case "note.switcher": Always()
         case "updates.version": versionControl
         case "updates.auto": Switch(on: $prefs.installsUpdates)
+        case "updates.notice": Switch(on: $prefs.showsUpdateReady)
         case "about.feedback": Pill("Send Feedback") { Links.writeFeedback() }
         case "about.notes": Pill("What's New…") { browser.lead(to: InternalPage(.notes)) }
         case "bench": Switch(on: $prefs.bench)
         case "agents": Switch(on: $prefs.agents)
+        case "news.updates": OptInSettingsField(betaOnly: false) { _ = browser.open($0, foreground: true) }
+        case "news.iphone": OptInSettingsField(betaOnly: true) { _ = browser.open($0, foreground: true) }
         default: EmptyView()
         }
     }
@@ -840,7 +936,9 @@ struct SettingsPanel: View {
     private func after(_ item: SettingsItem, searched: Bool) -> some View {
         switch item.id {
         case "search.engine":
-            if prefs.engine == .custom { templateField($prefs.customEngine) }
+            if prefs.engine == .custom {
+                templateField($prefs.customEngine, suggest: $prefs.customSuggest)
+            }
         case "search.shift":
             if prefs.shiftEngine == .custom { templateField($prefs.shiftCustom) }
         case "search.keywords":
@@ -859,7 +957,7 @@ struct SettingsPanel: View {
         case "privacy.forget":
             if !searched {
                 Group {
-                    NotificationSites()
+                    PermissionSites(browser: browser, prefs: prefs)
                     PopupSiteList(prefs: prefs)
                 }
                 .under()
@@ -877,6 +975,8 @@ struct SettingsPanel: View {
             }
         case "agents":
             if !searched, prefs.agents { RememberedAgents() }
+        case "devtools":
+            DevToolsPackageList().under()
         case "passwords.apple":
             ApplePasswordsCard(prefs: prefs, bare: true)
                 .under()
@@ -900,11 +1000,29 @@ struct SettingsPanel: View {
         }
     }
 
-    /// A custom engine's address, under the row that chose Custom.
-    private func templateField(_ text: Binding<String>) -> some View {
+    /// A custom engine's address, under the row that chose Custom; and, under
+    /// it, where its suggestions may come from (EngineSuggest.swift).
+    private func templateField(_ text: Binding<String>, suggest: Binding<String>? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            addressField(text, placeholder: "https://example.com/search?q=%s")
+            if let suggest {
+                Text("Suggestions address (optional)")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Palette.muted)
+                    .padding(.leading, 10)
+                    .padding(.top, 2)
+                addressField(suggest, placeholder: "https://example.com/suggest?q=%s")
+            }
+        }
+        .padding(.leading, SettingsPanel.textInset)
+        .padding(.trailing, 14)
+        .padding(.bottom, 11)
+    }
+
+    private func addressField(_ text: Binding<String>, placeholder: String) -> some View {
         ZStack(alignment: .leading) {
             if text.wrappedValue.isEmpty {
-                Text("https://example.com/search?q=%s")
+                Text(placeholder)
                     .foregroundStyle(Palette.muted.opacity(0.8))
             }
             TextField("", text: text)
@@ -915,26 +1033,25 @@ struct SettingsPanel: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
         .background(Palette.wash, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-        .padding(.leading, SettingsPanel.textInset)
-        .padding(.trailing, 14)
-        .padding(.bottom, 11)
     }
 
     @ViewBuilder
     private var keywordEditor: some View {
         if let current = draft {
             HStack(spacing: 8) {
-                TextField("yt", text: Binding(
+                // Plainly examples, not an entry already there (idea 810):
+                // "word" and "address", in italics, with "e.g.".
+                TextField("", text: Binding(
                     get: { current.keyword },
                     set: { draft?.keyword = $0 }
-                ))
+                ), prompt: Text("word").italic())
                 .textFieldStyle(.plain)
                 .frame(width: 50)
                 Text("→").foregroundStyle(Palette.muted)
-                TextField("https://www.youtube.com/results?search_query=%s", text: Binding(
+                TextField("", text: Binding(
                     get: { current.template },
                     set: { draft?.template = $0 }
-                ))
+                ), prompt: Text("address with %s for the words, e.g. youtube.com/results?search_query=%s").italic())
                 .textFieldStyle(.plain)
                 .onSubmit(saveDraft)
             }
@@ -994,7 +1111,7 @@ struct SettingsPanel: View {
     private var keywordDetail: String {
         guard let draft else { return SettingsIndex.item("search.keywords")?.detail ?? "" }
         if draft.keyword.isEmpty, draft.template.isEmpty {
-            return "A word, then the site's search address with %s where the words go"
+            return "Type a word, like yt, then the site's search address with %s where the words you type go"
         }
         return draftProblem ?? "\(draft.keyword.trimmingCharacters(in: .whitespacesAndNewlines)) will search \(draft.name)"
     }
@@ -1017,10 +1134,14 @@ struct SettingsPanel: View {
 
     /// Said plainly: turned on, what you type leaves the Mac as you type it.
     private var suggestDetail: String {
-        let name = prefs.engine.name(custom: prefs.customEngine)
-        guard EngineSuggest.endpoint(for: prefs.engine) != nil else {
-            return "A custom engine has no suggestions to give, so nothing is sent"
+        guard EngineSuggest.endpoint(for: prefs.engine, custom: prefs.customSuggest) != nil else {
+            guard prefs.engine == .custom else { return "No suggestions address is set, so nothing is sent" }
+            return prefs.customSuggest.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? "A custom engine has no suggestions until you give it an address, so nothing is sent"
+                : "A custom engine's suggestions need an https address with %s, so nothing is sent"
         }
+        if prefs.engine == .custom { return "What you type is sent to the suggestions address as you type" }
+        let name = prefs.engine.name(custom: prefs.customEngine)
         return "What you type is sent to \(name) as you type"
     }
 
@@ -1052,11 +1173,8 @@ struct SettingsPanel: View {
     }
 
     private func setUpLikeArc() {
-        let before = prefs.arcSnapshot
-        let changed = withAnimation(Motion.glide) { prefs.setUpLikeArc() }
-        arcBefore = before
-        SettingsPanel.arcBefore = before
-        browser.announce(changed.isEmpty ? "Already set up like Arc" : "Turned on: " + changed.joined(separator: ", "))
+        let changed = withAnimation(Motion.glide) { likeArc.setUp(prefs) }
+        browser.announce(LikeArc.said(changed))
     }
 
     // MARK: - about
@@ -1499,6 +1617,22 @@ struct Segmented<Option: Hashable>: View {
 }
 
 /// On or off, in ink rather than in blue.
+/// A few things each shown or not, side by side: a tick for each
+/// (Back, Forward, Reload…).
+struct Ticks: View {
+    let items: [(String, Binding<Bool>)]
+
+    var body: some View {
+        HStack(spacing: 14) {
+            ForEach(items.indices, id: \.self) { index in
+                Toggle(items[index].0, isOn: items[index].1)
+                    .toggleStyle(.checkbox)
+                    .font(.system(size: 12.5))
+            }
+        }
+    }
+}
+
 struct Switch: View {
     @Binding var on: Bool
 
@@ -1609,21 +1743,102 @@ struct Pill: View {
     }
 }
 
-/// Settings › Privacy: the sites allowed to send notifications, each with a
-/// way to take it back.
-private struct NotificationSites: View {
+/// Settings › Privacy: saved choices, reset one permission at a time.
+private struct PermissionSites: View {
+    let browser: Browser
+    @ObservedObject var prefs: Preferences
     @ObservedObject private var notifications = SiteNotifications.shared
+    @State private var query = ""
+    @FocusState private var searching: Bool
+    @State private var kind: CaptureChoices.Kind?
 
     var body: some View {
-        let sites = SiteNotifications.allowed
-        if !sites.isEmpty {
-            ForEach(sites, id: \.self) { site in
+        let saved = CaptureChoices.saved()
+        let search = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let sites = Dictionary(grouping: saved.filter {
+            (kind == nil || $0.kind == kind) &&
+            (search.isEmpty || $0.origin.localizedCaseInsensitiveContains(search))
+        }, by: \.origin)
+        if !saved.isEmpty {
+            Rule()
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Reset asks again next time. Devices already in use keep running.")
+                    .font(.system(size: 11.5)).foregroundStyle(Palette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack {
+                    Hunt(text: $query, prompt: "Find a site", focus: $searching)
+                        .accessibilityLabel("Find a site")
+                    Picker("Filter by permission", selection: $kind) {
+                        Text("All permissions").tag(Optional<CaptureChoices.Kind>.none)
+                        ForEach(CaptureChoices.listedKinds) { permission in
+                            Text(permission.title).tag(Optional(permission))
+                        }
+                    }
+                    .labelsHidden().fixedSize()
+                    .accessibilityLabel("Filter by permission")
+                }
+            }
+            .padding(.horizontal, 14).padding(.vertical, 12)
+            if sites.isEmpty { Nothing("No matching sites") }
+            ForEach(sites.keys.sorted(), id: \.self) { origin in
                 Rule()
-                Line(URL(string: site).map(SiteCard.site) ?? site, "Can send notifications") {
-                    Pill("Remove") { SiteNotifications.forget(site) }
+                PermissionSiteRow(origin: origin, entries: sites[origin, default: []],
+                                  notificationsEnabled: prefs.siteNotifications) { entry in
+                    browser.setSitePermission(nil, kind: entry.kind, origin: entry.origin)
                 }
             }
         }
+    }
+}
+
+private struct PermissionSiteRow: View {
+    let origin: String
+    let entries: [CaptureChoices.Saved]
+    let notificationsEnabled: Bool
+    let reset: (CaptureChoices.Saved) -> Void
+    @State private var expanded = false
+    @State private var hovering = false
+
+    var body: some View {
+        let count = entries.count == 1 ? "1 permission" : "\(entries.count) permissions"
+        Button { expanded.toggle() } label: {
+            HStack(spacing: 8) {
+                Text(origin).font(.system(size: 13)).foregroundStyle(Palette.ink)
+                Spacer(minLength: 8)
+                Text(count).font(.system(size: 11.5)).foregroundStyle(Palette.muted)
+                Image(systemName: expanded ? "chevron.down" : "chevron.right")
+                    .font(.system(size: 10, weight: .semibold)).foregroundStyle(Palette.muted)
+            }
+            .padding(.leading, 14 + SettingsPanel.listInset)
+            .padding(.trailing, 14).frame(minHeight: 44)
+            .contentShape(Rectangle())
+            .background(hovering ? Palette.hover : .clear)
+        }
+        .buttonStyle(.plain)
+        .padding(.leading, -SettingsPanel.listInset)
+        .onHover { hovering = $0 }
+        .accessibilityLabel("\(origin), \(count)")
+        .accessibilityValue(expanded ? "Expanded" : "Collapsed")
+
+        if expanded {
+            ForEach(entries) { entry in
+                let action = entry.alternativeSpelling ? "Remove record" : "Reset"
+                Line(entry.kind.title, detail(entry)) {
+                    Pill(action) { reset(entry) }
+                        .accessibilityLabel("\(action): \(entry.kind.title) for \(entry.origin)")
+                }
+            }
+        }
+    }
+
+    private func detail(_ entry: CaptureChoices.Saved) -> String {
+        let status = entry.alternativeSpelling
+            ? "Saved \(entry.choice.title) · May differ from current permission"
+            : entry.choice == .different ? "Different answers; refusal applies" : entry.choice.title
+        if entry.kind == .notifications && !notificationsEnabled {
+            return status + " · Notifications are off"
+        }
+        return status
     }
 }
 

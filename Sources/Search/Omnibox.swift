@@ -9,6 +9,9 @@ final class FieldState: ObservableObject {
     @Published var offers: [Suggestion] = []
     @Published var ending: String?
     @Published var picked: Int?
+    /// The row was picked by what was typed (Arc-style tab popup), not by
+    /// the arrow keys: Return takes it, and the field keeps what was typed.
+    @Published var pickedByTyping = false
     @Published var siteOffer: SearchSite?
 }
 
@@ -34,20 +37,37 @@ struct Omnibox: View {
     var fitted = false
     /// The page whose pane this field stands on, with Split View on.
     var tab: Tab.ID?
+    /// Only the list, as wide as this, for the address line's field
+    /// (AddressLine.swift), which stands where the line is.
+    var listOnly: CGFloat?
 
-    init(browser: Browser, over: Bool, fitted: Bool = false, tab: Tab.ID? = nil) {
+    /// Centred on the window and nearer its top, as Spotlight's, for
+    /// Settings › The field in the middle of the window (idea 753).
+    var high = false
+
+    init(browser: Browser, over: Bool, fitted: Bool = false, tab: Tab.ID? = nil, listOnly: CGFloat? = nil, high: Bool = false) {
+        self.high = high
         self.browser = browser
         self.typing = browser.typing
         self.over = over
         self.fitted = fitted
         self.tab = tab
+        self.listOnly = listOnly
     }
 
     var body: some View {
         Group {
-            if fitted {
+            if let width = listOnly {
+                if browser.fieldShowing, !browser.offers.isEmpty || browser.siteOffer != nil || browser.switcherNote != nil {
+                    list.frame(width: width)
+                }
+            } else if fitted {
                 GeometryReader { geometry in
                     content(width: min(Metrics.fieldWidth, max(0, geometry.size.width - 28)))
+                }
+            } else if high {
+                GeometryReader { geometry in
+                    content(width: min(Metrics.fieldWidth, max(0, geometry.size.width - 28)), top: geometry.size.height * 0.24)
                 }
             } else {
                 content(width: Metrics.fieldWidth)
@@ -56,11 +76,18 @@ struct Omnibox: View {
         .allowsHitTesting(browser.fieldShowing)
     }
 
-    private func content(width: CGFloat) -> some View {
-        ZStack {
+    /// `top`: the field that far down from the top, rather than a little
+    /// above the middle.
+    private func content(width: CGFloat, top: CGFloat? = nil) -> some View {
+        ZStack(alignment: top == nil ? .center : .top) {
             // Keep the container mounted: only the field scales, while the
-            // page's cover fades without pulling its edges into view.
-            if browser.fieldShowing {
+            // page's cover fades without pulling its edges into view. Not
+            // while the address line has the field (AddressLine.swift), nor
+            // over a pane while the window has it (Settings › The field in
+            // the middle of the window): the pane's, made a moment after the
+            // window's, took the keys and went, leaving them to nothing, so
+            // ⌘T's and ⌘L's field had no caret (idea 1033).
+            if browser.fieldShowing, !browser.editingInline, high || !browser.fieldOnWindow {
                 if over {
                     // The page is still there, just out of the way.
                     Rectangle()
@@ -88,7 +115,8 @@ struct Omnibox: View {
                 // Lifted a little above centre: dead centre reads as low,
                 // because the strip at the top isn't part of what the eye is
                 // measuring.
-                .padding(.bottom, 60)
+                .padding(.bottom, top == nil ? 60 : 0)
+                .padding(.top, top ?? 0)
                 .transition(.scale(scale: 0.97).combined(with: .opacity))
                 // The list's arrival and its leaving are animated from here,
                 // briefly: nothing that changes the suggestions does it inside
@@ -119,8 +147,10 @@ struct Omnibox: View {
                     // A slow, almost invisible breath under the field. It is
                     // the only thing on an empty tab, and a thing that never
                     // moves at all reads as a picture of an app rather than
-                    // an app.
-                    Breath()
+                    // an app. Not over a theme (Settings › Themes): the wall
+                    // moves the eye already, and the ink's haze lay over a
+                    // picture as a white or dark smudge (idea 952).
+                    UnlessThemed(over: over) { Breath() }
 
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .fill(Palette.ground)
@@ -255,6 +285,11 @@ struct Omnibox: View {
                     // Kept by you, not only visited: the bookmark's mark,
                     // at the end now that the site's icon leads the row.
                     symbol("bookmark")
+                } else if offer.kind == .elsewhere {
+                    // Open on another device: iCloud Tabs' mark.
+                    symbol("laptopcomputer.and.iphone")
+                } else if offer.pinned {
+                    symbol("pin")
                 }
             }
             .padding(.horizontal, 12)
@@ -362,6 +397,27 @@ private struct SiteOfferRow: View {
     }
 }
 
+/// Its content only where no theme is behind the field: over a page (⌘L) or
+/// on a plain blank tab. A view of its own, so only it watches the settings.
+private struct UnlessThemed<Content: View>: View {
+    let over: Bool
+    @ViewBuilder let content: () -> Content
+    @ObservedObject private var prefs = Shared.prefs
+
+    var body: some View {
+        if over || !themed { content() }
+    }
+
+    /// A chosen picture that can't be read shows as Off (HomeBackground).
+    private var themed: Bool {
+        switch prefs.homeTheme {
+        case .off: return false
+        case .custom: return HomeBackground.load(prefs.homeThemeImage) != nil
+        default: return true
+        }
+    }
+}
+
 /// The breath under the field: a soft shape of ink, blurred, moved by Core
 /// Animation. Animated by SwiftUI, it was drawn again on the main thread
 /// every frame for as long as an empty tab was showing — 18% of a core with
@@ -455,11 +511,14 @@ struct AddressField: NSViewRepresentable {
     @ObservedObject private var typing: FieldState
     /// The pane's page, for a field standing on one (see Coordinator.focus).
     var tab: Tab.ID?
+    /// Its type, smaller in the address line (AddressLine.swift).
+    var size: CGFloat = 15.5
 
-    init(browser: Browser, tab: Tab.ID? = nil) {
+    init(browser: Browser, tab: Tab.ID? = nil, size: CGFloat = 15.5) {
         self.browser = browser
         self.typing = browser.typing
         self.tab = tab
+        self.size = size
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(browser: browser) }
@@ -475,10 +534,14 @@ struct AddressField: NSViewRepresentable {
         let field = Field()
         Self.shown.setObject(field, forKey: browser)
         field.delegate = context.coordinator
+        field.wanted = { [weak coordinator = context.coordinator, weak field] in
+            guard let coordinator, let field else { return false }
+            return coordinator.wantsKeys(field)
+        }
         field.isBordered = false
         field.drawsBackground = false
         field.focusRingType = .none
-        field.font = .systemFont(ofSize: 15.5)
+        field.font = .systemFont(ofSize: size)
         field.textColor = Palette.NS.ink
         field.lineBreakMode = .byClipping
         field.cell?.usesSingleLineMode = true
@@ -489,7 +552,7 @@ struct AddressField: NSViewRepresentable {
         // SwiftUI picks its own colour for a placeholder, and on a pale ground
         // that colour was near-white.
         let words = Self.placeholderWords(for: browser)
-        field.placeholderAttributedString = Self.placeholder(words)
+        field.placeholderAttributedString = Self.placeholder(words, size: size)
         field.setAccessibilityLabel(Self.accessibilityName(for: browser))
         context.coordinator.placeheld = words
         return field
@@ -498,8 +561,10 @@ struct AddressField: NSViewRepresentable {
     /// What the empty field asks for: with a site put in it with Tab, the
     /// words to search that site for; otherwise an address, and where it
     /// will open, since the field looks the same whichever key raised it.
+    /// In the address bar there is no doubt where: it is the tab's own.
     private static func placeholderWords(for browser: Browser) -> String {
         if let site = browser.siteChip { return "Search \(site.name)" }
+        if browser.editingInline { return "Enter a web address" }
         switch browser.fieldMode {
         case .blank: return "Enter a web address"
         case .newTab: return "New tab: enter a web address"
@@ -519,11 +584,11 @@ struct AddressField: NSViewRepresentable {
         }
     }
 
-    private static func placeholder(_ words: String) -> NSAttributedString {
+    private static func placeholder(_ words: String, size: CGFloat) -> NSAttributedString {
         NSAttributedString(
             string: words,
             attributes: [
-                .font: NSFont.systemFont(ofSize: 15.5),
+                .font: NSFont.systemFont(ofSize: size),
                 .foregroundColor: NSColor(Palette.ink.opacity(0.3)),
             ]
         )
@@ -552,7 +617,7 @@ struct AddressField: NSViewRepresentable {
         let words = Self.placeholderWords(for: browser)
         if coordinator.placeheld != words {
             coordinator.placeheld = words
-            field.placeholderAttributedString = Self.placeholder(words)
+            field.placeholderAttributedString = Self.placeholder(words, size: size)
             field.setAccessibilityLabel(Self.accessibilityName(for: browser))
             DispatchQueue.main.async { coordinator.showPlaceholder(in: field) }
         }
@@ -561,6 +626,29 @@ struct AddressField: NSViewRepresentable {
             coordinator.answered = browser.focusRequest
             DispatchQueue.main.async { coordinator.focus(field) }
         }
+    }
+
+    /// Whether the field on show had the keys a moment ago and is still up,
+    /// with what was typed: if so they go back to it, in the next turn of
+    /// the run loop, with the caret where it was. For a page that asked for
+    /// them by itself (PageView.becomeFirstResponder, idea 495), in the
+    /// field's own window.
+    @MainActor static func keepsKeys(for browser: Browser, in pageWindow: NSWindow) -> Bool {
+        // Only the page beside the field: one gone to WebKit's own full
+        // screen window takes the keys there.
+        guard browser.fieldShowing, let field = shown.object(forKey: browser), let window = field.window, window === pageWindow,
+              let leftAt = field.leftAt, field.currentEditor() == nil else { return false }
+        DispatchQueue.main.async { [weak field] in
+            guard let field, browser.editing, field.window === window, field.currentEditor() == nil else { return }
+            let attributes = (window.fieldEditor(false, for: field) as? NSTextView)?.selectedTextAttributes
+            window.makeFirstResponder(field)
+            guard let editor = field.currentEditor() as? NSTextView else { return }
+            if let attributes { editor.selectedTextAttributes = attributes }
+            let length = (editor.string as NSString).length
+            let start = min(leftAt.location, length)
+            editor.selectedRange = NSRange(location: start, length: min(leftAt.length, length - start))
+        }
+        return true
     }
 
     /// The field, told when it lands in a window.
@@ -573,9 +661,66 @@ struct AddressField: NSViewRepresentable {
     /// until it was clicked. Now the request waits for the window.
     final class Field: RoomyField {
         var arrived: (() -> Void)?
+        /// Where the caret was as the field last let go of the keys.
+        var leftAt: NSRange?
+        /// How the selection looked then, for the keys given back.
+        private var leftLook: [NSAttributedString.Key: Any]?
+        /// Whether this is still the field that should have the keys: the
+        /// one on show, over the page in front. Set by its coordinator.
+        var wanted: (() -> Bool)?
+        /// The field is being moved, in its own window, with the keys.
+        private var movingWithKeys = false
+
+        override func textDidEndEditing(_ note: Notification) {
+            if let editor = note.object as? NSTextView {
+                leftAt = editor.selectedRange()
+                leftLook = editor.selectedTextAttributes
+            }
+            super.textDidEndEditing(note)
+            DispatchQueue.main.async { [weak self] in self?.takeKeysBack() }
+        }
+
+        // SwiftUI draws the field inside a view of its own while the field's
+        // open animation runs, and when it ends it moves the field out of it,
+        // within the same window (DisplayList.ViewUpdater, addSubview). On
+        // macOS 27 that move ends the field's editing and leaves the keys
+        // with the window, about 0.35 s after ⌘T or ⌘L, with the open
+        // animation: what was typed from then on went nowhere until a click
+        // in the field (idea 1099). Moved with the keys, or let go of them
+        // with nobody taking them, the field takes them back, the caret
+        // where it was. A click, Tab or a page that takes the keys leaves
+        // them with what took them, and a field put away is not wanted.
+        override func viewWillMove(toWindow newWindow: NSWindow?) {
+            movingWithKeys = newWindow != nil && newWindow === window && currentEditor() != nil
+            // A test run can have the move drop the keys, as macOS 27 does,
+            // on a Mac whose macOS keeps them (Tests/field_keeps_keys.py).
+            if movingWithKeys, Self.dropsKeysOnMove { window?.makeFirstResponder(nil) }
+            super.viewWillMove(toWindow: newWindow)
+        }
+
+        static var dropsKeysOnMove: Bool {
+            Store.testing && Store.settings.bool(forKey: "test.fieldDropsKeysOnMove")
+        }
+
+        /// The keys back, if the field lost them to nobody: the window holds
+        /// them itself, and the field is still the one wanted.
+        func takeKeysBack() {
+            guard let window, currentEditor() == nil, window.firstResponder === window,
+                  !isHiddenOrHasHiddenAncestor, let leftAt, wanted?() == true else { return }
+            window.makeFirstResponder(self)
+            guard let editor = currentEditor() as? NSTextView else { return }
+            if let leftLook { editor.selectedTextAttributes = leftLook }
+            let length = (editor.string as NSString).length
+            let start = min(leftAt.location, length)
+            editor.selectedRange = NSRange(location: start, length: min(leftAt.length, length - start))
+        }
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
+            if movingWithKeys {
+                movingWithKeys = false
+                takeKeysBack()
+            }
             guard window != nil, let arrived else { return }
             self.arrived = nil
             arrived()
@@ -600,6 +745,13 @@ struct AddressField: NSViewRepresentable {
 
         init(browser: Browser) {
             self.browser = browser
+        }
+
+        /// Whether `field` should have the keys: the one on show, over the
+        /// page in front, with no tab being renamed.
+        @MainActor func wantsKeys(_ field: Field) -> Bool {
+            (tab == nil || tab == browser.activeID) && browser.fieldShowing && browser.editingTab == nil
+                && AddressField.shown.object(forKey: browser) === field
         }
 
         /// The keys to the field, now if it is in a window, or the moment it is.

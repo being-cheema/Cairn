@@ -6,7 +6,7 @@ import SwiftUI
 // as its outline, and a few near-twins share one drawing.
 
 /// A pen on the 16-point grid: points are in grid units, not points.
-private struct Pen {
+private struct InkPen {
     var path = Path()
     let x: CGFloat, y: CGFloat, s: CGFloat
 
@@ -36,9 +36,9 @@ private struct Pen {
     }
 }
 
-private func ink(_ draw: @escaping (inout Pen) -> Void) -> InkGlyph {
+private func ink(_ draw: @escaping (inout InkPen) -> Void) -> InkGlyph {
     InkGlyph { x, y, s in
-        var pen = Pen(x: x, y: y, s: s)
+        var pen = InkPen(x: x, y: y, s: s)
         draw(&pen)
         return pen.path
     }

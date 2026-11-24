@@ -26,6 +26,35 @@ final class Shield: ObservableObject {
     private var waiting: [WKUserContentController] = []
     private var preparing = false
 
+    // The list is prepared in the background at launch, and a page that
+    // starts loading before it is ready makes its first requests without
+    // it: `waiting` gives it the list a moment later, after the ad and
+    // tracker requests have gone. The tab restored in front started loading
+    // 50–150 ms before the list was ready. So the first loads wait for it,
+    // at most a second, once per launch: after that nothing waits, even on
+    // Try again in Settings.
+    private var held: [() -> Void] = []
+    private var settled = false
+
+    /// Runs `load` now, or, while the list is being prepared, once it is
+    /// ready, compiling it failed, or a second has passed.
+    func whenReady(_ load: @escaping () -> Void) {
+        guard !settled, preparing, enabled else { return load() }
+        if held.isEmpty {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+                MainActor.assumeIsolated { self?.release() }
+            }
+        }
+        held.append(load)
+    }
+
+    private func release() {
+        settled = true
+        let loads = held
+        held = []
+        loads.forEach { $0() }
+    }
+
     /// Set the one time compiling the list didn't work. The toggle in
     /// Settings can say "on" all it wants; nothing is actually blocked until
     /// this is nil, so it is the one thing worth telling a person about
@@ -92,6 +121,11 @@ final class Shield: ObservableObject {
         "mixpanel.com", "amplitude.com", "segment.com", "segment.io",
         "branch.io", "appsflyer.com", "adjust.com", "analytics.tiktok.com",
         "connect.facebook.net", "ads-twitter.com", "analytics.twitter.com",
+        // Playwire's ad stack and the scripts that come with it to bring ads
+        // back past a blocker, or to see one (albumoftheyear.org): each a
+        // whole-domain block in EasyList, as the beacon is in EasyPrivacy.
+        "intergient.com", "btloader.com", "ad-delivery.net", "mentorsticks.com",
+        "dns-finder.com", "confiant-integrations.net", "cloudflareinsights.com",
     ]
 
     /// The few slots that are reliably an advertisement and nothing else. Kept
@@ -121,7 +155,23 @@ final class Shield: ObservableObject {
         (["*theguardian.com"], ".top-fronts-banner-ad-container"),
         (["*independent.co.uk", "*the-independent.com"], "#billboard-wrapper"),
         (["*cnn.com"], ".ad-slot-header__wrapper"),
+        (["*albumoftheyear.org"], ".headerAd, .homePageAdSquare"),
     ]
+
+    /// Reddit's own promoted posts: custom elements the page puts straight
+    /// in its light DOM (the feed, a post's comments, the sidebar), so a
+    /// plain hiding rule reaches them. Only reddit.com; a normal post is a
+    /// `shreddit-post`, never one of these. Test runs can add a local
+    /// stand-in for Reddit (`test.redditHosts`).
+    private static let reddit = [
+        "shreddit-ad-post", "shreddit-comments-page-ad", "shreddit-sidebar-ad",
+        "shreddit-dynamic-ad-link", "comment-tree-ad", ".promotedlink",
+    ]
+
+    static var redditSites: [String] {
+        let extra = Store.testing ? (Store.settings.stringArray(forKey: "test.redditHosts") ?? []) : []
+        return ["*reddit.com"] + extra.map { "*" + $0 }
+    }
 
     static func networkFilter(for domain: String) -> String {
         let escaped = domain.replacingOccurrences(of: ".", with: "\\.")
@@ -154,6 +204,11 @@ final class Shield: ObservableObject {
             ]
         }
 
+        rules.append([
+            "trigger": ["url-filter": ".*", "if-domain": Shield.redditSites],
+            "action": ["type": "css-display-none", "selector": Shield.reddit.joined(separator: ", ")],
+        ])
+
         guard let data = try? JSONSerialization.data(withJSONObject: rules, options: [.sortedKeys]),
               let json = String(data: data, encoding: .utf8)
         else {
@@ -182,6 +237,7 @@ final class Shield: ObservableObject {
                             guard let compiled else {
                                 self.preparing = false
                                 self.trouble = error?.localizedDescription ?? "Compiling the block list failed"
+                                self.release()
                                 return
                             }
                             self.ready(compiled, store: store, identifier: identifier)
@@ -198,6 +254,7 @@ final class Shield: ObservableObject {
         // Tabs that opened while this was still preparing get it now.
         if enabled { waiting.forEach { set($0, on: true, again: true) } }
         waiting = []
+        release()
         // Leave other users of WebKit's store alone, including extensions.
         store.getAvailableContentRuleListIdentifiers { identifiers in
             for old in identifiers ?? [] where old != identifier && (old == "office-shield" || old.hasPrefix("office-shield-")) {

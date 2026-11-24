@@ -64,9 +64,58 @@ final class PaneStage: NSView {
             needsLayout = true
         }
     }
-    /// The shadow under each page's card, a layer of the stage's own behind
-    /// the page — never the page's, which is cut to its corners.
+    /// The ground under each page's card, a layer of the stage's own behind
+    /// the page — never the page's, which is cut to its corners. It cast a
+    /// soft shadow round the card, which read as a blurred grey ring where
+    /// the white of the page met the window's grey: the card's edge is the
+    /// slot's own hairline, one pixel wide, and nothing soft.
     private var shadows: [CALayer] = []
+
+    /// The window's card as ⌘S moves the column (ContentView's CardClip):
+    /// how much smaller it is than this stage, across and down from the
+    /// top left, and its corners. The pages are laid out once at their new
+    /// size and cut to the card on each frame, so their edges never run
+    /// past the window's.
+    private var cardSize: (() -> CGSize)?
+    private var cardCorner: CGFloat?
+
+    func clip(card: (() -> CGSize)?, corner: CGFloat) {
+        cardSize = card
+        cardCorner = corner
+        // In this pass's layout, once the stage is where this frame has it
+        // (see StageView.clip).
+        needsLayout = true
+    }
+
+    /// Each page cut to the card, and its ground, edge and corners with it.
+    private func applyCard() {
+        guard let corner = cardCorner else { return }
+        let cardShort = cardSize.map { size in
+            let card = size()
+            return CGSize(width: max(0, bounds.width - card.width), height: max(0, bounds.height - card.height))
+        } ?? .zero
+        let card = CGRect(x: 0, y: 0, width: max(0, bounds.width - cardShort.width),
+                          height: max(0, bounds.height - cardShort.height))
+        let whole = cardShort.width < 0.25 && cardShort.height < 0.25
+        let hairline = 1 / max(1, window?.backingScaleFactor ?? 2)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for (index, slot) in slots.enumerated() {
+            let seen = slot.frame.intersection(card)
+            let short = seen.isNull ? .zero
+                : CGSize(width: slot.frame.width - seen.width, height: slot.frame.height - seen.height)
+            slot.clip(short: short, corner: corner)
+            // The edge would be cut on the card's far sides: none while
+            // the card is short of the page.
+            slot.layer?.borderWidth = corner > 0 && whole ? hairline : 0
+            if index < shadows.count {
+                let shadow = shadows[index]
+                if !seen.isNull { shadow.frame = seen }
+                shadow.cornerRadius = corner
+            }
+        }
+        CATransaction.commit()
+    }
     var onCommit: ((UUID, [Double]) -> Void)?
     var onFocus: ((Tab) -> Void)?
     /// Where each page is, from the top left, each time that changes — never
@@ -180,6 +229,12 @@ final class PaneStage: NSView {
     private var queued = false
     private var monitor: Any?
     private var told: [Tab.ID: CGRect] = [:]
+    /// Where the pages are while a divider is held (see dividerMoved).
+    private var held: [Tab.ID: CGRect] = [:]
+    /// The pages whose own background is off for a resize, and when it
+    /// comes back (see backPages).
+    private let unbacked = NSHashTable<WKWebView>.weakObjects()
+    private var rebacking: DispatchWorkItem?
 
     /// Each page's share while a divider is held; nil otherwise.
     private var live: [Double]?
@@ -321,8 +376,9 @@ final class PaneStage: NSView {
             let edge = NSColor.labelColor.withAlphaComponent(CardEdge.edge).cgColor
             let ground = Palette.NS.ground.cgColor
             layer?.backgroundColor = card ? NSColor.clear.cgColor : ground
+            let hairline = 1 / max(1, window?.backingScaleFactor ?? 2)
             for slot in slots {
-                slot.layer?.borderWidth = card ? 1 : 0
+                slot.layer?.borderWidth = card ? hairline : 0
                 slot.layer?.borderColor = edge
             }
             for shadow in shadows {
@@ -330,10 +386,6 @@ final class PaneStage: NSView {
                 shadow.backgroundColor = ground
                 shadow.cornerRadius = corner
                 shadow.cornerCurve = .continuous
-                shadow.shadowColor = NSColor.black.cgColor
-                shadow.shadowOpacity = Swift.Float(CardEdge.shadow)
-                shadow.shadowRadius = 6
-                shadow.shadowOffset = CGSize(width: 0, height: 1)
             }
         }
     }
@@ -362,9 +414,6 @@ final class PaneStage: NSView {
         if let sizes = split?.sizes, sizes.count == tabs.count { return sizes }
         return TabSplit.even(tabs.count)
     }
-
-    /// The first page's share, as it is drawn now.
-    private var share: Double { shares.first ?? 0.5 }
 
     /// Room for `count` pages side by side, none narrower than `narrowest`.
     private func fits(_ count: Int) -> Bool {
@@ -397,6 +446,7 @@ final class PaneStage: NSView {
         super.layout()
         let area = bounds
         var frames: [CGRect] = Array(repeating: .zero, count: tabs.count)
+        var grew = false // see backPages
         let lines = dividers
         if paired {
             let widths = self.widths(room: room)
@@ -424,6 +474,12 @@ final class PaneStage: NSView {
             let frame = index < frames.count ? frames[index] : .zero
             let visible = index < tabs.count && shown(index) && frame.width > 0
             slot.isHidden = !visible
+            // Grown, by a page not already covered for it by ⌘S's cover.
+            if visible, slot.frame.width > 0,
+               frame.width > slot.frame.width + 0.5 || frame.height > slot.frame.height + 0.5,
+               !((page(tabs[index]) as? WKWebView).map { FoldCover.coming.contains($0) } ?? false) {
+                grew = true
+            }
             if slot.frame != frame { slot.frame = frame }
             if index < shadows.count {
                 // Pages run the stage's full height, so its flip is no matter.
@@ -435,9 +491,11 @@ final class PaneStage: NSView {
             // edge, it read as a stray frame on one page of two (Drice,
             // 18 Nov 2026). The page clicked last is the one they go to.
         }
+        applyCard()
         // A window made too narrow for two takes the other page off, and
         // gives it back once there is room.
         feed()
+        if grew { backPages() }
         if let bar = findBar {
             let page = focused.flatMap { id in tabs.firstIndex { $0.id == id } }
                 .flatMap { frames.indices.contains($0) ? frames[$0] : nil }
@@ -467,9 +525,11 @@ final class PaneStage: NSView {
             host.isHidden = page == nil || page?.width == 0
             if let page, host.frame != page { host.frame = page }
         }
-        guard live == nil else { return }
         var now: [Tab.ID: CGRect] = [:]
         for (index, tab) in tabs.enumerated() where shown(index) { now[tab.id] = frames[index] }
+        // While a divider is held, kept for dividerMoved, which tells
+        // SwiftUI only when it draws one of the pages.
+        guard live == nil else { held = now; return }
         if now != told {
             told = now
             let frames = now
@@ -545,6 +605,16 @@ final class PaneStage: NSView {
         // the hand.
         needsLayout = true
         layoutSubtreeIfNeeded()
+        // A page SwiftUI draws (Settings, History, an empty page) has
+        // no view on the stage to resize: it's placed from the frames the
+        // stage tells, which waited for the button to come up, so it kept
+        // its old width while the divider moved off and left the ground in
+        // between. Told now, as the stage lays out, it follows the hand.
+        // Two web pages tell nothing, as before.
+        if held != told, tabs.indices.contains(where: { shown($0) && page(tabs[$0]) == nil }) {
+            told = held
+            onFrames?(held)
+        }
     }
 
     fileprivate func dividerEnded() {
@@ -555,6 +625,56 @@ final class PaneStage: NSView {
         dragged = true
         needsLayout = true
         if let id { onCommit?(id, shares) }
+    }
+
+    // MARK: - the pages' own colour behind them while they resize
+
+    /// Behind each page while the stage's pages change size — the divider
+    /// held, the window resized, the column's edge let go — the page's own colour,
+    /// until half a second after the last change. WebKit draws a page at its
+    /// new size a frame or more after its view is resized, and the room it
+    /// hadn't drawn yet showed the web view's own background, dark grey in
+    /// dark mode: a strip at a white page's edge chasing the hand. That
+    /// background is WebKit's to draw and has no public switch on macOS, so
+    /// it's turned off with `_setDrawsBackground:` (private, checked for
+    /// first) and the stage's slot shows `underPageBackgroundColor` there
+    /// instead, as Safari does. Nothing runs while nothing resizes.
+    ///
+    /// Only for a page that grows: one that shrinks has nothing undrawn. And
+    /// not for ⌘S, whose own cover lies over the room a page grows into
+    /// (Browser.cover). Switched off and on, the background had WebKit paint
+    /// the whole page twice and the page drawn clear, blended over what is
+    /// under it, all through the column's slide, and the window server
+    /// stuttered over it (idea 847: 1.0.16).
+    private func backPages() {
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            for (index, slot) in slots.enumerated() {
+                let web = index < tabs.count ? page(tabs[index]) as? WKWebView : nil
+                slot.layer?.backgroundColor = web?.underPageBackgroundColor.cgColor
+                if let web, !unbacked.contains(web), Self.drawsBackground(web, false) { unbacked.add(web) }
+            }
+        }
+        rebacking?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.unbackPages() }
+        rebacking = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: work)
+    }
+
+    /// Each page drawing its own background again, as it always does.
+    private func unbackPages() {
+        rebacking?.cancel()
+        rebacking = nil
+        for web in unbacked.allObjects { _ = Self.drawsBackground(web, true) }
+        unbacked.removeAllObjects()
+        for slot in slots { slot.layer?.backgroundColor = nil }
+    }
+
+    /// WebKit's switch for the background a web view draws where its page
+    /// isn't drawn; false where this WebKit doesn't have it.
+    private static func drawsBackground(_ web: WKWebView, _ on: Bool) -> Bool {
+        guard web.responds(to: NSSelectorFromString("_setDrawsBackground:")) else { return false }
+        web.setValue(on, forKey: "drawsBackground")
+        return true
     }
 
     /// Double-clicked, or asked by VoiceOver: the two pages either side of
@@ -634,6 +754,7 @@ final class PaneStage: NSView {
     /// Keeps `stages` pointing only at the window the stage is in.
     override func viewWillMove(toWindow newWindow: NSWindow?) {
         super.viewWillMove(toWindow: newWindow)
+        if newWindow == nil { unbackPages() } // see backPages
         if let window, Self.stages.object(forKey: window) === self { Self.stages.removeObject(forKey: window) }
         if let newWindow { Self.stages.setObject(self, forKey: newWindow) }
     }

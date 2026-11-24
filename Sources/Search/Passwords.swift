@@ -33,7 +33,7 @@ struct PasswordsPanel: View {
                                 : "Nothing matches.", art: browser.saved.isEmpty ? "approval" : "search")
                     }
                 } else {
-                    ScrollView(showsIndicators: false) {
+                    ScrollView {
                         Card {
                             ForEach(Array(browser.shownSites.enumerated()), id: \.element.host) { index, site in
                                 if index > 0 { Rule() }

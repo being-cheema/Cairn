@@ -8,7 +8,7 @@ import XCTest
 @MainActor
 final class FollowFileTests: XCTestCase {
     override class func setUp() {
-        setenv("SEARCH_PROBE", "follow-file-\(getpid())", 1)
+        TestWorld.enter()
         super.setUp()
     }
 
@@ -26,6 +26,27 @@ final class FollowFileTests: XCTestCase {
             "look", "navigationLeft", "sidebar", "sidePosition", "sideHides", "roomyTabs", "sideIcons", "sideWidth",
             "sidePanelWidth", "cards", "glyph", "tabsGive", "showsTabShortcuts", "bookmarksBar", "alwaysShowsDownloads",
             "foldsToIcons", "instantMotion", "compactStrip",
+            // Look and layout settings added since, each read again as it was
+            // added: the column's slide, buttons at the top, the card in full
+            // screen, the address bar and its width, the scroll bars, the glass window and the
+            // Liquid Glass tab, the bounce, and ⌘1–⌘9 for spaces.
+            "slidesColumn", "doorsUp", "cardsInFullScreen", "addressLine", "scrollbarsFade", "addressWidth", "glass", "glassGrain",
+            "glassClear", "glassStyle", "liquidTabs", "bounces", "spacesOnCommand",
+            // Themes: the empty tab's background is part of the look.
+            "homeTheme", "homeThemeImage", "homeTuning", "homeShuffle",
+            // The column narrowed to icons, and the sidebar button beside the
+            // window's buttons (#1360, #1351).
+            "narrowed", "narrowsToIcons", "foldButton",
+            // The bookmarks bar at the top of the sidebar (#1390).
+            "bookmarksInSidebar",
+            // A click on the tab you're on edits its address only (idea 951).
+            "tabClickAddressOnly",
+            // The bookmarks bar only on new tabs (idea 1082).
+            "bookmarksNewTabOnly",
+            // A click on the tab you're on keeps its name (idea 1076).
+            "tabClickKeepsName",
+            // Icons only on the bookmarks bar (idea 980).
+            "bookmarksIconsOnly",
         ])
     }
 

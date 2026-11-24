@@ -18,7 +18,7 @@ final class PinFolderColumnTests: XCTestCase {
     private var made: [Search.Tab] = []
 
     override class func setUp() {
-        setenv("SEARCH_PROBE", "pin-folders-\(getpid())", 1)
+        TestWorld.enter()
         super.setUp()
     }
 
@@ -31,7 +31,11 @@ final class PinFolderColumnTests: XCTestCase {
     }
 
     override func tearDown() async throws {
-        for window in windows { window.contentView = nil }
+        // Closed, not only emptied: ordered in far off the screens, a window
+        // left open counts as shown, and later tests that check nothing was
+        // shown (PopupGestureRelayTests, SidePanelPrivacyTests,
+        // WebsitePopupTests) failed on it.
+        for window in windows { window.contentView = nil; window.close() }
         for browser in browsers {
             PinFolders.set(browser.spaceID, [], from: nil)
             for tab in browser.tabs where tab.pin != nil { browser.unpin(tab) }
