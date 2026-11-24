@@ -31,6 +31,12 @@ struct Plate<Content: View, Foot: View>: View {
 
     @Environment(\.asTab) private var asTab
 
+    /// A page Settings sends you to (Passwords, Bring Things Over) shows a way
+    /// back to it: it opens in a tab of its own, so the toolbar's back arrow has
+    /// no history to go to.
+    private var settingsBack = false
+    func fromSettings() -> Self { var copy = self; copy.settingsBack = true; return copy }
+
     var body: some View {
         if asTab { page } else { card }
     }
@@ -40,6 +46,19 @@ struct Plate<Content: View, Foot: View>: View {
     /// card, no shadow, no cross — the tab is what closes.
     private var page: some View {
         VStack(alignment: .leading, spacing: 0) {
+            if settingsBack {
+                Button { Browsers.front?.tuning = true } label: {
+                    HStack(spacing: 5) {
+                        Ink("chevron.left", size: 11)
+                        Text("Settings")
+                    }
+                    .font(.system(size: 13))
+                    .foregroundStyle(Palette.accent)
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 36)
+                .padding(.bottom, -22)
+            }
             Text(title)
                 .font(Typeface.heading(26, weight: .medium))
                 .foregroundStyle(Palette.ink)

@@ -99,6 +99,7 @@ struct PasswordsPanel: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+        .fromSettings()
         .animation(Motion.settle, value: adding)
         .animation(Motion.settle, value: open)
         .onAppear { hunting = true }

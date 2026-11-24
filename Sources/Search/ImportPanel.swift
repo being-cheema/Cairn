@@ -145,6 +145,7 @@ struct ImportPanel: View {
                 }
             }
         }
+        .fromSettings()
         .animation(Motion.settle, value: brought)
         .animation(Motion.settle, value: pick)
         .onAppear {
