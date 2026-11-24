@@ -36,16 +36,16 @@ enum Palette {
     /// ink, a window's background — which want an NSColor and keep it.
     enum NS {
         /// Paper, not white: the page's card stays the page's own white.
-        static let ground = tint(light: (0.980, 0.969, 0.949), dark: (0.106, 0.102, 0.094))
-        static let ink = duo(0.09, dark: (0.941, 0.933, 0.902))
-        static let muted = duo(0.55, dark: (0.616, 0.604, 0.561))
-        static let faint = duo(0.83, dark: (0.361, 0.353, 0.325))
-        static let hairline = duo(0.91, dark: (0.212, 0.204, 0.184))
-        static let wash = duo(0.937, dark: (0.149, 0.145, 0.133))
-        static let hover = duo(0.965, dark: (0.129, 0.125, 0.114))
-        static let frame = duo(0.955, dark: (0.055, 0.055, 0.051))
+        static let ground = tint(light: (0.980, 0.969, 0.949), dark: (0.090, 0.090, 0.090))
+        static let ink = duo(0.09, dark: (0.941, 0.941, 0.941))
+        static let muted = duo(0.55, dark: (0.600, 0.600, 0.600))
+        static let faint = duo(0.83, dark: (0.350, 0.350, 0.350))
+        static let hairline = duo(0.91, dark: (0.190, 0.190, 0.190))
+        static let wash = duo(0.937, dark: (0.140, 0.140, 0.140))
+        static let hover = duo(0.965, dark: (0.115, 0.115, 0.115))
+        static let frame = duo(0.955, dark: (0.055, 0.055, 0.055))
         /// The resting traffic lights, drawn by hand when the app is behind.
-        static let resting = duo(0.80, dark: (0.290, 0.282, 0.263))
+        static let resting = duo(0.80, dark: (0.300, 0.300, 0.300))
         static let safe = tint(light: (0.08, 0.50, 0.24), dark: (0.29, 0.87, 0.50))
         static let unsafe = tint(light: (0.71, 0.33, 0.04), dark: (0.98, 0.75, 0.14))
         /// The one colour of the hand: coral, as on Anthropic's own pages.
@@ -60,8 +60,8 @@ enum Palette {
             }
         }
 
-        /// Warm paper in a light window; in a dark one a neutral charcoal with
-        /// only a trace of warmth (the earlier dark greys read orange), given
+        /// Warm paper in a light window; in a dark one a true neutral charcoal, as dark
+        /// as Claude's own (the earlier dark greys read orange), given
         /// as the colour itself.
         private static func duo(_ light: CGFloat, dark: (CGFloat, CGFloat, CGFloat)) -> NSColor {
             NSColor(name: nil) { appearance in
