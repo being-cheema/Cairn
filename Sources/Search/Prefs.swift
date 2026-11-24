@@ -669,6 +669,14 @@ final class Preferences: ObservableObject {
             Vault.FillProof.forget()
         }
     }
+    /// One yes to show, copy or remove a password holds for five minutes
+    /// (Vault.Unlock). Off, each one asks.
+    @Published var keepsVaultUnlocked: Bool {
+        didSet {
+            store.set(keepsVaultUnlocked, forKey: Vault.Unlock.key)
+            Vault.Unlock.lock()
+        }
+    }
     /// Your card in Contacts under the boxes for your name, email, phone and
     /// address (MeCard). Off unless turned on, which is when macOS asks.
     @Published var fillsContacts: Bool {
@@ -1435,6 +1443,7 @@ final class Preferences: ObservableObject {
         savesPasswords = store.object(forKey: "passwords.save") as? Bool ?? true
         fillsPasswords = store.object(forKey: "passwords.fill") as? Bool ?? true
         asksBeforeFilling = store.bool(forKey: "passwords.fill.prove")
+        keepsVaultUnlocked = store.object(forKey: Vault.Unlock.key) as? Bool ?? true
         claudeModel = ClaudeCode.model(named: store.string(forKey: "claude.model"))
         let contacts = store.bool(forKey: "contacts.fill")
         fillsContacts = contacts

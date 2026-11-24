@@ -43,6 +43,34 @@ struct Kept: Identifiable, Equatable, Hashable {
     var id: String { host + "\u{1}" + user }
 }
 
+/// What an item holds besides its password. Empty for every login kept before
+/// this existed, and for most after: then the keychain value is the password
+/// alone, as it always was.
+struct Extras: Codable, Equatable {
+    var title: String?
+    var notes: String?
+    /// An `otpauth://` link or a bare setup key, for the verification code.
+    var totp: String?
+    /// Other addresses the account is for, besides the host it is kept under.
+    var urls: [String]?
+    var changed: Date?
+
+    var isEmpty: Bool {
+        (title ?? "").isEmpty && (notes ?? "").isEmpty && (totp ?? "").isEmpty && (urls ?? []).isEmpty && changed == nil
+    }
+}
+
+/// One item whole, with its secret: only for the Passwords page's detail and
+/// the paths that need the notes or the code secret. Never kept in a property.
+struct Item: Equatable {
+    var host: String
+    var user: String
+    var password: String
+    var extras = Extras()
+    var used: Date?
+    var clear = false
+}
+
 enum Vault {
     /// What every item of ours is tagged with. A test run tags its own, so a
     /// password saved while trying something never sits among the real ones.
@@ -143,8 +171,55 @@ enum Vault {
     }
 
     /// One item's secret, where a list holds only the item: read when a
-    /// password is shown or copied, and never as part of a list.
-    static func secret(of kept: Kept) -> String? { secret(host: kept.host, user: kept.user) }
+    /// password is shown or copied, and never as part of a list. Just the
+    /// password, whatever else the item holds.
+    static func secret(of kept: Kept) -> String? {
+        secret(host: kept.host, user: kept.user).map { decode($0).password }
+    }
+
+    /// The whole item, for its detail page: the password, the notes, the code
+    /// secret. One keychain read.
+    static func item(of kept: Kept) -> Item? {
+        guard let raw = secret(host: kept.host, user: kept.user) else { return nil }
+        let (password, extras) = decode(raw)
+        return Item(host: kept.host, user: kept.user, password: password, extras: extras, used: kept.used, clear: kept.clear)
+    }
+
+    // MARK: - what the keychain value holds
+
+    /// A value with more than a password starts with this, which no password
+    /// a person or a generator makes does (a control character). Anything
+    /// without it is a password and nothing else, as every item was before.
+    nonisolated static let valueMark = "\u{1}cairn-item\u{1}"
+
+    private struct Packed: Codable {
+        var p: String
+        var x: Extras
+    }
+
+    /// The keychain value for a password and what goes with it: the password
+    /// alone when there is nothing else, so a plain item stays readable by
+    /// every older build.
+    nonisolated static func encode(_ password: String, _ extras: Extras) -> String {
+        guard !extras.isEmpty else { return password }
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .secondsSince1970
+        guard let json = try? encoder.encode(Packed(p: password, x: extras)),
+              let text = String(data: json, encoding: .utf8)
+        else { return password }
+        return valueMark + text
+    }
+
+    /// The password and extras a keychain value holds. A value that says it
+    /// holds more but can't be read is kept whole as the password: a
+    /// damaged item is never turned into an empty one.
+    nonisolated static func decode(_ raw: String) -> (password: String, extras: Extras) {
+        guard raw.hasPrefix(valueMark) else { return (raw, Extras()) }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .secondsSince1970
+        guard let packed = try? decoder.decode(Packed.self, from: Data(raw.dropFirst(valueMark.count).utf8)) else { return (raw, Extras()) }
+        return (packed.p, packed.x)
+    }
 
     /// What an item's attributes say beyond its name: when it was last used,
     /// and whether it was kept from a page sent in the clear.
@@ -221,9 +296,13 @@ enum Vault {
     // MARK: - writing
 
     @discardableResult
-    static func save(host: String, user: String, password: String, used: Date? = nil, clear: Bool = false) -> Bool {
+    static func save(host: String, user: String, password: String, used: Date? = nil, clear: Bool = false,
+                     extras: Extras? = nil) -> Bool {
+        // No extras given: what the item already holds stays, so a sign-in
+        // saving a new password never loses its notes or its code secret.
+        let kept = extras ?? secret(host: host, user: user).map { decode($0).extras } ?? Extras()
         guard !host.isEmpty, !password.isEmpty,
-              let data = password.data(using: .utf8)
+              let data = encode(password, kept).data(using: .utf8)
         else { return false }
 
         // Ours only. Server and account alone also match what other apps
@@ -326,6 +405,62 @@ enum Vault {
 
     /// A test run's stand-in for `canEvaluatePolicy` failing with this.
     @MainActor static var cannotAsk: LAError.Code?
+
+    // MARK: - the unlock window
+
+    /// Showing, copying or removing a kept password asks the Mac's owner
+    /// (`prove`). One yes holds for `window` — five minutes — across every
+    /// one of those, so going down a list copying three of them is one
+    /// question and not three. It ends the moment the screens sleep or lock,
+    /// the Mac sleeps, or the session switches away, as FillProof's does, and
+    /// at quit (it is only ever in memory). Off in Settings, every show, copy
+    /// and removal asks.
+    @MainActor enum Unlock {
+        static let window: TimeInterval = 300
+        static let key = "passwords.lock.keep"
+        /// Settings › Passwords › Stay unlocked for five minutes.
+        static var keeps: Bool { Store.settings.object(forKey: key) as? Bool ?? true }
+        private static var openedAt: Date?
+        private static var watching = false
+
+        static func isOpen(at now: Date = Date()) -> Bool {
+            guard keeps, let opened = openedAt else { return false }
+            let age = now.timeIntervalSince(opened)
+            return age >= 0 && age < window
+        }
+
+        /// `done(true)` at once while the window is open, otherwise once the
+        /// Mac's owner says yes (which opens it).
+        static func ask(_ reason: String, _ done: @escaping (Bool) -> Void) {
+            if isOpen() { done(true); return }
+            watch()
+            Vault.prove(reason) { ok in
+                if ok { openedAt = Date() }
+                done(ok)
+            }
+        }
+
+        static func lock() { openedAt = nil }
+
+        /// A test run's, to look at the window's end without waiting for it.
+        static func age(_ seconds: TimeInterval) {
+            guard Store.testing, openedAt != nil else { return }
+            openedAt = Date().addingTimeInterval(-seconds)
+        }
+
+        private static func watch() {
+            guard !watching else { return }
+            watching = true
+            let spend: (Notification) -> Void = { _ in MainActor.assumeIsolated { lock() } }
+            let workspace = NSWorkspace.shared.notificationCenter
+            for name in [NSWorkspace.screensDidSleepNotification, NSWorkspace.willSleepNotification,
+                         NSWorkspace.sessionDidResignActiveNotification] {
+                workspace.addObserver(forName: name, object: nil, queue: .main, using: spend)
+            }
+            DistributedNotificationCenter.default().addObserver(
+                forName: .init("com.apple.screenIsLocked"), object: nil, queue: .main, using: spend)
+        }
+    }
 
     // MARK: - before a fill
 

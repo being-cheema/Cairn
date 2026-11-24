@@ -241,7 +241,7 @@ struct PasswordsPanel: View {
         }
 
         private func reveal() {
-            Vault.prove("show the password for \(login.host)") { ok in
+            Vault.Unlock.ask("show the password for \(login.host)") { ok in
                 // Read after the Mac has said who this is, not before: the
                 // secret is asked for here and let go with the row.
                 guard ok, let password = Vault.secret(of: login) else { return }

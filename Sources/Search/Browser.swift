@@ -1313,7 +1313,7 @@ final class Browser: NSObject, ObservableObject {
             confirm: "Remove",
             returnCancels: true
         ) { [weak self] in
-            Vault.prove("remove \(many)") { ok in
+            Vault.Unlock.ask("remove \(many)") { ok in
                 guard ok, let self, !self.forgetting else { return }
                 // A keychain delete is a few milliseconds, a few hundred of
                 // them a second: off the main thread, as imports are (#380).
@@ -1341,7 +1341,7 @@ final class Browser: NSObject, ObservableObject {
     /// of their history, and it is taken off again after a minute and a
     /// half unless something else has been copied since.
     func copy(_ login: Kept) {
-        Vault.prove("copy the password for \(login.host)") { [weak self] ok in
+        Vault.Unlock.ask("copy the password for \(login.host)") { [weak self] ok in
             guard ok, let self else { return }
             // Read here, once the Mac has said who this is: what the panel
             // drew its list from holds no secrets.

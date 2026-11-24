@@ -859,6 +859,7 @@ struct SettingsPanel: View {
         case "passwords.save": Switch(on: $prefs.savesPasswords)
         case "passwords.fill": Switch(on: $prefs.fillsPasswords)
         case "passwords.fill.prove": Switch(on: $prefs.asksBeforeFilling)
+        case "passwords.lock.keep": Switch(on: $prefs.keepsVaultUnlocked)
         case "passkeys": Switch(on: $prefs.passkeys)
         // Turned on, macOS is asked whether Search may read Contacts; a no,
         // or no card of yours, leaves it off and says why.
