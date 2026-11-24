@@ -273,7 +273,7 @@ struct Omnibox: View {
         }
 
         private func symbol(_ name: String) -> some View {
-            Image(systemName: name)
+            Ink(name, size: 10)
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(Palette.muted)
         }
@@ -624,6 +624,7 @@ struct AddressField: NSViewRepresentable {
             window.makeFirstResponder(field)
             guard let editor = field.currentEditor() as? NSTextView else { return }
             defer { browser.fieldFocused(in: window) }
+            editor.insertionPointColor = Palette.NS.accent
             // The system paints selected text as a block of accent colour,
             // which over this pale field is the loudest thing in the
             // window. A tenth of the ink says "selected" quietly enough.

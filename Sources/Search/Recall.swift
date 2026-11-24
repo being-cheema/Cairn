@@ -468,7 +468,7 @@ struct DownloadsPanel: View {
 
         var body: some View {
             HStack(alignment: .top, spacing: 12) {
-                Image(systemName: icon)
+                Ink(icon, size: 14)
                     .font(.system(size: 14, weight: .regular))
                     .foregroundStyle(Palette.muted)
                     .frame(width: 18)

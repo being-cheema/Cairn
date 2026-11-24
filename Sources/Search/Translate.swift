@@ -1098,7 +1098,7 @@ struct TranslateMenu: View {
 
         var body: some View {
             HStack(spacing: 8) {
-                Image(systemName: symbol).font(.system(size: 11)).foregroundStyle(Palette.muted).frame(width: 14)
+                Ink(symbol, size: 11).font(.system(size: 11)).foregroundStyle(Palette.muted).frame(width: 14)
                 Text(title).font(.system(size: 12.5)).foregroundStyle(Palette.ink).lineLimit(1)
                 Spacer(minLength: 0)
             }

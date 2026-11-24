@@ -254,7 +254,7 @@ struct AccountList: View {
                     Group {
                         switch mark {
                         case .letter(let letter): Text(letter).font(.system(size: 11, weight: .medium))
-                        case .symbol(let name): Image(systemName: name).font(.system(size: 10, weight: .medium))
+                        case .symbol(let name): Ink(name, size: 10).font(.system(size: 10, weight: .medium))
                         }
                     }
                     .foregroundStyle(Palette.ink)

@@ -709,7 +709,7 @@ struct SiteCard: View {
 
         var body: some View {
             Button(action: act) {
-                Image(systemName: symbol)
+                Ink(symbol, size: 11)
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(hovering ? Color.white : Color(nsColor: .labelColor))
                     .frame(width: 22, height: 18)

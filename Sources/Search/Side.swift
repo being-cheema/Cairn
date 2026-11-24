@@ -1970,7 +1970,7 @@ struct Quiet: View {
         Button(action: act) {
             HStack(spacing: 8) {
                 if centred { Spacer(minLength: 0) }
-                Image(systemName: icon)
+                Ink(icon, size: 10)
                     .font(.system(size: 10, weight: .medium))
                     .frame(width: 15)
                 if !title.isEmpty {
@@ -2086,7 +2086,7 @@ struct Door: View {
         Button {
             if opened { opened = false } else { act() }
         } label: {
-            Image(systemName: icon)
+            Ink(icon, size: 11)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(on ? Palette.ink : (hovering ? Palette.ink.opacity(0.7) : Palette.muted))
                 .frame(width: 26, height: 26)

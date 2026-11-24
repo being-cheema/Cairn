@@ -254,7 +254,7 @@ struct SettingsPanel: View {
         var body: some View {
             Button(action: act) {
                 HStack(spacing: 9) {
-                    Image(systemName: page.icon)
+                    Ink(page.icon, size: 12)
                         .font(.system(size: 12, weight: .medium))
                         .frame(width: 16)
                     Text(page.title)
@@ -298,7 +298,7 @@ struct SettingsPanel: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 10) {
                 if !searching {
-                    Image(systemName: page.icon)
+                    Ink(page.icon, size: 15)
                         .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(Palette.ink)
                 }
@@ -422,7 +422,7 @@ struct SettingsPanel: View {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) { withAnimation(Motion.quick) { lit = nil } }
                 } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: group.icon).font(.system(size: 10.5, weight: .medium))
+                        Ink(group.icon, size: 10.5).font(.system(size: 10.5, weight: .medium))
                         Text("\(group.page.title)  ›  \(group.title)".uppercased())
                             .font(.system(size: 10.5, weight: .semibold))
                             .tracking(0.4)
@@ -1171,7 +1171,7 @@ struct GroupBlock<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                Image(systemName: icon)
+                Ink(icon, size: 10.5)
                     .font(.system(size: 10.5, weight: .semibold))
                 Text(title.uppercased())
                     .font(.system(size: 10.5, weight: .semibold))
@@ -1201,7 +1201,7 @@ struct SettingRow<Control: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .center, spacing: 12) {
-                Image(systemName: icon)
+                Ink(icon, size: 12)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(Palette.ink.opacity(0.78))
                     .frame(width: 26, height: 26)
@@ -1560,7 +1560,7 @@ struct Steps: View {
 
         var body: some View {
             Button { if let to { act(to) } } label: {
-                Image(systemName: icon)
+                Ink(icon, size: 9)
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(to == nil ? Palette.faint : Palette.ink)
                     .frame(width: 20, height: 20)

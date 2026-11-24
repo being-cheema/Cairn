@@ -1348,7 +1348,7 @@ struct BookmarksDropdown: View {
         var body: some View {
             HStack(spacing: 8) {
                 if let symbol {
-                    Image(systemName: symbol).font(.system(size: 11)).foregroundStyle(Palette.muted).frame(width: 14)
+                    Ink(symbol, size: 11).font(.system(size: 11)).foregroundStyle(Palette.muted).frame(width: 14)
                 } else {
                     Spacer().frame(width: 14)
                 }

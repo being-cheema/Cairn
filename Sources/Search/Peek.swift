@@ -265,7 +265,7 @@ struct PeekPanel: View {
 
         var body: some View {
             Button(action: act) {
-                Image(systemName: symbol)
+                Ink(symbol, size: 11)
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(Palette.ink)
                     .frame(width: 28, height: 28)

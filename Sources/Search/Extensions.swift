@@ -2658,7 +2658,7 @@ private struct ExtensionMenu: View {
 
         var body: some View {
             SwiftUI.Button(action: act) {
-                Image(systemName: symbol)
+                Ink(symbol, size: 10.5)
                     .font(.system(size: 10.5, weight: .medium))
                     .foregroundStyle(on || hovering ? Palette.ink : Palette.muted)
                     .frame(width: 22, height: 22)
@@ -2685,7 +2685,7 @@ private struct ExtensionMenu: View {
 
         var body: some View {
             HStack(spacing: 8) {
-                Image(systemName: symbol).font(.system(size: 11)).foregroundStyle(Palette.muted).frame(width: 14)
+                Ink(symbol, size: 11).font(.system(size: 11)).foregroundStyle(Palette.muted).frame(width: 14)
                 Text(title).font(.system(size: 12.5)).foregroundStyle(Palette.ink)
                 Spacer(minLength: 0)
             }

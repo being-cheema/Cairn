@@ -706,7 +706,7 @@ struct NewSpaceCard: View {
     private var icons: some View {
         LazyVGrid(columns: Array(repeating: GridItem(.fixed(28), spacing: 4), count: 6), spacing: 4) {
             ForEach(Array(zip(Spaces.icons, Spaces.iconNames)), id: \.0) { symbol, name in
-                Image(systemName: symbol)
+                Ink(symbol, size: 13)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(symbol == icon ? Palette.ink : Palette.muted)
                     .frame(width: 28, height: 28)

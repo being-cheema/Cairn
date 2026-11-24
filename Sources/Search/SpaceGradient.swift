@@ -608,7 +608,7 @@ struct SpaceLookPicker: View {
                         }
                     }
             }
-            Image(systemName: space.symbol)
+            Ink(space.symbol, size: 20)
                 .font(.system(size: 20, weight: .medium))
                 .foregroundStyle(choice == .none ? Palette.muted : Color.white)
                 .shadow(color: .black.opacity(choice == .none ? 0 : 0.18), radius: 2, y: 1)
@@ -703,7 +703,7 @@ struct SpaceLookPicker: View {
                 ForEach(Self.directions, id: \.angle) { direction in
                     let on = Int(gradient.angle.rounded()) == Int(direction.angle)
                     Button { browser.editGradient(id) { $0.angle = direction.angle } } label: {
-                        Image(systemName: direction.symbol)
+                        Ink(direction.symbol, size: 10)
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(on ? Palette.ink : Palette.muted)
                             .frame(width: 30, height: 22)
@@ -761,7 +761,7 @@ struct SpaceLookPicker: View {
 
     private func round(_ symbol: String, _ name: String, _ run: @escaping () -> Void) -> some View {
         Button(action: run) {
-            Image(systemName: symbol)
+            Ink(symbol, size: 9)
                 .font(.system(size: 9, weight: .bold))
                 .foregroundStyle(Palette.muted)
                 .frame(width: Self.dot, height: Self.dot)

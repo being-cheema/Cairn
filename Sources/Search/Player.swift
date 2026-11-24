@@ -146,7 +146,7 @@ private struct PlayerButton: View {
 
     var body: some View {
         Button(action: act) {
-            Image(systemName: symbol)
+            Ink(symbol, size: 8)
                 .font(.system(size: 8, weight: .semibold))
                 .foregroundStyle(Palette.muted)
                 .frame(width: 15, height: 15)

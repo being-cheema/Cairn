@@ -140,7 +140,7 @@ struct FindBar: View {
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            Image(systemName: icon)
+            Ink(icon, size: 9)
                 .font(.system(size: 9, weight: .semibold))
                 .foregroundStyle(Palette.muted)
                 .frame(width: 24, height: 24)
