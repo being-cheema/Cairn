@@ -453,7 +453,7 @@ struct SettingsPanel: View {
     private func detail(of item: SettingsItem) -> String {
         switch item.id {
         case "general.default":
-            return isDefault ? "Search is the default browser on this Mac" : item.detail
+            return isDefault ? "\(Brand.name) is the default browser on this Mac" : item.detail
         case "mail.default":
             if mailDefault { return "Email links from other apps open here" }
             return mailHandler.map { "Email links from other apps go to \($0) now" } ?? item.detail
@@ -777,7 +777,7 @@ struct SettingsPanel: View {
                 guard on else { prefs.fillsContacts = false; return }
                 Task { @MainActor in
                     guard await MeCard.shared.ask() else {
-                        browser.announce("Search may not read Contacts: System Settings › Privacy & Security › Contacts")
+                        browser.announce("\(Brand.name) may not read Contacts: System Settings › Privacy & Security › Contacts")
                         return
                     }
                     guard await MeCard.shared.reload() else {
@@ -851,7 +851,7 @@ struct SettingsPanel: View {
         case "shield":
             if let trouble = shield.trouble {
                 Rule()
-                Line(trouble, "Nothing is being blocked until this clears. Try again, or restart Search") {
+                Line(trouble, "Nothing is being blocked until this clears. Try again, or restart \(Brand.name)") {
                     Pill("Try again") { shield.compile() }
                 }
                 .under()
@@ -1046,7 +1046,7 @@ struct SettingsPanel: View {
     /// Says so when a password manager extension has taken the saving over.
     private var savingDetail: String {
         if #available(macOS 15.4, *), let name = Extensions.shared.passwordSavingTakenBy {
-            return "\(name) does the saving; it asked Search not to offer"
+            return "\(name) does the saving; it asked \(Brand.name) not to offer"
         }
         return "Asked once per site, never again for a site you refuse"
     }
@@ -1065,7 +1065,7 @@ struct SettingsPanel: View {
         HStack(spacing: 14) {
             if Art.image("browser") != nil { ArtPicture(name: "browser", size: 84) }
             Logomark()
-                .fill(Palette.ink, style: FillStyle(eoFill: true))
+                .fill(Palette.accent, style: FillStyle(eoFill: true))
                 .aspectRatio(Logomark.canvas.width / Logomark.canvas.height, contentMode: .fit)
                 .frame(height: 34)
             VStack(alignment: .leading, spacing: 3) {

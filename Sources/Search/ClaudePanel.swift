@@ -161,7 +161,7 @@ struct ClaudePanel: View {
         case .noScript:
             return "This copy of \(Brand.name) has no search-mcp to give Claude Code, so there is nothing for it to use."
         case .agentsOff:
-            return "Turn on Settings › About › Developer › Let coding agents use Search first. Claude then asks you, in this window, before it starts."
+            return "Turn on Settings › About › Developer › Let coding agents use \(Brand.name) first. Claude then asks you, in this window, before it starts."
         }
     }
 

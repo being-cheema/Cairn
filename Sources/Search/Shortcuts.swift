@@ -174,7 +174,10 @@ struct KeyCombo: Codable, Hashable {
 /// A menu command, and the key it has unless you give it another.
 struct Command: Identifiable {
     enum Section: String, CaseIterable {
-        case app = "Search", file = "File", edit = "Edit", view = "View", tabs = "Tabs", spaces = "Spaces", bookmarks = "Bookmarks", history = "History"
+        case app = "App", file = "File", edit = "Edit", view = "View", tabs = "Tabs", spaces = "Spaces", bookmarks = "Bookmarks", history = "History"
+
+        /// What the shortcuts page heads the group with: the app's own name for its own menu.
+        var shown: String { self == .app ? Brand.name : rawValue }
     }
 
     let id: String

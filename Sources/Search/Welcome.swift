@@ -65,10 +65,10 @@ struct WelcomePanel: View {
         VStack(spacing: 22) {
             if Art.image("welcome") != nil { ArtPicture(name: "welcome", size: 140) } else { Plate(size: 72) }
             VStack(spacing: 10) {
-                Text("Search")
+                Text(Brand.name)
                     .font(Typeface.heading(36, weight: .medium))
                     .foregroundStyle(Palette.ink)
-                Text("A browser with nothing in the way. Four megabytes, the engine already in your Mac, and as little around the page as we could manage.")
+                Text("\(Brand.tagline). It runs on the engine already in your Mac, and Claude can browse in tabs of its own while you watch.")
                     .font(.system(size: 14.5))
                     .foregroundStyle(Palette.muted)
                     .multilineTextAlignment(.center)
@@ -134,7 +134,7 @@ struct WelcomePanel: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            // Safari, a browser on another Mac, one Search can't read: what
+            // Safari, a browser on another Mac, one \(Brand.name) can't read: what
             // it exported, bookmarks, passwords or Safari's own ZIP.
             Pill("From a file another browser exported…") { browser.importFile() }
         }
@@ -168,12 +168,12 @@ struct WelcomePanel: View {
                     HStack(spacing: 8) {
                         Ink("checkmark", size: 11)
                             .font(.system(size: 11, weight: .medium))
-                        Text("Search is the default browser")
+                        Text("\(Brand.name) is the default browser")
                     }
                     .font(.system(size: 13))
                     .foregroundStyle(Palette.ink)
                 } else {
-                    Big("Make Search the default", filled: true) {
+                    Big("Make \(Brand.name) the default", filled: true) {
                         asked = true
                         Links.becomeDefault { _ in isDefault = Links.isDefault }
                     }
@@ -202,9 +202,9 @@ struct WelcomePanel: View {
                 Key("⌘L", "Suggestions from your search engine as you type — off until you turn them on in Settings › Browsing.")
                 Key("⌘", "Held, it can show each tab's number for ⌘1–9. Settings › Tabs.")
                 Key("⌘1", "Pressed again on its pin, back to where you were.")
-                Key("⇧⌘P", "Float a video in Search's window, or in macOS's picture in picture. Settings › Browsing.")
+                Key("⇧⌘P", "Float a video in \(Brand.name)'s window, or in macOS's picture in picture. Settings › Browsing.")
                 Key("⌃-click", "Claude or ChatGPT in a side panel beside the page: right-click a tab › Open in Side Panel, or View › Side Panel.")
-                Key("⌘Q", "Search can ask before it quits. Settings › General.")
+                Key("⌘Q", "\(Brand.name) can ask before it quits. Settings › General.")
                 Key("⌘,", "Your Apple passwords, under the sign-in field — Settings › Passwords.")
                 if PageTranslator.available {
                     Key("⌃-click", "Translate a page into your language, on this Mac — nothing is sent anywhere. Right-click the page › Translate Page.")
@@ -322,7 +322,7 @@ struct WelcomePanel: View {
         let size: CGFloat
         var body: some View {
             Logomark()
-                .fill(Palette.ink, style: FillStyle(eoFill: true))
+                .fill(Palette.accent, style: FillStyle(eoFill: true))
                 .aspectRatio(Logomark.canvas.width / Logomark.canvas.height, contentMode: .fit)
                 .frame(height: size * 0.56)
         }

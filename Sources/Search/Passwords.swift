@@ -59,15 +59,15 @@ struct PasswordsPanel: View {
                 if !legacy.isEmpty {
                     HStack(spacing: 8) {
                         Text(legacy.count == 1
-                             ? "1 password was kept by Search, the app this one comes from."
-                             : "\(legacy.count) passwords were kept by Search, the app this one comes from.")
+                             ? "1 password was kept by \(Brand.name), the app this one comes from."
+                             : "\(legacy.count) passwords were kept by \(Brand.name), the app this one comes from.")
                             .font(.system(size: 12))
                             .foregroundStyle(Palette.ink)
                         Spacer(minLength: 0)
                         Pill(copying ? "Copying…" : "Copy to \(Brand.name)…") { copyLegacy() }
                             .disabled(copying)
                     }
-                    Text("macOS asks for your login password to let each one go; Always Allow asks once. Nothing in Search is changed or removed.")
+                    Text("macOS asks for your login password to let each one go; Always Allow asks once. Nothing in \(Brand.name) is changed or removed.")
                         .font(.system(size: 11.5))
                         .foregroundStyle(Palette.muted)
                         .fixedSize(horizontal: false, vertical: true)
@@ -121,8 +121,8 @@ struct PasswordsPanel: View {
             await refreshLegacy()
             let done = result.copied == 1 ? "1 password" : "\(result.copied) passwords"
             browser.announce(result.skipped == 0
-                             ? "Copied \(done) from Search"
-                             : "Copied \(done) from Search, \(result.skipped) not allowed — try again to copy those")
+                             ? "Copied \(done) from \(Brand.name)"
+                             : "Copied \(done) from \(Brand.name), \(result.skipped) not allowed — try again to copy those")
         }
     }
 

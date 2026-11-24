@@ -524,8 +524,8 @@ struct LittleView: View {
                     .truncationMode(.head)
                 Spacer(minLength: 0)
                 if let keep {
-                    Pill("Open in Search", action: keep)
-                        .help("Open in Search   ⌘O")
+                    Pill("Open in \(Brand.name)", action: keep)
+                        .help("Open in \(Brand.name)   ⌘O")
                 } else {
                     Spacer().frame(width: 64)
                 }

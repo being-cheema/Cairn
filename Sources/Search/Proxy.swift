@@ -136,7 +136,7 @@ enum ProxySecret {
         guard status == errSecSuccess else {
             throw NSError(domain: NSOSStatusErrorDomain, code: Int(status), userInfo: [
                 NSLocalizedDescriptionKey: status == errSecMissingEntitlement
-                    ? "This copy of Search can't keep a password in the keychain."
+                    ? "This copy of \(Brand.name) can't keep a password in the keychain."
                     : "The proxy password couldn't be kept in the keychain (\(status)).",
             ])
         }
@@ -337,7 +337,7 @@ struct ProxySettings: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Line("Send everything through a proxy", draft.mode == .system ? "Off: Search follows the Mac's own network settings." : note) {
+            Line("Send everything through a proxy", draft.mode == .system ? "Off: \(Brand.name) follows the Mac's own network settings." : note) {
                 Picker("Proxy", selection: $draft.mode) {
                     ForEach(ProxySettingsValue.Mode.allCases) { Text($0.title).tag($0) }
                 }
