@@ -564,9 +564,9 @@ struct AddressField: NSViewRepresentable {
     /// In the address bar there is no doubt where: it is the tab's own.
     private static func placeholderWords(for browser: Browser) -> String {
         if let site = browser.siteChip { return "Search \(site.name)" }
-        if browser.editingInline { return "Enter a web address" }
+        if browser.editingInline { return NewTabWords.address }
         switch browser.fieldMode {
-        case .blank: return "Enter a web address"
+        case .blank: return NewTabWords.address
         case .newTab: return "New tab: enter a web address"
         case .thisTab: return "This tab: enter a web address"
         case .switcher: return "Switch to an open tab"

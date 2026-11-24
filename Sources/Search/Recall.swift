@@ -148,15 +148,21 @@ struct HistoryPanel: View {
                         .fixedSize()
                     }
                     Pill("Clear") {
-                        browser.clearHistory(in: scopes.contains { $0.space == clearsIn } ? clearsIn : nil)
-                        clearsIn = nil
-                        refresh()
-                        withAnimation(Motion.settle) { browser.recallMode = .history }
+                        Ask.sure("Clear this history?", detail: "Pages visited, archived tabs and what sites remember for searches go. This can't be undone.",
+                                 confirm: "Clear", returnCancels: true) {
+                            browser.clearHistory(in: scopes.contains { $0.space == clearsIn } ? clearsIn : nil)
+                            clearsIn = nil
+                            refresh()
+                            withAnimation(Motion.settle) { browser.recallMode = .history }
+                        }
                     }
                 }
                 Rule()
                 Line("Cookies and sign-ins", "Signs you out of every site") {
-                    Pill("Sign out of everything") { browser.clearSites() }
+                    Pill("Sign out of everything") {
+                        Ask.sure("Sign out of every site?", detail: "Cookies and site data go, so you will have to sign in again everywhere.",
+                                 confirm: "Sign out", returnCancels: true) { browser.clearSites() }
+                    }
                 }
                 Rule()
                 Line("Cache", "Only what was fetched to draw pages") {

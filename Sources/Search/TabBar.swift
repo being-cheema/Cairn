@@ -894,6 +894,7 @@ private struct TabPill: View, Equatable {
     /// tint rather than sit on it as grey patches (see Greys).
     @Environment(\.liquidTabs) private var liquid
     @Environment(\.greys) private var greys
+    @Environment(\.colorScheme) private var scheme
     @Environment(\.rowCarrying) private var rowCarrying
     let browser: Browser
     @ObservedObject var prefs: Preferences
@@ -1232,8 +1233,9 @@ private struct TabPill: View, Equatable {
                 // darker grey the column's live pin wears too. Under a pane
                 // of Liquid Glass, the glass is a tab's ground.
                 Rectangle().fill(pinned ? greys.pinLive : (liquid ? Color.clear : greys.wash))
-                // The one tab you are on wears a breath of coral.
-                Rectangle().fill(Palette.accent.opacity(0.10))
+                // The one tab you are on wears a breath of coral. Less on the
+                // neutral charcoal, where 0.10 of it mixes to a warm brown.
+                Rectangle().fill(Palette.accent.opacity(scheme == .dark ? 0.05 : 0.10))
                 // Not on a pinned square, nor a tab down to its mark. Thirty
                 // points of grey filling from the left behind a single letter
                 // says nothing about anything — it needs the width of a title

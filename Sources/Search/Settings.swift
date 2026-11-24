@@ -165,7 +165,7 @@ struct SettingsPanel: View {
         let counts = Dictionary(grouping: hits, by: \.page).mapValues(\.count)
         return VStack(alignment: .leading, spacing: 2) {
             Text("Settings")
-                .font(.system(size: 13, weight: .semibold))
+                .font(Typeface.heading(15, weight: .medium))
                 .foregroundStyle(Palette.ink)
                 .padding(.horizontal, 10)
                 .padding(.top, 14)
@@ -252,6 +252,7 @@ struct SettingsPanel: View {
         let chosen: Namespace.ID
         let act: () -> Void
         @State private var hovering = false
+        @Environment(\.colorScheme) private var scheme
 
         var body: some View {
             Button(action: act) {
@@ -278,7 +279,10 @@ struct SettingsPanel: View {
                 .background {
                     if on {
                         RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(Palette.ground)
+                            // The paper lifts out of a lighter column in the
+                            // light theme; on charcoal, ground is darker than
+                            // the column, so the pick takes the lighter wash.
+                            .fill(scheme == .dark ? Palette.wash : Palette.ground)
                             .shadow(color: .black.opacity(0.06), radius: 3, y: 1)
                             .matchedGeometryEffect(id: "chosen", in: chosen)
                     } else if hovering {
@@ -289,6 +293,8 @@ struct SettingsPanel: View {
                 .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
             .buttonStyle(.plain)
+            .focusRing(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .accessibilityAddTraits(on ? .isSelected : [])
             .onHover { hovering = $0 }
             .animation(Motion.quick, value: hovering)
         }
@@ -369,8 +375,13 @@ struct SettingsPanel: View {
 
     private func groups(of page: Page) -> some View {
         ForEach(SettingsIndex.groups(of: page)) { group in
-            GroupBlock(title: group.title, icon: group.icon) {
-                Card { rows(SettingsIndex.items(in: group.id).filter(shown), searched: false) }
+            let card = Card { rows(SettingsIndex.items(in: group.id).filter(shown), searched: false) }
+            // Themes has one group and one row, both called Home background:
+            // the page says it once, in the row.
+            if page == .themes {
+                card
+            } else {
+                GroupBlock(title: group.title, icon: group.icon) { card }
             }
         }
     }
@@ -492,6 +503,7 @@ struct SettingsPanel: View {
                 : Passkeys.access == .denied
                 ? "macOS was told no: System Settings › Privacy & Security › Passkeys"
                 : item.detail
+        case "devtools": return Updater.configured || !DevToolsPackages.shared.installed.isEmpty ? item.detail : "Not offered in this build"
         case "shield": return shield.trouble ?? item.detail
         case "updates.version": return versionDetail
         case "arc.import": return arcHere ? item.detail : "Arc isn't on this Mac. Bring Things Over can read an export"
@@ -564,13 +576,12 @@ struct SettingsPanel: View {
         case "general.import":
             // Coming from another browser, now or any time later: the same
             // page as File › Bring Things Over… and the Welcome's.
-            Pill("Bring Things Over…") { browser.lead(to: InternalPage(.importing)) }
+            Pill("Bring things over…") { browser.lead(to: InternalPage(.importing)) }
         case "sync":
             // On asks for the folder first; cancelled, it stays off.
             // Never with Sync with iCloud: the two would undo each other.
             Switch(on: Binding(get: { sync.on }, set: { $0 ? sync.choose() : sync.turnOff() }))
                 .disabled(icloud.on && !sync.on)
-                .opacity(icloud.on && !sync.on ? 0.4 : 1)
         case "handoff": Switch(on: $prefs.handoff)
         case "icloud":
             // Off limits in a build not signed for iCloud, and while the
@@ -578,15 +589,13 @@ struct SettingsPanel: View {
             let locked = !icloud.on && (!icloud.available || sync.on)
             Switch(on: Binding(get: { icloud.on }, set: { $0 ? icloud.turnOn() : icloud.turnOff() }))
                 .disabled(locked)
-                .opacity(locked ? 0.4 : 1)
         case "icloud.erase":
+            // Return is Cancel's: this can't be taken back, and the first
+            // button of a plain alert is the one Return presses.
             Pill("Delete…") {
-                let alert = NSAlert()
-                alert.messageText = "Delete \(Brand.name)'s data from iCloud?"
-                alert.informativeText = "Open tabs, pins, spaces, bookmarks and settings leave iCloud for every device. What is on each device stays. Sync with iCloud turns off here and on your other devices."
-                alert.addButton(withTitle: "Delete")
-                alert.addButton(withTitle: "Cancel")
-                if alert.runModal() == .alertFirstButtonReturn { icloud.erase() }
+                Ask.sure("Delete \(Brand.name)'s data from iCloud?",
+                         detail: "Open tabs, pins, spaces, bookmarks and settings leave iCloud for every device. What is on each device stays. Sync with iCloud turns off here and on your other devices.",
+                         confirm: "Delete", returnCancels: true) { icloud.erase() }
             }
         case "quit.confirm": Switch(on: $prefs.confirmsQuit)
         case "downloads.folder": Pill("Change…") { chooseFolder() }
@@ -779,7 +788,6 @@ struct SettingsPanel: View {
                     Pill("Cancel") { draft = nil }
                     Pill("Save", filled: true) { saveDraft() }
                         .disabled(draftProblem != nil)
-                        .opacity(draftProblem == nil ? 1 : 0.4)
                 }
             }
         case "links.little": Switch(on: $prefs.littleLinks)
@@ -823,15 +831,14 @@ struct SettingsPanel: View {
             } else if prefs.looksLikeArc {
                 Always(text: "Set up")
             } else {
-                Pill("Set Up", filled: true) { setUpLikeArc() }
+                Pill("Set up", filled: true) { setUpLikeArc() }
             }
         case "arc.import":
-            Pill("Bring Over…") { browser.lead(to: InternalPage(.importing, "Arc")) }
+            Pill("Bring over…") { browser.lead(to: InternalPage(.importing, "Arc")) }
                 .disabled(!arcHere)
-                .opacity(arcHere ? 1 : 0.4)
         case "spaces": Switch(on: $prefs.usesSpaces)
         case "spaces.commandNumbers": Switch(on: $prefs.spacesOnCommand)
-        case "profiles": Pill("New Profile…") { ProfileMenu.askNew() }
+        case "profiles": Pill("New profile…") { ProfileMenu.askNew() }
         case "profiles.oneWindow": Switch(on: $prefs.profilesInOneWindow)
         case "spaces.links": Switch(on: $prefs.sendsLinksToSpaces)
         case "spaces.buttons": Switch(on: $prefs.spaceButtons)
@@ -885,9 +892,22 @@ struct SettingsPanel: View {
         case "privacy.gpc": Switch(on: $prefs.sendsPrivacySignal)
         case "privacy.httpsFirst": Switch(on: $prefs.triesHTTPSFirst)
         case "notifications.ask": Switch(on: $prefs.siteNotifications)
-        case "privacy.forget": Pill("Forget choices") { browser.forgetCaptureChoices() }
-        case "clear.history": Pill("Clear") { browser.clearHistory() }
-        case "clear.cookies": Pill("Sign out of everything") { browser.clearSites() }
+        // What can't be taken back asks first, with Return on Cancel (as
+        // Remove All in Passwords does). The cache only holds copies the
+        // next visit fetches again, so it stays one click.
+        case "privacy.forget":
+            Pill("Forget choices") {
+                Ask.sure("Forget every site's choices?",
+                         detail: "Camera, microphone, location and notification answers are forgotten, and each site asks again the next time it wants one.",
+                         confirm: "Forget", returnCancels: true) { browser.forgetCaptureChoices() }
+            }
+        case "clear.history": ClearHistory(browser: browser)
+        case "clear.cookies":
+            Pill("Sign out of everything") {
+                Ask.sure("Sign out of everything?",
+                         detail: "Cookies and site data go, so every site you are signed in to forgets you, in every space of this profile. This can't be undone.",
+                         confirm: "Sign out", returnCancels: true) { browser.clearSites() }
+            }
         case "clear.cache": Pill("Clear") { browser.clearCache() }
         default: EmptyView()
         }
@@ -916,10 +936,11 @@ struct SettingsPanel: View {
         case "launcher.little": Switch(on: $prefs.launcherLittle)
         case "note.switcher": Always()
         case "updates.version": versionControl
-        case "updates.auto": Switch(on: $prefs.installsUpdates)
-        case "updates.notice": Switch(on: $prefs.showsUpdateReady)
-        case "about.feedback": Pill("Send Feedback") { Links.writeFeedback() }
-        case "about.notes": Pill("What's New…") { browser.lead(to: InternalPage(.notes)) }
+        // Nothing to install or announce in a copy with no update feed.
+        case "updates.auto": Switch(on: $prefs.installsUpdates).disabled(!Updater.configured)
+        case "updates.notice": Switch(on: $prefs.showsUpdateReady).disabled(!Updater.configured)
+        case "about.feedback": Pill("Send feedback") { Links.writeFeedback() }
+        case "about.notes": Pill("What's new…") { browser.lead(to: InternalPage(.notes)) }
         case "bench": Switch(on: $prefs.bench)
         case "agents": Switch(on: $prefs.agents)
         case "news.updates": OptInSettingsField(betaOnly: false) { _ = browser.open($0, foreground: true) }
@@ -977,7 +998,11 @@ struct SettingsPanel: View {
         case "agents":
             if !searched, prefs.agents { RememberedAgents() }
         case "devtools":
-            DevToolsPackageList().under()
+            // A copy with no update feed has none to offer; one that already
+            // holds a package still lists it, to remove it.
+            if Updater.configured || !DevToolsPackages.shared.installed.isEmpty {
+                DevToolsPackageList().under()
+            }
         case "profiles":
             if !searched {
                 ProfileList(browser: browser)
@@ -1179,11 +1204,11 @@ struct SettingsPanel: View {
 
     private var aboutHeader: some View {
         HStack(spacing: 14) {
-            if Art.image("browser") != nil { ArtPicture(name: "browser", size: 84) }
+            // One picture: the mark. The illustration beside it competed with it.
             Logomark()
                 .fill(Palette.accent, style: FillStyle(eoFill: true))
                 .aspectRatio(Logomark.canvas.width / Logomark.canvas.height, contentMode: .fit)
-                .frame(height: 34)
+                .frame(height: 44)
             VStack(alignment: .leading, spacing: 3) {
                 Text(Brand.name)
                     .font(Typeface.heading(19, weight: .medium))
@@ -1357,10 +1382,11 @@ struct SettingRow<Control: View>: View {
                     }
                 }
                 Spacer(minLength: 8)
-                if !wide { control() }
+                if !wide { control().environment(\.switchLabel, title) }
             }
             if wide {
                 control()
+                    .environment(\.switchLabel, title)
                     .padding(.leading, 38)
             }
         }
@@ -1573,7 +1599,9 @@ private struct LookPicture: View {
 }
 
 /// A row of choices in a grey track, one of them lifted out in white. The
-/// white slides to the one you pick rather than appearing there.
+/// white slides to the one you pick rather than appearing there. Each choice
+/// is a Button, so the keyboard reaches it and VoiceOver reads it as one of
+/// a set, the picked one marked selected.
 struct Segmented<Option: Hashable>: View {
     let options: [(Option, String)]
     @Binding var selection: Option
@@ -1586,31 +1614,77 @@ struct Segmented<Option: Hashable>: View {
     var body: some View {
         HStack(spacing: 2) {
             ForEach(options, id: \.0) { option, title in
-                Text(title)
-                    .font(.system(size: 11.5, weight: option == selection ? .medium : .regular))
-                    .foregroundStyle(option == selection ? Palette.ink : Palette.muted)
-                    .lineLimit(1)
-                    .fixedSize(horizontal: !wide, vertical: false)
-                    .frame(maxWidth: wide ? .infinity : nil)
-                    .padding(.horizontal, wide ? 4 : 10)
-                    .padding(.vertical, 5)
-                    .background {
-                        if option == selection {
-                            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                .fill(Palette.ground)
-                                .shadow(color: .black.opacity(0.08), radius: 3, y: 1)
-                                .matchedGeometryEffect(id: "chosen", in: slide)
+                let picked = option == selection
+                Button {
+                    withAnimation(Motion.settle) { selection = option }
+                } label: {
+                    Text(title)
+                        .font(.system(size: 11.5, weight: picked ? .medium : .regular))
+                        .foregroundStyle(picked ? Palette.ink : Palette.muted)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: !wide, vertical: false)
+                        .frame(maxWidth: wide ? .infinity : nil)
+                        .padding(.horizontal, wide ? 4 : 10)
+                        .padding(.vertical, 6)
+                        .background {
+                            if picked {
+                                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                    .fill(Palette.ground)
+                                    .shadow(color: .black.opacity(0.08), radius: 3, y: 1)
+                                    .matchedGeometryEffect(id: "chosen", in: slide)
+                            }
                         }
-                    }
-                    .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-                    .onTapGesture {
-                        withAnimation(Motion.settle) { selection = option }
-                    }
+                        .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .focusRing(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .accessibilityAddTraits(picked ? .isSelected : [])
             }
         }
         .padding(2)
         .background(Palette.wash, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
         .animation(Motion.settle, value: selection)
+    }
+}
+
+/// Keyboard focus, drawn: the plain buttons the controls here are made of
+/// show none of their own, so a person tabbing through Settings (Full
+/// Keyboard Access) lost their place. A coral ring just outside the shape,
+/// only while the control has focus; the system's own is turned off so the
+/// two don't stack.
+private struct FocusRing<S: InsettableShape>: ViewModifier {
+    let shape: S
+    @FocusState private var focused: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .focusEffectDisabled()
+            .focused($focused)
+            .overlay {
+                shape.inset(by: -2).stroke(Palette.accent, lineWidth: 2)
+                    .opacity(focused ? 1 : 0)
+                    .allowsHitTesting(false)
+            }
+    }
+}
+
+extension View {
+    func focusRing<S: InsettableShape>(_ shape: S) -> some View {
+        modifier(FocusRing(shape: shape))
+    }
+}
+
+private struct SwitchLabelKey: EnvironmentKey {
+    static let defaultValue = ""
+}
+
+extension EnvironmentValues {
+    /// What the switch beside it is for, in words. A row says it once for
+    /// whatever control it holds, so a switch is named for VoiceOver without
+    /// each one being given its title by hand.
+    var switchLabel: String {
+        get { self[SwitchLabelKey.self] }
+        set { self[SwitchLabelKey.self] = newValue }
     }
 }
 
@@ -1631,22 +1705,69 @@ struct Ticks: View {
     }
 }
 
+/// On or off: a Toggle, so it has a role and a value for VoiceOver and a
+/// place in the keyboard's order, drawn as the same capsule as ever.
 struct Switch: View {
     @Binding var on: Bool
+    /// Its name, when the row around it isn't a SettingRow that gives one.
+    var label: String?
+
+    @Environment(\.switchLabel) private var inherited
+
+    init(on: Binding<Bool>, label: String? = nil) {
+        _on = on
+        self.label = label
+    }
 
     var body: some View {
-        Capsule()
-            .fill(on ? Palette.accent : Palette.faint)
-            .frame(width: 30, height: 18)
-            .overlay(alignment: on ? .trailing : .leading) {
-                Circle()
-                    .fill(Palette.ground)
-                    .shadow(color: .black.opacity(0.18), radius: 1.5, y: 1)
-                    .padding(2)
-            }
-            .contentShape(Capsule())
-            .onTapGesture { withAnimation(Motion.settle) { on.toggle() } }
-            .animation(Motion.settle, value: on)
+        let name = label ?? inherited
+        Toggle(name, isOn: $on)
+            .toggleStyle(SwitchStyle(name: name))
+            .labelsHidden()
+    }
+}
+
+private struct SwitchStyle: ToggleStyle {
+    let name: String
+
+    func makeBody(configuration: Configuration) -> some View {
+        SwitchBody(on: configuration.$isOn, name: name)
+    }
+}
+
+private struct SwitchBody: View {
+    @Binding var on: Bool
+    let name: String
+    @Environment(\.isEnabled) private var enabled
+
+    var body: some View {
+        Button { withAnimation(Motion.settle) { on.toggle() } } label: {
+            // Off is a grey that holds 3:1 against the ground (the old faint
+            // was 1.4:1, near blank), on is coral; the knob is white in both,
+            // so it reads as a knob and not as a hole in the track.
+            Capsule()
+                .fill(on ? Palette.accent : Palette.track)
+                .frame(width: 30, height: 18)
+                .overlay(alignment: on ? .trailing : .leading) {
+                    Circle()
+                        .fill(.white)
+                        .shadow(color: .black.opacity(enabled ? 0.22 : 0), radius: 1.5, y: 1)
+                        .padding(2)
+                }
+                // Out of reach, the switch shows no lift and goes pale, so
+                // it can't be taken for one that is merely off.
+                .opacity(enabled ? 1 : 0.4)
+                // The capsule is 18 high: the hit area is the 28 around it.
+                .padding(.vertical, 5)
+                .padding(.horizontal, 3)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .focusRing(Capsule())
+        .animation(Motion.settle, value: on)
+        .accessibilityLabel(name)
+        .accessibilityValue(on ? "On" : "Off")
+        .accessibilityAddTraits(.isToggle)
     }
 }
 
@@ -1707,8 +1828,9 @@ struct Steps: View {
     }
 }
 
-/// A small capsule that does one thing. Outlined by default; filled in ink
-/// when it is the thing you came here to press.
+/// A small capsule that does one thing. Outlined by default; filled in coral
+/// when it is the thing you came here to press. Pale while it can't be
+/// pressed, and 28 points tall to hit though it is drawn smaller.
 struct Pill: View {
     let title: String
     var filled = false
@@ -1716,6 +1838,7 @@ struct Pill: View {
     let action: () -> Void
 
     @State private var hovering = false
+    @Environment(\.isEnabled) private var enabled
 
     init(_ title: String, filled: Bool = false, tint: Color = Palette.ink, action: @escaping () -> Void) {
         self.title = title
@@ -1731,13 +1854,48 @@ struct Pill: View {
                 .foregroundStyle(filled ? Palette.ground : tint)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
-                .background(filled ? Palette.accent : (hovering ? Palette.hover : Palette.ground), in: Capsule())
+                .background(filled ? Palette.accent : (hovering && enabled ? Palette.hover : Palette.ground), in: Capsule())
                 .overlay(Capsule().strokeBorder(filled ? .clear : Palette.hairline, lineWidth: 1))
-                .contentShape(Capsule())
+                .frame(minHeight: 28)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .focusRing(Capsule())
+        .opacity(enabled ? 1 : 0.4)
         .onHover { hovering = $0 }
         .animation(Motion.quick, value: hovering)
+    }
+}
+
+/// Settings › Privacy › History: Clear, with the same choice of where as the
+/// History panel's (Recall.swift) when spaces keep histories of their own.
+private struct ClearHistory: View {
+    let browser: Browser
+    @State private var scope: UUID?
+
+    var body: some View {
+        let scopes = browser.historyScopes
+        let chosen = scopes.first { $0.space == scope }
+        HStack(spacing: 8) {
+            if !scopes.isEmpty {
+                Picker("Clear history from", selection: $scope) {
+                    Text("All spaces").tag(UUID?.none)
+                    ForEach(scopes, id: \.space) { Text($0.name).tag(UUID?.some($0.space)) }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .fixedSize()
+            }
+            Pill("Clear") {
+                let what = chosen.map { "the history of \($0.name)" } ?? "all the history you have"
+                Ask.sure("Clear history?",
+                         detail: "This removes \(what), the tabs \(Brand.name) closed by itself, site icons and the searches learned from sites. This can't be undone.",
+                         confirm: "Clear", returnCancels: true) {
+                    browser.clearHistory(in: chosen?.space)
+                    scope = nil
+                }
+            }
+        }
     }
 }
 

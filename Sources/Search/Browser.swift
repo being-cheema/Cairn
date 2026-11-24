@@ -1375,9 +1375,26 @@ final class Browser: NSObject, ObservableObject {
         announce("Kept for \(item.host)")
     }
 
-    func forget(_ login: Kept) {
-        Vault.forget(host: login.host, user: login.user)
-        relist()
+    /// One account out of the keychain, asked and then proved the way Remove
+    /// All is: the Detail pane's Remove sits beside Edit and can't be undone
+    /// (Settings promises removing "always asks first"). Return is Cancel's.
+    func forget(_ login: Kept, then done: @escaping () -> Void = {}) {
+        Ask.sure(
+            "Remove the password for \(login.host)?",
+            detail: "It's taken out of your keychain. This can't be undone.",
+            confirm: "Remove",
+            returnCancels: true
+        ) { [weak self] in
+            Vault.Unlock.ask("remove the password for \(login.host)") { ok in
+                guard ok, let self else { return }
+                guard Vault.forget(host: login.host, user: login.user) else {
+                    self.announce("The keychain refused it")
+                    return
+                }
+                self.relist()
+                done()
+            }
+        }
     }
 
     /// The panel's Remove All…, or Remove N… while its search narrows the
@@ -1433,15 +1450,7 @@ final class Browser: NSObject, ObservableObject {
                 self.announce("The keychain refused it")
                 return
             }
-            let board = NSPasteboard.general
-            board.prepareForNewContents(with: .currentHostOnly)
-            board.setString(password, forType: .string)
-            board.setData(Data(), forType: NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType"))
-            board.setData(Data(), forType: NSPasteboard.PasteboardType("org.nspasteboard.TransientType"))
-            let copied = board.changeCount
-            DispatchQueue.main.asyncAfter(deadline: .now() + 90) {
-                if board.changeCount == copied { board.clearContents() }
-            }
+            KeptClipboard.put(password, clearAfter: 90)
             announce("Password copied")
         }
     }

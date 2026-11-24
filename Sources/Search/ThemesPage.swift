@@ -26,15 +26,14 @@ struct ThemesPage: View {
         VStack(alignment: .leading, spacing: 16) {
             mock
 
-            // A pop-up where the six segments (~488 pt, which don't
-            // shrink) would run off the card. By the preview's width (see
-            // mock): the segments' ideal width counts each as the widest.
-            Group {
-                if width >= 470 {
-                    families.pickerStyle(.segmented)
-                } else {
-                    families.pickerStyle(.menu).fixedSize()
-                }
+            // The same segmented control as every other page; a pop-up only
+            // where six of them would run off the card (by the preview's
+            // width, see mock).
+            if width >= 400 {
+                Segmented(options: HomeTheme.Family.allCases.map { ($0, $0.title) },
+                          selection: Binding(get: { family }, set: choose), wide: true)
+            } else {
+                families.pickerStyle(.menu).fixedSize()
             }
 
             switch family {
@@ -100,7 +99,7 @@ struct ThemesPage: View {
             RoundedRectangle(cornerRadius: 9, style: .continuous)
                 .fill(Palette.ground)
                 .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(Palette.hairline, lineWidth: 1))
-                .overlay(Text("Search or enter address")
+                .overlay(Text(NewTabWords.address)
                     .font(.system(size: 11)).foregroundStyle(Palette.muted))
                 .frame(width: 220, height: 30)
             tabs(side: side, right: right)
@@ -119,7 +118,7 @@ struct ThemesPage: View {
 
     @ViewBuilder
     private func tabs(side: Bool, right: Bool) -> some View {
-        let bar = RoundedRectangle(cornerRadius: 3, style: .continuous).fill(Palette.muted.opacity(0.35))
+        let bar = RoundedRectangle(cornerRadius: 3, style: .continuous).fill(Palette.quiet.opacity(0.35))
         if side {
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(0..<4, id: \.self) { _ in bar.frame(height: 8) }

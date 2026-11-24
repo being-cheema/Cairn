@@ -55,6 +55,15 @@ struct Extras: Codable, Equatable {
     var urls: [String]?
     var changed: Date?
 
+    /// When a saved item counts as changed. Only a new password changes it:
+    /// fixing a typo in the notes must not make a year-old password look new
+    /// (Health calls it old by this date). An item whose date was never known
+    /// stays unknown.
+    static func changedDate(existing: Item?, newPassword: String, now: Date = Date()) -> Date? {
+        guard let existing else { return now }
+        return existing.password == newPassword ? existing.extras.changed : now
+    }
+
     var isEmpty: Bool {
         (title ?? "").isEmpty && (notes ?? "").isEmpty && (totp ?? "").isEmpty && (urls ?? []).isEmpty && changed == nil
     }

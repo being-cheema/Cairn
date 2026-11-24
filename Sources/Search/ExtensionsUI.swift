@@ -10,8 +10,11 @@ struct ExtensionsPage: View {
         if #available(macOS 15.4, *) {
             Installer(browser: browser, extensions: .shared)
         } else {
-            Card {
-                Line("Chrome extensions", "Need macOS 15.4 or later — the version whose WebKit can run them.") { EmptyView() }
+            GroupBlock(title: "Add", icon: "plus.circle") {
+                Card {
+                    SettingRow(icon: "puzzlepiece.extension", title: "Chrome extensions",
+                               detail: "Need macOS 15.4 or later — the version whose WebKit can run them.") { EmptyView() }
+                }
             }
         }
     }
@@ -23,81 +26,80 @@ struct ExtensionsPage: View {
         @State private var link = ""
 
         var body: some View {
-            VStack(alignment: .leading, spacing: 18) {
-                Card {
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack(spacing: 8) {
-                            Text("Add from the Chrome Web Store")
-                                .font(.system(size: 13))
-                                .foregroundStyle(Palette.ink)
-                            Spacer(minLength: 8)
-                            Pill("Open the Store") {
+            VStack(alignment: .leading, spacing: 22) {
+                // The ways in, as rows of a card like every other page's.
+                GroupBlock(title: "Add", icon: "plus.circle") {
+                    Card {
+                        SettingRow(icon: "storefront", title: "Chrome Web Store",
+                                   detail: "Find it there and press Add to \(Brand.name) on its page") {
+                            Pill("Open the store") {
                                 browser.open(Browser.webStore, foreground: true)
                             }
                         }
-                        HStack(spacing: 8) {
-                            ZStack(alignment: .leading) {
-                                if link.isEmpty {
-                                    Text("Paste a link to an extension, or its id")
-                                        .foregroundStyle(Palette.muted.opacity(0.8))
+                        Rule()
+                        SettingRow(icon: "link", title: "Paste a link",
+                                   detail: "A link to an extension in the store, or its id", wide: true) {
+                            HStack(spacing: 8) {
+                                ZStack(alignment: .leading) {
+                                    if link.isEmpty {
+                                        Text("Link or id")
+                                            .foregroundStyle(Palette.muted)
+                                    }
+                                    TextField("", text: $link)
+                                        .textFieldStyle(.plain)
+                                        .foregroundStyle(Palette.ink)
+                                        .onSubmit(add)
+                                        .accessibilityLabel("Link to an extension, or its id")
                                 }
-                                TextField("", text: $link)
-                                    .textFieldStyle(.plain)
-                                    .foregroundStyle(Palette.ink)
-                                    .onSubmit(add)
-                            }
-                            .font(.system(size: 12.5))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 7)
-                            .background(Palette.wash, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-                            if !extensions.busy.isEmpty {
-                                Ring(size: 12)
-                            } else {
-                                Pill("Add", filled: true, action: add)
-                                    .disabled(Crx.id(in: link) == nil)
+                                .font(.system(size: 12.5))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 7)
+                                .background(Palette.wash, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                                if !extensions.busy.isEmpty {
+                                    Ring(size: 12)
+                                } else {
+                                    Pill("Add", filled: true, action: add)
+                                        .disabled(Crx.id(in: link) == nil)
+                                }
                             }
                         }
-                        Text("Or find it in the store and press Add to \(Brand.name) on its page.")
-                            .font(.system(size: 11.5))
-                            .foregroundStyle(Palette.muted)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .padding(14)
-                }
-
-                Card {
-                    Line("From another browser", "What Chrome, Arc, Brave and the others added from the Chrome Web Store — installed fresh from the store, you say yes to each one") {
-                        Pill("Bring them over…") {
-                            browser.bringingExtensions = true
-                            browser.lead(to: InternalPage(.importing))
+                        Rule()
+                        SettingRow(icon: "square.and.arrow.down", title: "From another browser",
+                                   detail: "What Chrome, Arc, Brave and the others added from the store, installed fresh: you say yes to each one") {
+                            Pill("Bring them over…") {
+                                browser.bringingExtensions = true
+                                browser.lead(to: InternalPage(.importing))
+                            }
                         }
+                        Rule()
+                        SettingRow(icon: "folder", title: "Load an unpacked extension",
+                                   detail: "A folder with a manifest.json, your own or one exported from another browser. Reload picks up what you've changed") {
+                            Pill("Choose…") { extensions.installFolder() }
+                        }
+                        FromSafariApps(extensions: extensions)
                     }
                 }
 
-                if extensions.installed.isEmpty {
-                    Card { Nothing("No extensions yet.", art: "coding") }
-                } else {
-                    Card {
-                        ForEach(Array(extensions.installed.enumerated()), id: \.element.id) { index, item in
-                            if index > 0 { Rule() }
-                            Row(item: item, extensions: extensions)
+                GroupBlock(title: "Installed", icon: "puzzlepiece.extension") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        if extensions.installed.isEmpty {
+                            Card { Nothing("No extensions yet.", art: "coding") }
+                        } else {
+                            Card {
+                                ForEach(Array(extensions.installed.enumerated()), id: \.element.id) { index, item in
+                                    if index > 0 { Rule() }
+                                    Row(item: item, extensions: extensions)
+                                }
+                            }
+                            Text("Each extension stays out of private tabs until you allow it in its … menu. One you allow can tell which tabs are private, but may still keep what you visit in them.")
+                                .font(.system(size: 11.5))
+                                .foregroundStyle(Palette.muted)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
-                    Text("Each extension stays out of private tabs until you allow it in its … menu. One you allow can tell which tabs are private, but may still keep what you visit in them.")
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(Palette.muted)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 Recorders()
-
-                Card {
-                    Line("Load an unpacked extension", "A folder with a manifest.json — your own, or one exported from another browser. Reload picks up what you've changed in it since.") {
-                        Pill("Choose…") { extensions.installFolder() }
-                    }
-                }
-
-                FromSafariApps(extensions: extensions)
             }
         }
 
@@ -118,24 +120,24 @@ struct ExtensionsPage: View {
         @State private var found: [SafariApps.Found] = []
 
         var body: some View {
-            Card {
-                VStack(spacing: 0) {
-                    Line("From Safari apps", "Safari extensions that came inside apps in Applications, added as unpacked extensions. Only their JavaScript runs: the app's own part doesn't, so anything that needs it (native messaging, content blockers) won't work.") {
-                        Switch(on: $on)
+            VStack(spacing: 0) {
+                Rule()
+                SettingRow(icon: "safari", title: "From Safari apps",
+                           detail: "Safari extensions that came inside apps in Applications, added as unpacked ones. Only their JavaScript runs: native messaging and content blockers won't work") {
+                    Switch(on: $on)
+                }
+                if on {
+                    if found.isEmpty {
+                        Rule()
+                        Nothing("No Safari extensions in your apps.")
                     }
-                    if on {
-                        if found.isEmpty {
-                            Rule()
-                            Nothing("No Safari extensions in your apps.")
-                        }
-                        ForEach(found, id: \.id) { item in
-                            Rule()
-                            Line(item.name, "In \(item.app)") {
-                                if extensions.installed.contains(where: { $0.id == item.id }) {
-                                    Text("Added").font(.system(size: 12)).foregroundStyle(Palette.muted)
-                                } else {
-                                    Pill("Add") { SafariApps.add(item, to: extensions) }
-                                }
+                    ForEach(found, id: \.id) { item in
+                        Rule()
+                        SettingRow(icon: "puzzlepiece.extension", title: item.name, detail: "In \(item.app)") {
+                            if extensions.installed.contains(where: { $0.id == item.id }) {
+                                Text("Added").font(.system(size: 12)).foregroundStyle(Palette.muted)
+                            } else {
+                                Pill("Add") { SafariApps.add(item, to: extensions) }
                             }
                         }
                     }
@@ -164,11 +166,12 @@ struct ExtensionsPage: View {
         var body: some View {
             let ids = ExtensionCapture.allowedIDs
             if !ids.isEmpty {
-                Card {
-                    VStack(spacing: 0) {
+                GroupBlock(title: "Allowed to record your screen", icon: "record.circle") {
+                    Card {
                         ForEach(Array(ids.enumerated()), id: \.element) { index, id in
                             if index > 0 { Rule() }
-                            Line(Browser.extensionName(id), "Can record your screen — macOS asks what to share each time") {
+                            SettingRow(icon: "puzzlepiece.extension", title: Browser.extensionName(id),
+                                       detail: "macOS asks what to share each time") {
                                 Pill("Remove") { ExtensionCapture.forget(id) }
                             }
                         }
@@ -246,7 +249,7 @@ struct ExtensionsPage: View {
                     .fixedSize()
                     .accessibilityLabel("More for \(item.name)")
                     .help("More for \(item.name)")
-                    Switch(on: Binding(get: { item.enabled }, set: { extensions.setEnabled(item.id, $0) }))
+                    Switch(on: Binding(get: { item.enabled }, set: { extensions.setEnabled(item.id, $0) }), label: "Turn on \(item.name)")
                 }
                 if sites, extensions.siteAccess(item.id).restricted {
                     SiteList(item: item, extensions: extensions)

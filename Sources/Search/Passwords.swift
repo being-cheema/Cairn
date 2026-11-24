@@ -1,6 +1,60 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+/// The one tint for taking something away, wherever it is on this page.
+private enum Tone {
+    static let remove = Color.red.opacity(0.75)
+}
+
+/// What the Passwords page puts on the clipboard goes the same way: this Mac's
+/// only, marked concealed and transient (what clipboard managers go by to keep
+/// it out of their history), and taken off again after a while unless
+/// something else has been copied since.
+enum KeptClipboard {
+    static func put(_ text: String, clearAfter seconds: TimeInterval?) {
+        let board = NSPasteboard.general
+        board.prepareForNewContents(with: .currentHostOnly)
+        board.setString(text, forType: .string)
+        board.setData(Data(), forType: NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType"))
+        board.setData(Data(), forType: NSPasteboard.PasteboardType("org.nspasteboard.TransientType"))
+        guard let seconds else { return }
+        let copied = board.changeCount
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds) {
+            if board.changeCount == copied { board.clearContents() }
+        }
+    }
+}
+
+/// Typed changes are not thrown away without asking. Keep editing is the
+/// first button, so Return is the safe answer.
+@MainActor
+private func confirmDiscard(then: @escaping () -> Void) {
+    if Store.testing, let yes = Ask.testing {
+        if yes { then() }
+        return
+    }
+    let alert = NSAlert()
+    alert.messageText = "Discard changes?"
+    alert.informativeText = "What you typed hasn't been kept."
+    alert.addButton(withTitle: "Keep editing")
+    alert.addButton(withTitle: "Discard")
+    if alert.runModal() == .alertSecondButtonReturn { then() }
+}
+
+/// An error with a mark of its own, so it never leans on colour alone.
+private func errorLine(_ text: String) -> some View {
+    HStack(alignment: .firstTextBaseline, spacing: 5) {
+        Image(systemName: "exclamationmark.circle")
+            .font(.system(size: 11.5))
+            .foregroundStyle(Palette.accent)
+        Text(text)
+            .font(.system(size: 12))
+            .foregroundStyle(Palette.ink)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+    .accessibilityElement(children: .combine)
+}
+
 /// Every password kept: a list on the left, the one picked on the right. The
 /// same rule as ever: a password is never shown until you have proved you are
 /// you (Vault.Unlock), and never for longer than it takes to read it.
@@ -23,6 +77,14 @@ struct PasswordsPanel: View {
     }
 
     @FocusState private var hunting: Bool
+    @FocusState private var focusedRow: String?
+    @FocusState private var focusedTab: Tab?
+    /// The open form holds typed changes not yet kept.
+    @State private var editDirty = false
+    /// The Mac's say-so was asked for on Codes or Health and refused.
+    @State private var unlockRefused = false
+    /// The Codes tab has been read once since it was opened.
+    @State private var codesLoaded = false
     @State private var tab = Tab.all
     @State private var selected: String?
     @State private var editing: Editing?
@@ -96,11 +158,12 @@ struct PasswordsPanel: View {
         }
         .fromSettings()
         .onChange(of: tab) { _, now in
-            if now == .codes { loadCodes() } else { coded = [] }
-            if now == .health { checkHealth() }
+            // Codes and Health only read anything when their button is pressed.
+            unlockRefused = false
+            if now != .codes { coded = []; codesLoaded = false }
             if now == .passkeys { passkeyList = PasskeyStore.all() }
         }
-        .onChange(of: browser.saved) { _, _ in report = nil; if tab == .health { checkHealth() } }
+        .onChange(of: browser.saved) { _, _ in report = nil }
         .animation(Motion.settle, value: tab)
         .animation(Motion.settle, value: editing)
         .onAppear { hunting = true }
@@ -137,6 +200,15 @@ struct PasswordsPanel: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .focused($focusedTab, equals: each)
+                .focusEffectDisabled()
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4)
+                        .strokeBorder(Palette.accent, lineWidth: 1.5)
+                        .padding(-3)
+                        .opacity(focusedTab == each ? 1 : 0)
+                )
+                .accessibilityAddTraits(tab == each ? .isSelected : [])
             }
             Spacer(minLength: 0)
         }
@@ -146,19 +218,58 @@ struct PasswordsPanel: View {
 
     private var all: some View {
         HStack(alignment: .top, spacing: 16) {
-            VStack(spacing: 10) {
-                HStack(spacing: 8) {
-                    Hunt(text: $browser.hunting, prompt: "Search sites and accounts", focus: $hunting)
-                    Pill("Add", filled: true) { selected = nil; editing = .new }
+            // With nothing kept there is nothing to search or list: the one
+            // empty state is the detail pane's.
+            if !browser.saved.isEmpty {
+                VStack(spacing: 10) {
+                    HStack(spacing: 8) {
+                        Hunt(text: $browser.hunting, prompt: "Search sites and accounts", focus: $hunting)
+                        Pill("Add", filled: true) { guardEdits { selected = nil; editing = .new } }
+                    }
+                    list
+                    if !rows.isEmpty {
+                        HStack {
+                            Spacer(minLength: 0)
+                            Pill(removeAllTitle, tint: Tone.remove) { browser.forgetShown() }
+                                .disabled(browser.forgetting)
+                        }
+                    }
                 }
-                list
+                .frame(width: 300)
             }
-            .frame(width: 300)
 
             Card { detail }
                 .frame(maxWidth: .infinity)
         }
         .frame(height: 440)
+    }
+
+    /// What Remove below the list takes: the list as it stands, so the
+    /// search that narrows it is right there to see (Browser.forgetShown).
+    private var removeAllTitle: String {
+        let n = rows.count
+        if browser.hunting.trimmingCharacters(in: .whitespaces).isEmpty { return n == 1 ? "Remove it…" : "Remove all \(n)…" }
+        return n == 1 ? "Remove this one…" : "Remove these \(n)…"
+    }
+
+    /// Runs `go` now, or once typed changes in the open form are let go of.
+    private func guardEdits(_ go: @escaping () -> Void) {
+        if editing != nil, editDirty {
+            confirmDiscard { editDirty = false; go() }
+        } else {
+            go()
+        }
+    }
+
+    /// Up and Down move the pick through the list, Delete removes it (asking,
+    /// as the Remove button does).
+    private func step(_ by: Int) {
+        guard !rows.isEmpty else { return }
+        let at = rows.firstIndex { $0.id == selected }
+        let next = min(max((at ?? (by > 0 ? -1 : rows.count)) + by, 0), rows.count - 1)
+        let id = rows[next].id
+        guard id != selected else { return }
+        guardEdits { editing = nil; selected = id; focusedRow = id }
     }
 
     @ViewBuilder
@@ -175,21 +286,31 @@ struct PasswordsPanel: View {
                 Card {
                     ForEach(Array(rows.enumerated()), id: \.element.id) { index, login in
                         if index > 0 { Rule() }
-                        Row(login: login, picked: selected == login.id, flagged: report?.flagged.contains(login.id) ?? false) {
-                            editing = nil
-                            selected = login.id
+                        Row(login: login, picked: selected == login.id, flagged: report?.flagged.contains(login.id) ?? false,
+                            focus: $focusedRow) {
+                            guardEdits { editing = nil; selected = login.id }
                         }
                     }
                 }
                 .padding(.bottom, 2)
             }
+            .onKeyPress(.upArrow) { step(-1); return .handled }
+            .onKeyPress(.downArrow) { step(1); return .handled }
+            .onKeyPress(.delete) { removePicked() }
+            .onKeyPress(.deleteForward) { removePicked() }
         }
+    }
+
+    private func removePicked() -> KeyPress.Result {
+        guard let login = picked else { return .ignored }
+        browser.forget(login) { selected = nil }
+        return .handled
     }
 
     @ViewBuilder
     private var detail: some View {
         if let editing {
-            EditForm(browser: browser, editing: editing) { saved in
+            EditForm(browser: browser, editing: editing, dirty: $editDirty) { saved in
                 self.editing = nil
                 if let saved { selected = saved.id }
             }
@@ -199,15 +320,33 @@ struct PasswordsPanel: View {
                 login: login,
                 edit: { item in editing = .existing(item) },
                 copy: { browser.copy(login) },
-                forget: { browser.forget(login); selected = nil }
+                announce: { browser.announce($0) },
+                forget: { browser.forget(login) { selected = nil } }
             )
             .id(login.id)
         } else {
-            VStack {
+            VStack(spacing: 14) {
                 Spacer()
-                Text(browser.saved.isEmpty ? "Add a password, or bring yours in." : "Pick one to see it.")
-                    .font(Typeface.heading(14))
-                    .foregroundStyle(Palette.muted)
+                if browser.saved.isEmpty {
+                    ArtPicture(name: "approval", size: 64)
+                    Text("No passwords kept yet")
+                        .font(Typeface.heading(16, weight: .medium))
+                        .foregroundStyle(Palette.ink)
+                    Text("Sign in somewhere and say yes, or add one yourself, or bring in what another manager or browser holds.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Palette.muted)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: 340)
+                    HStack(spacing: 8) {
+                        Pill("Add", filled: true) { selected = nil; editing = .new }
+                        Pill("Import & export") { tab = .bring }
+                    }
+                } else {
+                    Text("Pick one to see it.")
+                        .font(Typeface.heading(14))
+                        .foregroundStyle(Palette.muted)
+                }
                 Spacer()
             }
             .frame(maxWidth: .infinity, minHeight: 300)
@@ -223,12 +362,40 @@ struct PasswordsPanel: View {
         let key: TOTP.Key
     }
 
+    /// A tab that reads the passwords says so, and waits for its button: only
+    /// that asks the Mac who you are. A refusal leaves you here.
+    private func gate(_ text: String, button: String, busy: String?, action: @escaping () -> Void) -> some View {
+        Card {
+            VStack(alignment: .leading, spacing: 12) {
+                if let busy {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text(busy).font(Typeface.heading(14)).foregroundStyle(Palette.muted)
+                    }
+                } else {
+                    Text(text)
+                        .font(Typeface.heading(14))
+                        .foregroundStyle(Palette.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if unlockRefused { errorLine("Not unlocked.") }
+                    Pill(button, filled: true, action: action)
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
     @ViewBuilder
     private var codesTab: some View {
         if coded.isEmpty {
-            Card {
-                Nothing(loadingCodes ? "Reading…" : "No verification codes yet. Add a setup key to a password (Edit), or bring in a file that has them.",
-                        art: "approval")
+            if codesLoaded {
+                Card {
+                    Nothing("No verification codes yet. Add a setup key to a password (Edit), or bring in a file that has them.", art: "approval")
+                }
+            } else {
+                gate("Your verification codes are kept with your passwords. Showing them needs your Mac's say-so.",
+                     button: "Show codes", busy: loadingCodes ? "Reading…" : nil, action: loadCodes)
             }
         } else {
             ScrollView(showsIndicators: false) {
@@ -241,7 +408,7 @@ struct PasswordsPanel: View {
                                 Text(item.detail).font(.system(size: 11.5)).foregroundStyle(Palette.muted).lineLimit(1)
                             }
                             Spacer(minLength: 8)
-                            CodeLine(key: item.key)
+                            CodeLine(key: item.key) { browser.announce($0) }
                         }
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
@@ -257,9 +424,10 @@ struct PasswordsPanel: View {
     private func loadCodes() {
         guard !loadingCodes else { return }
         loadingCodes = true
+        unlockRefused = false
         let all = browser.saved
         Vault.Unlock.ask("show your verification codes") { ok in
-            guard ok else { loadingCodes = false; tab = .all; return }
+            guard ok else { loadingCodes = false; unlockRefused = true; return }
             Task {
                 let found: [CodeItem] = await Task.detached(priority: .userInitiated) {
                     all.compactMap { kept -> CodeItem? in
@@ -269,7 +437,7 @@ struct PasswordsPanel: View {
                     }
                 }.value
                 loadingCodes = false
-                if tab == .codes { coded = found }
+                if tab == .codes { coded = found; codesLoaded = true }
             }
         }
     }
@@ -278,6 +446,7 @@ struct PasswordsPanel: View {
     /// the key is the only thing held.
     private struct CodeLine: View {
         let key: TOTP.Key
+        let announce: (String) -> Void
 
         var body: some View {
             TimelineView(.periodic(from: .now, by: 1)) { context in
@@ -292,9 +461,15 @@ struct PasswordsPanel: View {
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundStyle(left <= 5 ? Palette.accent : Palette.muted)
                         .frame(width: 26, alignment: .trailing)
+                        // Colour alone says it is about to change; a reader
+                        // of the screen is told too.
+                        .accessibilityLabel("Time left")
+                        .accessibilityValue("\(left) seconds left")
                     Quick("Copy") {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(code, forType: .string)
+                        // A code is good for a minute at most: not left on
+                        // the clipboard for longer than a password would be.
+                        KeptClipboard.put(code, clearAfter: 30)
+                        announce("Code copied")
                     }
                 }
             }
@@ -333,7 +508,7 @@ struct PasswordsPanel: View {
                                 Spacer(minLength: 8)
                                 Text(record.lastUsed.map { "Used \(Self.when.string(from: $0))" } ?? "Made \(Self.when.string(from: record.created))")
                                     .font(.system(size: 11.5)).foregroundStyle(Palette.muted)
-                                Quick("Remove") { removePasskey(record) }
+                                Quick("Remove", tint: Tone.remove) { removePasskey(record) }
                             }
                             .padding(.horizontal, 14)
                             .padding(.vertical, 10)
@@ -342,26 +517,27 @@ struct PasswordsPanel: View {
                 }
                 .frame(maxHeight: 330)
             }
-            Text("These are made and kept by \(Brand.name) alone, in your keychain on this Mac, and signed only after Touch ID. Passkeys in iCloud Keychain or the Passwords app can't be moved here: Apple lets only a paid developer's app use those. For such a site, sign in another way once and let \(Brand.name) make a new passkey.")
+            Text("Passkeys made here stay on this Mac, and are signed only after Touch ID. iCloud Keychain passkeys can't be used here: sign in another way once, then make a new one.")
                 .font(.system(size: 11.5))
                 .foregroundStyle(Palette.muted)
                 .fixedSize(horizontal: false, vertical: true)
+                .help("Apple lets only a paid developer's app use passkeys kept in iCloud Keychain or the Passwords app, so \(Brand.name) can't read or move them.")
         }
     }
 
     /// Asks the Mac, then asks again in words: a site's passkey is not a
     /// thing to get back.
     private func removePasskey(_ record: PasskeyRecord) {
-        Vault.Unlock.ask("remove the passkey for \(record.rp)") { ok in
-            guard ok else { return }
-            let alert = NSAlert()
-            alert.messageText = "Remove the passkey for \(record.rp)?"
-            alert.informativeText = "\(record.userName.isEmpty ? "The account" : record.userName) can no longer sign in with it. If the site has no other way in for you, you may be locked out."
-            alert.alertStyle = .warning
-            alert.addButton(withTitle: "Remove")
-            alert.addButton(withTitle: "Keep")
-            guard alert.runModal() == .alertFirstButtonReturn else { return }
-            if PasskeyStore.remove(record) { passkeyList = PasskeyStore.all() } else { browser.announce("Couldn't remove it") }
+        Ask.sure(
+            "Remove the passkey for \(record.rp)?",
+            detail: "\(record.userName.isEmpty ? "The account" : record.userName) can no longer sign in with it. If the site has no other way in for you, you may be locked out.",
+            confirm: "Remove",
+            returnCancels: true
+        ) {
+            Vault.Unlock.ask("remove the passkey for \(record.rp)") { ok in
+                guard ok else { return }
+                if PasskeyStore.remove(record) { passkeyList = PasskeyStore.all() } else { browser.announce("Couldn't remove it") }
+            }
         }
     }
 
@@ -373,9 +549,10 @@ struct PasswordsPanel: View {
     private func checkHealth() {
         guard !checking else { return }
         checking = true
+        unlockRefused = false
         let all = browser.saved
         Vault.Unlock.ask("check your passwords") { ok in
-            guard ok else { checking = false; tab = .all; return }
+            guard ok else { checking = false; unlockRefused = true; return }
             Task {
                 let found = await Task.detached(priority: .userInitiated) {
                     let entries = all.compactMap { kept -> PasswordHealth.Entry? in
@@ -402,35 +579,43 @@ struct PasswordsPanel: View {
     @ViewBuilder
     private var healthTab: some View {
         if let report {
-            let shown = report.findings.filter { finding in healthFilter.map { finding.kinds.contains($0) } ?? true }
+            // A filter with nothing left under it is no filter (the last weak
+            // one was fixed): the rest of the list is not hidden by it.
+            let active = healthFilter.flatMap { report.count($0) > 0 ? $0 : nil }
+            let shown = report.findings.filter { finding in active.map { finding.kinds.contains($0) } ?? true }
             VStack(alignment: .leading, spacing: 14) {
                 HStack(spacing: 10) {
                     ForEach(PasswordHealth.Kind.allCases) { kind in
                         let n = report.count(kind)
-                        Button { healthFilter = healthFilter == kind ? nil : kind } label: {
+                        Button { healthFilter = active == kind ? nil : kind } label: {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("\(n)")
                                     .font(Typeface.heading(24, weight: .medium))
-                                    .foregroundStyle(n == 0 ? Palette.muted : Palette.ink)
-                                Text(kind.rawValue).font(.system(size: 12)).foregroundStyle(Palette.muted)
+                                    .foregroundStyle(Palette.ink)
+                                Text(kind.rawValue).font(.system(size: 12)).foregroundStyle(Palette.ink)
+                                Text(kind.detail)
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(Palette.muted)
+                                    .multilineTextAlignment(.leading)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
                             .padding(12)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(RoundedRectangle(cornerRadius: 10).fill(healthFilter == kind ? Palette.accent.opacity(0.12) : Palette.wash))
-                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(healthFilter == kind ? Palette.accent : Palette.hairline, lineWidth: 1))
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                            .background(RoundedRectangle(cornerRadius: 10).fill(active == kind ? Palette.accent.opacity(0.12) : Palette.wash))
+                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(active == kind ? Palette.accent : Palette.hairline, lineWidth: 1))
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .help(kind == .reused ? "The same password on more than one account"
-                              : kind == .weak ? "Short, or one of the most common passwords"
-                              : kind == .old ? "Not changed in over a year (only where the date is known)"
-                              : "Kept from a page sent over plain http")
+                        .accessibilityElement(children: .combine)
+                        .accessibilityAddTraits(active == kind ? .isSelected : [])
+                        .help(kind.help)
                     }
                 }
+                .fixedSize(horizontal: false, vertical: true)
                 if shown.isEmpty {
                     Card {
                         Nothing(report.findings.isEmpty ? "Nothing to fix in \(count(report.checked, "password", "passwords"))."
-                                : "Nothing under \(healthFilter?.rawValue ?? "that").", art: "approval")
+                                : "Nothing under \(active?.rawValue ?? "that").", art: "approval")
                     }
                 } else {
                     ScrollView(showsIndicators: false) {
@@ -459,7 +644,8 @@ struct PasswordsPanel: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         } else {
-            Card { Nothing(checking ? "Checking…" : "Reading your passwords needs a moment and your Mac's say-so.", art: "approval") }
+            gate("Checking reads every password on this Mac, to find ones used twice, weak or old. It needs your Mac's say-so, and nothing is sent anywhere.",
+                 button: "Check passwords", busy: checking ? "Checking…" : nil, action: checkHealth)
         }
     }
 
@@ -487,7 +673,6 @@ struct PasswordsPanel: View {
                             Pill(reading ? "Reading…" : "Passwords file…", filled: true) { chooseFile() }
                                 .disabled(reading)
                             Pill("Another browser…") { browser.lead(to: InternalPage(.importing)) }
-                            Pill("Bookmarks and history file…") { browser.importFile() }
                         }
                         Text("Another browser reads its saved passwords straight from its profile: macOS asks once for that browser's keychain key, and nothing is changed there.")
                             .font(.system(size: 11.5))
@@ -522,19 +707,6 @@ struct PasswordsPanel: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .padding(14)
-                }
-            }
-
-            // What the list shows, all of it or what the search leaves: never
-            // more than can be seen (Browser.forgetShown).
-            let shown = rows.count
-            if shown > 0 {
-                HStack {
-                    Spacer(minLength: 0)
-                    Pill(browser.hunting.trimmingCharacters(in: .whitespaces).isEmpty ? "Remove All…" : "Remove \(shown)…", tint: .red.opacity(0.75)) {
-                        browser.forgetShown()
-                    }
-                    .disabled(browser.forgetting)
                 }
             }
         }
@@ -591,7 +763,7 @@ struct PasswordsPanel: View {
                         if plan.problems.count > 4 {
                             Text("and \(plan.problems.count - 4) more")
                                 .font(.system(size: 11.5))
-                                .foregroundStyle(Palette.faint)
+                                .foregroundStyle(Palette.muted)
                         }
                     }
                 }
@@ -636,7 +808,7 @@ struct PasswordsPanel: View {
                     if pendingFile != nil, !trashed, !cameFromBackup {
                         Pill("Move the file to the Trash", filled: true) { moveToTrash() }
                     } else if trashed {
-                        Text("In the Trash").font(.system(size: 12)).foregroundStyle(Palette.muted)
+                        Text("\(pendingFile?.lastPathComponent ?? "The file") moved to the Trash").font(.system(size: 12)).foregroundStyle(Palette.muted)
                     }
                     Pill("Done") { finished = nil; pendingFile = nil; trashed = false }
                 }
@@ -742,7 +914,7 @@ struct PasswordsPanel: View {
                     .frame(width: 280)
                     .onSubmit(openVault)
                 if let openError {
-                    Text(openError).font(.system(size: 12)).foregroundStyle(Palette.accent)
+                    errorLine(openError)
                 }
                 HStack(spacing: 8) {
                     Pill(reading ? "Opening…" : "Open", filled: true) { openVault() }
@@ -772,22 +944,33 @@ struct PasswordsPanel: View {
                     .fixedSize(horizontal: false, vertical: true)
                 if askingBackup {
                     VStack(alignment: .leading, spacing: 8) {
-                        SecureField("Passphrase (at least \(PasswordExport.shortest) characters)", text: $backupPass)
+                        SecureField("Passphrase", text: $backupPass)
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 320)
+                        if backupPass.count < PasswordExport.shortest {
+                            let more = PasswordExport.shortest - backupPass.count
+                            Text("At least \(PasswordExport.shortest) characters (\(more) more)")
+                                .font(.system(size: 11.5))
+                                .foregroundStyle(Palette.muted)
+                        }
                         SecureField("Again", text: $backupAgain)
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 320)
-                        Text(backupPass.isEmpty || backupAgain.isEmpty || backupPass == backupAgain
-                             ? "There is no way to open the backup without it: not even for \(Brand.name)."
-                             : "The two don't match.")
-                            .font(.system(size: 11.5))
-                            .foregroundStyle(!backupPass.isEmpty && !backupAgain.isEmpty && backupPass != backupAgain ? Palette.accent : Palette.muted)
+                        if !backupPass.isEmpty, !backupAgain.isEmpty, backupPass != backupAgain {
+                            errorLine("The two don't match.")
+                        } else {
+                            Text("There is no way to open the backup without it: not even for \(Brand.name).")
+                                .font(.system(size: 11.5))
+                                .foregroundStyle(Palette.muted)
+                        }
                         HStack(spacing: 8) {
                             Pill(exporting ? "Saving…" : "Save backup…", filled: true) {
-                                let passphrase = backupPass
-                                askingBackup = false; backupPass = ""; backupAgain = ""
-                                export(.backup, passphrase: passphrase)
+                                // The fields are let go of once the file is
+                                // written, not before: a save panel
+                                // cancelled should not cost a retype.
+                                export(.backup, passphrase: backupPass) {
+                                    askingBackup = false; backupPass = ""; backupAgain = ""
+                                }
                             }
                             .disabled(exporting || backupPass.count < PasswordExport.shortest || backupPass != backupAgain)
                             Pill("Cancel") { askingBackup = false; backupPass = ""; backupAgain = "" }
@@ -812,7 +995,7 @@ struct PasswordsPanel: View {
                             if exported.plain, !exportedTrashed {
                                 Pill("Move it to the Trash") { trashExport(exported.url) }
                             } else if exportedTrashed {
-                                Text("In the Trash").font(.system(size: 12)).foregroundStyle(Palette.muted)
+                                Text("\(exported.url.lastPathComponent) moved to the Trash").font(.system(size: 12)).foregroundStyle(Palette.muted)
                             }
                         }
                     }
@@ -835,20 +1018,20 @@ struct PasswordsPanel: View {
     /// A plain file is the one way out that leaves passwords readable, so it
     /// asks first, and says so.
     private func confirmPlain() {
-        let alert = NSAlert()
-        alert.messageText = "Write every password as plain text?"
-        alert.informativeText = "The file holds each site, account and password readable by anything that opens it, and by anyone who gets the file. Use an encrypted backup unless another manager needs a CSV."
-        alert.addButton(withTitle: "Write the file…")
-        alert.addButton(withTitle: "Cancel")
-        alert.alertStyle = .warning
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
-        exported = nil
-        export(.csv, passphrase: "")
+        Ask.sure(
+            "Write every password as plain text?",
+            detail: "The file holds each site, account and password readable by anything that opens it, and by anyone who gets the file. Use an encrypted backup unless another manager needs a CSV.",
+            confirm: "Write the file…",
+            returnCancels: true
+        ) {
+            exported = nil
+            export(.csv, passphrase: "")
+        }
     }
 
     /// Where to put it first, then the Mac's proof, then the read: nothing is
     /// held while a panel is up.
-    private func export(_ kind: Out, passphrase: String) {
+    private func export(_ kind: Out, passphrase: String, wrote: @escaping () -> Void = {}) {
         let panel = NSSavePanel()
         panel.canCreateDirectories = true
         switch kind {
@@ -884,6 +1067,7 @@ struct PasswordsPanel: View {
                     try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
                     exportedTrashed = false
                     exported = Exported(url: url, plain: kind == .csv, count: made.count, missed: all.count - made.count)
+                    wrote()
                 } catch {
                     browser.announce("Couldn't save the file")
                 }
@@ -953,36 +1137,54 @@ struct PasswordsPanel: View {
         let picked: Bool
         /// The last health check found something to say about it.
         let flagged: Bool
+        let focus: FocusState<String?>.Binding
         let pick: () -> Void
         @State private var hovering = false
 
         var body: some View {
-            HStack(spacing: 10) {
-                Mark(icon: Favicons.shared.cached(login.host), letter: login.host.first.map { String($0).uppercased() } ?? "•", size: 16)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(login.host)
-                        .font(.system(size: 13))
-                        .foregroundStyle(Palette.ink)
-                        .lineLimit(1)
-                    Text(login.user.isEmpty ? "No username" : login.user)
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(Palette.muted)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
+            Button(action: pick) {
+                HStack(spacing: 10) {
+                    Mark(icon: Favicons.shared.cached(login.host), letter: login.host.first.map { String($0).uppercased() } ?? "•", size: 16)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(login.host)
+                            .font(.system(size: 13))
+                            .foregroundStyle(Palette.ink)
+                            .lineLimit(1)
+                        Text(login.user.isEmpty ? "No username" : login.user)
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(Palette.muted)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    Spacer(minLength: 0)
+                    if flagged {
+                        Circle().fill(Palette.accent).frame(width: 6, height: 6)
+                            .help("The Health tab has something to say about this one")
+                    }
                 }
-                Spacer(minLength: 0)
-                if flagged {
-                    Circle().fill(Palette.accent).frame(width: 6, height: 6)
-                        .help("The Health tab has something to say about this one")
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                // The pick is a neutral wash with a thin bar of the accent,
+                // not a tint of it: the same quiet mark Settings uses.
+                .background(picked ? Palette.wash : (hovering ? Palette.hover : .clear))
+                .overlay(alignment: .leading) {
+                    if picked { Rectangle().fill(Palette.accent).frame(width: 2.5) }
                 }
+                .overlay(
+                    Rectangle()
+                        .strokeBorder(Palette.accent, lineWidth: 1.5)
+                        .opacity(focus.wrappedValue == login.id ? 1 : 0)
+                )
+                .contentShape(Rectangle())
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(picked ? Palette.accent.opacity(0.12) : (hovering ? Palette.hover : .clear))
-            .contentShape(Rectangle())
-            .onTapGesture(perform: pick)
+            .buttonStyle(.plain)
+            .focused(focus, equals: login.id)
+            .focusEffectDisabled()
             .onHover { hovering = $0 }
             .animation(Motion.quick, value: hovering)
+            .accessibilityLabel("\(login.host), \(login.user.isEmpty ? "No username" : login.user)")
+            .accessibilityAddTraits(picked ? .isSelected : [])
         }
     }
 
@@ -996,6 +1198,7 @@ struct PasswordsPanel: View {
         let login: Kept
         let edit: (Item) -> Void
         let copy: () -> Void
+        let announce: (String) -> Void
         let forget: () -> Void
 
         /// The whole item, from the moment it is shown to the moment it is
@@ -1022,10 +1225,15 @@ struct PasswordsPanel: View {
                 field("Username") {
                     Text(login.user.isEmpty ? "No username" : login.user)
                         .font(.system(size: 13))
-                        .foregroundStyle(login.user.isEmpty ? Palette.faint : Palette.ink)
+                        .foregroundStyle(login.user.isEmpty ? Palette.muted : Palette.ink)
                         .textSelection(.enabled)
                     Spacer(minLength: 8)
-                    if !login.user.isEmpty { Quick("Copy") { copyText(login.user) } }
+                    if !login.user.isEmpty {
+                        Quick("Copy") {
+                            KeptClipboard.put(login.user, clearAfter: nil)
+                            announce("Username copied")
+                        }
+                    }
                 }
 
                 field("Password") {
@@ -1038,6 +1246,9 @@ struct PasswordsPanel: View {
                         .textSelection(.enabled)
                     Spacer(minLength: 8)
                     Quick(item == nil ? "Show" : "Hide") { item == nil ? reveal() : conceal() }
+                    if item != nil {
+                        Text("Hides in 15s").font(.system(size: 11)).foregroundStyle(Palette.muted)
+                    }
                     Quick("Copy", act: copy)
                 }
 
@@ -1057,7 +1268,7 @@ struct PasswordsPanel: View {
                     if let text = item.extras.totp, !text.isEmpty {
                         field("Verification code") {
                             if let key = TOTP.key(from: text) {
-                                CodeLine(key: key)
+                                CodeLine(key: key, announce: announce)
                             } else {
                                 Text("The setup key isn't one this can read").font(.system(size: 12.5)).foregroundStyle(Palette.muted)
                                 Spacer(minLength: 0)
@@ -1071,7 +1282,7 @@ struct PasswordsPanel: View {
                 HStack(spacing: 8) {
                     Pill("Edit") { editNow() }
                     Spacer(minLength: 0)
-                    Pill("Remove", tint: .red.opacity(0.75), action: forget)
+                    Pill("Remove", tint: Tone.remove, action: forget)
                 }
             }
             .padding(18)
@@ -1089,11 +1300,6 @@ struct PasswordsPanel: View {
                     .padding(.vertical, 7)
                     .background(Palette.wash, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
             }
-        }
-
-        private func copyText(_ text: String) {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(text, forType: .string)
         }
 
         private func reveal() {
@@ -1135,6 +1341,9 @@ struct PasswordsPanel: View {
     private struct EditForm: View {
         @ObservedObject var browser: Browser
         let editing: Editing
+        /// Whether the fields differ from what was opened (or, for a new one,
+        /// are not empty), for the panel to ask before letting them go.
+        @Binding var dirty: Bool
         let done: (Kept?) -> Void
 
         @State private var site = ""
@@ -1181,7 +1390,7 @@ struct PasswordsPanel: View {
                     }
                 }
                 HStack(spacing: 8) {
-                    Pill("Cancel") { done(nil) }
+                    Pill("Cancel") { if isDirty { confirmDiscard { done(nil) } } else { done(nil) } }
                     Spacer(minLength: 0)
                     Pill("Save", filled: true, action: keep)
                         .disabled(Vault.host(of: site).isEmpty || password.isEmpty)
@@ -1197,41 +1406,58 @@ struct PasswordsPanel: View {
                 }
                 focus = existing == nil ? 0 : 2
             }
+            .onChange(of: isDirty) { _, now in dirty = now }
+            .onDisappear { dirty = false }
+        }
+
+        private var isDirty: Bool {
+            guard let item = existing else {
+                return ![site, user, password, title, notes, code, urls].allSatisfy(\.isEmpty)
+            }
+            return site != item.host || user != item.user || password != item.password
+                || title != (item.extras.title ?? "") || notes != (item.extras.notes ?? "")
+                || code != (item.extras.totp ?? "") || urls != (item.extras.urls ?? []).joined(separator: "\n")
         }
 
         /// A new password, made here: random characters or a few plain words,
         /// as strong as the bar says. Generate puts it in the box above and
         /// shows it, so it can be read before it is kept.
         private var generator: some View {
-            HStack(spacing: 10) {
-                Picker("", selection: $options.style) {
-                    ForEach(PasswordGenerator.Style.allCases) { Text($0.rawValue).tag($0) }
+            // Two lines: the pieces together are wider than the card is.
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 10) {
+                    Picker("", selection: $options.style) {
+                        ForEach(PasswordGenerator.Style.allCases) { Text($0.rawValue).tag($0) }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .frame(width: 180)
+                    Spacer(minLength: 0)
+                    Pill("Generate") {
+                        password = PasswordGenerator.make(options)
+                        showing = true
+                    }
                 }
-                .labelsHidden()
-                .pickerStyle(.segmented)
-                .frame(width: 180)
-                if options.style == .random {
-                    Stepper("Length \(options.length)", value: $options.length, in: PasswordGenerator.Options.lengths)
+                HStack(spacing: 10) {
+                    if options.style == .random {
+                        Stepper("Length \(options.length)", value: $options.length, in: PasswordGenerator.Options.lengths)
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(Palette.muted)
+                            .fixedSize()
+                        Toggle("Symbols", isOn: $options.symbols)
+                            .toggleStyle(.checkbox)
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(Palette.muted)
+                    } else {
+                        Stepper("Words \(options.words)", value: $options.words, in: PasswordGenerator.Options.wordCounts)
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(Palette.muted)
+                            .fixedSize()
+                    }
+                    Spacer(minLength: 0)
+                    Text(PasswordGenerator.strength(PasswordGenerator.bits(options)))
                         .font(.system(size: 11.5))
                         .foregroundStyle(Palette.muted)
-                        .fixedSize()
-                    Toggle("Symbols", isOn: $options.symbols)
-                        .toggleStyle(.checkbox)
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(Palette.muted)
-                } else {
-                    Stepper("Words \(options.words)", value: $options.words, in: PasswordGenerator.Options.wordCounts)
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(Palette.muted)
-                        .fixedSize()
-                }
-                Spacer(minLength: 0)
-                Text(PasswordGenerator.strength(PasswordGenerator.bits(options)))
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(Palette.muted)
-                Pill("Generate") {
-                    password = PasswordGenerator.make(options)
-                    showing = true
                 }
             }
             .onChange(of: options) { _, new in PasswordGenerator.Options.saved = new }
@@ -1258,7 +1484,8 @@ struct PasswordsPanel: View {
             }
             let others = urls.split(whereSeparator: \.isNewline).compactMap { clean(String($0)) }
             let extras = Extras(title: clean(title), notes: clean(notes), totp: clean(code),
-                                urls: others.isEmpty ? nil : others, changed: Date())
+                                urls: others.isEmpty ? nil : others,
+                            changed: Extras.changedDate(existing: existing, newPassword: password))
             let item = Item(host: host, user: user.trimmingCharacters(in: .whitespaces), password: password, extras: extras,
                             used: existing?.used, clear: existing?.clear ?? false)
             let old = existing.map { Kept(host: $0.host, user: $0.user, used: $0.used, clear: $0.clear) }

@@ -73,10 +73,18 @@ struct AccountList: View {
                 Image(systemName: contactsOnly ? "person.crop.rectangle" : "key")
                     .font(.system(size: 9, weight: .medium))
                 Text(footer)
-                    .font(.system(size: 10.5))
+                    .font(.system(size: 11))
                 Spacer(minLength: 0)
+                // Not a row: ↓ and ↑ walk `choices`, and this is no account.
+                Button { browser.lead(to: InternalPage(.passwords)) } label: {
+                    Text("Passwords…")
+                        .font(.system(size: 11, weight: .medium))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Palette.ink)
+                .help("Open your passwords")
             }
-            .foregroundStyle(Palette.faint)
+            .foregroundStyle(Palette.muted)
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
             .background(Palette.wash.opacity(0.5))
@@ -106,8 +114,8 @@ struct AccountList: View {
             ForEach(Array(choices.enumerated()), id: \.offset) { at, choice in
                 if at == asked.othersFrom {
                     Text("Other accounts on \(Vault.registrable(asked.host))")
-                        .font(.system(size: 10.5))
-                        .foregroundStyle(Palette.faint)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Palette.muted)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 5)
@@ -125,14 +133,16 @@ struct AccountList: View {
             Row(mark: .symbol("person.badge.key"), name: passkey.name,
                 detail: "Passkey" + (passkey.provider.map { " · \($0)" } ?? ""), lit: lit) { browser.choose(passkey) }
         case .login(let login):
-            Row(mark: .letter(login.user.first.map { String($0).uppercased() } ?? "•"),
-                name: login.user.isEmpty ? "No name" : login.user, detail: login.host, lit: lit) { browser.choose(login) }
+            // The site's icon, as on the Passwords page, so one account
+            // looks the same in both places.
+            Row(mark: .site(Favicons.shared.cached(login.host), login.host.first.map { String($0).uppercased() } ?? "•"),
+                name: login.user.isEmpty ? "No username" : login.user, detail: login.host, lit: lit) { browser.choose(login) }
         case .code(let account):
             Row(mark: .symbol("number"), name: account.user.isEmpty ? "Verification code" : account.user,
                 detail: "Verification code", lit: lit) { browser.chooseCode(account) }
         case .suggest:
             Row(mark: .symbol("key"), name: "Suggest a strong password",
-                detail: "Made here. Also fills the confirm box", lit: lit) { browser.useSuggestion() }
+                detail: Self.kindOfSuggestion + " · fills both boxes", lit: lit) { browser.useSuggestion() }
         case .contact(let contact):
             // A click fills the form; a shift-click, the box alone.
             Row(mark: .symbol("person.crop.circle"), name: contact.title, detail: contact.detail, lit: lit) {
@@ -155,7 +165,17 @@ struct AccountList: View {
         return "From your keychain"
     }
 
-    private enum Mark { case letter(String), symbol(String) }
+    /// What the strong password will be, from the choice made in Add, so the
+    /// row says what a click makes.
+    private static var kindOfSuggestion: String {
+        let options = PasswordGenerator.Options.saved
+        switch options.style {
+        case .random: return "Random, \(options.length) characters"
+        case .phrase: return "Passphrase, \(options.words) words"
+        }
+    }
+
+    private enum Badge { case symbol(String), site(NSImage?, String) }
 
     /// Offers its content no more than `room` and is as tall as the content
     /// then is: a short list keeps its own height, a long one stops at
@@ -176,7 +196,7 @@ struct AccountList: View {
     }
 
     private struct Row: View {
-        let mark: Mark
+        let mark: Badge
         let name: String
         let detail: String
         /// Come to with ↓ and ↑: lit as under the pointer.
@@ -189,20 +209,22 @@ struct AccountList: View {
                 HStack(spacing: 10) {
                     Group {
                         switch mark {
-                        case .letter(let letter): Text(letter).font(.system(size: 11, weight: .medium))
-                        case .symbol(let name): Ink(name, size: 10).font(.system(size: 10, weight: .medium))
+                        case .site(let icon, let letter):
+                            Mark(icon: icon, letter: letter, size: 22)
+                        case .symbol(let name):
+                            Ink(name, size: 10).font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(Palette.ink)
+                                .frame(width: 22, height: 22)
+                                .background(Palette.wash, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
                         }
                     }
-                    .foregroundStyle(Palette.ink)
-                    .frame(width: 22, height: 22)
-                    .background(Palette.wash, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
                     VStack(alignment: .leading, spacing: 1) {
                         Text(name)
                             .font(.system(size: 12.5))
                             .foregroundStyle(Palette.ink)
                             .lineLimit(1)
                         Text(detail)
-                            .font(.system(size: 10.5))
+                            .font(.system(size: 11))
                             .foregroundStyle(Palette.muted)
                             .lineLimit(1)
                     }

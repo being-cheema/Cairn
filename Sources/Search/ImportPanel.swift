@@ -260,7 +260,7 @@ struct ImportPanel: View {
                 }
             }
             .font(.system(size: 11.5))
-            .foregroundStyle(Palette.faint)
+            .foregroundStyle(Palette.muted)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.leading, 2)
         }
@@ -343,11 +343,11 @@ struct ImportPanel: View {
                                                           : "\(source.name) keeps them in the Passwords app: export them from there and bring in the CSV file") : preview?.passwords == 0 ? "None in \(source.name)" : source.asksForKey
                  ? "macOS asks once for \(source.name)'s keychain key"
                  : "Read from \(source.name)'s own files, unless it has a primary password") {
-                option($wantsPasswords, none: !source.importsPasswords || preview?.passwords == 0)
+                option($wantsPasswords, label: "Passwords", none: !source.importsPasswords || preview?.passwords == 0)
             }
             Rule()
             Line("Bookmarks", preview?.bookmarks == 0 ? "None in \(source.name)" : "In a “\(source.name)” folder, or at the top if you have none yet") {
-                option($wantsBookmarks, none: preview?.bookmarks == 0)
+                option($wantsBookmarks, label: "Bookmarks", none: preview?.bookmarks == 0)
             }
             // Brought before: only what is new comes, unless what came from
             // it last time is to go first. An import from before this was
@@ -358,18 +358,18 @@ struct ImportPanel: View {
                 Line("Replace what came from \(source.name) before",
                      recorded ? "Its bookmarks from \(record.date.formatted(.dateTime.day().month())) go, and these come fresh; passwords only ever add"
                               : "Nothing recorded from \(source.name) yet — only what is new comes") {
-                    option($replaceBookmarks, none: !recorded)
+                    option($replaceBookmarks, label: "Replace bookmarks that came before", none: !recorded)
                 }
             }
             Rule()
             Line("History", preview?.places == 0 ? "None in \(source.name)" : "The last \((preview.map { $0.places } ?? 3000).formatted()) places") {
-                option($wantsHistory, none: preview?.places == 0)
+                option($wantsHistory, label: "History", none: preview?.places == 0)
             }
             // Its open tabs and tab groups, asleep at the end of this space.
             if source.readsOpenTabs {
                 Rule()
                 Line("Open tabs & tab groups", tabsDetail(preview, source)) {
-                    option($wantsTabs, none: !bringsTabs(source))
+                    option($wantsTabs, label: "Open tabs and tab groups", none: !bringsTabs(source))
                 }
             }
             // Arc's own, or Zen's: its spaces, what is pinned in them, its
@@ -377,7 +377,7 @@ struct ImportPanel: View {
             if let arc = arcCounts[key(source, profile(of: source))], arc.spaces + arc.pinned > 0 {
                 Rule()
                 Line("Spaces and pinned tabs", arcDetail(arc, source)) {
-                    Switch(on: $wantsArc)
+                    Switch(on: $wantsArc, label: "Spaces and pinned tabs")
                 }
                 // Pinned pages only keep their shape as pinned rows, and
                 // those are off until asked for. This is the moment someone
@@ -409,7 +409,7 @@ struct ImportPanel: View {
             if !extensions.isEmpty {
                 Rule()
                 Line("Extensions", "\(extensions.count) found — installed fresh from the Chrome Web Store, you say yes to each one") {
-                    Switch(on: $wantsExtensions)
+                    Switch(on: $wantsExtensions, label: "Extensions")
                 }
             }
         }
@@ -460,11 +460,11 @@ struct ImportPanel: View {
 
     /// A kind's switch; off and out of reach when there is none of it.
     @ViewBuilder
-    private func option(_ on: Binding<Bool>, none: Bool) -> some View {
+    private func option(_ on: Binding<Bool>, label: String, none: Bool) -> some View {
         if none {
-            Switch(on: .constant(false)).disabled(true).opacity(0.4)
+            Switch(on: .constant(false), label: label).disabled(true)
         } else {
-            Switch(on: on)
+            Switch(on: on, label: label)
         }
     }
 
@@ -619,7 +619,7 @@ struct ImportPanel: View {
                     arcSaid = nil
                 }
             } else if arcSaid == nil {
-                Pill("Set Up Like Arc", filled: true) {
+                Pill("Set up like Arc", filled: true) {
                     arcSaid = LikeArc.said(withAnimation(Motion.glide) { likeArc.setUp(browser.prefs) })
                 }
             }
@@ -637,22 +637,28 @@ struct ImportPanel: View {
         @State private var hovering = false
 
         var body: some View {
-            HStack(spacing: 12) {
-                Circle()
-                    .strokeBorder(chosen ? Palette.ink : Palette.faint, lineWidth: chosen ? 4.5 : 1.2)
-                    .frame(width: 14, height: 14)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(name).font(.system(size: 13)).foregroundStyle(Palette.ink)
-                    Text(detail).font(.system(size: 11.5)).foregroundStyle(Palette.muted).monospacedDigit()
-                    Text(can).font(.system(size: 11)).foregroundStyle(Palette.faint)
+            Button(action: pick) {
+                HStack(spacing: 12) {
+                    Circle()
+                        .strokeBorder(chosen ? Palette.ink : Palette.quiet, lineWidth: chosen ? 4.5 : 1.2)
+                        .frame(width: 14, height: 14)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(name).font(.system(size: 13)).foregroundStyle(Palette.ink)
+                        Text(detail).font(.system(size: 11.5)).foregroundStyle(Palette.muted).monospacedDigit()
+                        Text(can).font(.system(size: 11)).foregroundStyle(Palette.muted)
+                    }
+                    Spacer(minLength: 0)
                 }
-                Spacer(minLength: 0)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
+                .background(hovering ? Palette.hover : .clear)
+                .contentShape(Rectangle())
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 9)
-            .background(hovering ? Palette.hover : .clear)
-            .contentShape(Rectangle())
-            .onTapGesture(perform: pick)
+            // A button, so the keyboard and VoiceOver reach it; the picked
+            // browser says so.
+            .buttonStyle(.plain)
+            .focusRing(Rectangle())
+            .accessibilityAddTraits(chosen ? .isSelected : [])
             .onHover { hovering = $0 }
             .animation(Motion.quick, value: hovering)
         }

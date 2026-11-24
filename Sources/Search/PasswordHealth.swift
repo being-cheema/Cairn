@@ -8,8 +8,26 @@ enum PasswordHealth {
         case reused = "Reused"
         case weak = "Weak"
         case old = "Old"
-        case plain = "Over http"
+        case plain = "Sent unencrypted"
         var id: String { rawValue }
+
+        /// One line under the count, so nothing hides in a tooltip.
+        var detail: String {
+            switch self {
+            case .reused: "The same password on more than one account"
+            case .weak: "Short, or among the most common"
+            case .old: "Not changed in over a year"
+            case .plain: "Kept from a page sent over plain http"
+            }
+        }
+
+        /// The tooltip: the same, with what it can't know.
+        var help: String {
+            switch self {
+            case .old: "Not changed in over a year (only where the date is known)"
+            default: detail
+            }
+        }
     }
 
     /// What the check needs of one item; the password is dropped after.

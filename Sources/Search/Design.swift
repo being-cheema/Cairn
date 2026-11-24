@@ -13,7 +13,13 @@ import AppKit
 enum Palette {
     static let ground = Color(nsColor: NS.ground)
     static let ink = Color(nsColor: NS.ink)             // neutral-900 · neutral-100
-    static let muted = Color(nsColor: NS.muted)         // neutral-500
+    /// For words. Light is deep enough for 4.5:1 on the paper and on white.
+    static let muted = Color(nsColor: NS.muted)         // neutral-600 · neutral-400
+    /// The old, lighter grey: for marks that carry no words (a grip, a ring,
+    /// a stroke), where 3:1 is the bar and the darker muted would be heavy.
+    static let quiet = Color(nsColor: NS.quiet)
+    /// A switch's off track: 3:1 against the ground, which `faint` isn't.
+    static let track = Color(nsColor: NS.track)
     static let faint = Color(nsColor: NS.faint)         // neutral-300 · neutral-700
     static let hairline = Color(nsColor: NS.hairline)   // neutral-200 · neutral-800
     static let wash = Color(nsColor: NS.wash)           // the live tab
@@ -38,7 +44,9 @@ enum Palette {
         /// Paper, not white: the page's card stays the page's own white.
         static let ground = tint(light: (0.980, 0.969, 0.949), dark: (0.090, 0.090, 0.090))
         static let ink = duo(0.09, dark: (0.941, 0.941, 0.941))
-        static let muted = duo(0.55, dark: (0.600, 0.600, 0.600))
+        static let muted = duo(0.42, dark: (0.600, 0.600, 0.600))
+        static let quiet = duo(0.55, dark: (0.600, 0.600, 0.600))
+        static let track = duo(0.55, dark: (0.420, 0.420, 0.420))
         static let faint = duo(0.83, dark: (0.350, 0.350, 0.350))
         static let hairline = duo(0.91, dark: (0.190, 0.190, 0.190))
         static let wash = duo(0.937, dark: (0.140, 0.140, 0.140))
@@ -49,9 +57,10 @@ enum Palette {
         static let safe = tint(light: (0.08, 0.50, 0.24), dark: (0.29, 0.87, 0.50))
         static let unsafe = tint(light: (0.71, 0.33, 0.04), dark: (0.98, 0.75, 0.14))
         /// The one colour of the hand: coral, as on Anthropic's own pages.
-        /// Light is deep enough to read as text on paper; dark is the lighter
+        /// Light is deep enough to read as text on paper (4.5:1), and to carry
+        /// the ground's colour as a filled pill's words; dark is the lighter
         /// coral for a dark ground.
-        static let accent = tint(light: (0.784, 0.380, 0.247), dark: (0.898, 0.561, 0.439))
+        static let accent = tint(light: (0.700, 0.310, 0.190), dark: (0.898, 0.561, 0.439))
 
         private static func tint(light: (CGFloat, CGFloat, CGFloat), dark: (CGFloat, CGFloat, CGFloat)) -> NSColor {
             NSColor(name: nil) { appearance in
@@ -108,11 +117,11 @@ struct Greys {
     static let white = Greys(wash: shade(0.063, 0.073), hover: shade(0.035, 0.045),
                              tile: shade(0.063, 0.073).opacity(0.55), pinLive: shade(0.10, 0.112),
                              washOnTile: shade(0.0294, 0.0342), hoverOnTile: shade(0.004, 0.005),
-                             muted: shade(0.45, 0.5281), faint: shade(0.17, 0.236))
+                             muted: shade(0.58, 0.5281), faint: shade(0.17, 0.236))
     static let frame = Greys(wash: shade(0.0628, 0.0865), hover: shade(0.0419, 0.0595),
                              tile: shade(0.0314, 0.0432), pinLive: shade(0.0995, 0.1243),
                              washOnTile: shade(0.0324, 0.0452), hoverOnTile: shade(0.0108, 0.0169),
-                             muted: shade(0.4241, 0.5459), faint: shade(0.1309, 0.2649))
+                             muted: shade(0.56, 0.5459), faint: shade(0.1309, 0.2649))
 
     private static func shade(_ light: CGFloat, _ dark: CGFloat) -> Color {
         Color(nsColor: NSColor(name: nil) { appearance in
@@ -180,6 +189,12 @@ enum Typeface {
     static func heading(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
         .system(size: size, weight: weight, design: .serif)
     }
+}
+
+/// What the blank tab's field says, once, for the field and for the
+/// pictures of it (Settings › Themes), which had drifted apart.
+enum NewTabWords {
+    static let address = "Enter a web address"
 }
 
 enum Metrics {
@@ -302,7 +317,7 @@ struct EdgeGrip: View {
 
     var body: some View {
         Capsule(style: .continuous)
-            .fill(lit ? Palette.muted : Palette.faint)
+            .fill(lit ? Palette.quiet : Palette.faint)
             .frame(width: Grip.width, height: lit ? Grip.lit : Grip.rest)
             .opacity(lit || resting ? 1 : 0)
             .animation(Motion.quick, value: lit)

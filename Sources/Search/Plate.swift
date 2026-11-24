@@ -52,10 +52,11 @@ struct Plate<Content: View, Foot: View>: View {
                         Ink("chevron.left", size: 11)
                         Text("Settings")
                     }
-                    .font(.system(size: 13))
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(Palette.accent)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Back to Settings")
                 .padding(.top, 36)
                 .padding(.bottom, -22)
             }
@@ -196,6 +197,7 @@ struct Line<Control: View>: View {
             }
             Spacer(minLength: 8)
             control()
+                .environment(\.switchLabel, title)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 11)
@@ -239,9 +241,13 @@ struct Hunt: View {
                 Button { text = "" } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 11))
-                        .foregroundStyle(Palette.faint)
+                        .foregroundStyle(Palette.muted)
+                        // A glyph this small is hard to land on.
+                        .frame(width: 20, height: 20)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Clear search")
             }
         }
         .padding(.horizontal, 12)
@@ -292,7 +298,13 @@ struct Quick: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(Palette.wash, in: Capsule())
+                // Drawn small, hit at a comfortable height.
+                .padding(.vertical, 3)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .opacity(enabled ? 1 : 0.4)
     }
+
+    @Environment(\.isEnabled) private var enabled
 }

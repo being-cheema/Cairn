@@ -171,7 +171,7 @@ struct ClaudePanel: View {
     private var composer: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .bottom, spacing: 8) {
-                TextField("", text: $session.draft, prompt: Text("Ask Claude…").foregroundStyle(Palette.faint), axis: .vertical)
+                TextField("", text: $session.draft, prompt: Text("Ask Claude…").foregroundStyle(Palette.muted), axis: .vertical)
                     .textFieldStyle(.plain)
                     .font(.system(size: 13))
                     .foregroundStyle(Palette.ink)
@@ -191,8 +191,8 @@ struct ClaudePanel: View {
             HStack(spacing: 6) {
                 modelMenu
                 Text("· Claude Code on this Mac · may be wrong")
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(Palette.faint)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Palette.muted)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
@@ -284,7 +284,7 @@ struct ClaudePanel: View {
                         if turn.steps.count > Self.shown {
                             Text("\(turn.steps.count - Self.shown) earlier steps")
                                 .font(.system(size: 11))
-                                .foregroundStyle(Palette.faint)
+                                .foregroundStyle(Palette.muted)
                         }
                         let tail = Array(turn.steps.suffix(Self.shown).enumerated())
                         ForEach(tail, id: \.offset) { index, step in
@@ -298,7 +298,7 @@ struct ClaudePanel: View {
                                 Text(verbatim: step)
                                     .font(.system(size: 11.5))
                             }
-                            .foregroundStyle(live ? Palette.muted : Palette.faint)
+                            .foregroundStyle(live ? Palette.ink : Palette.muted)
                         }
                     }
                 }

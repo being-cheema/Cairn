@@ -114,9 +114,10 @@ struct WelcomePanel: View {
     private var devices: some View {
         VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 14) {
-                Choice("Sync with iCloud", "Open tabs, pins, spaces, bookmarks and a few settings, on your iPhone and other Macs. End-to-end encrypted, in your own iCloud.", on: $syncs, plain: true)
+                Choice("Sync with iCloud", "Open tabs, pins, spaces, bookmarks and a few settings, on your iPhone and other Macs. End-to-end encrypted, in your own iCloud.", on: $syncs,
+                       unavailable: ICloudSync.shared.available ? nil : "Needs a build of \(Brand.name) signed for iCloud")
                 Rule(inset: 0)
-                Choice("Handoff", "The page in front shows up on your iPhone and iPad.", on: $handsOff, plain: true)
+                Choice("Handoff", "The page in front shows up on your iPhone and iPad.", on: $handsOff)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
@@ -139,7 +140,7 @@ struct WelcomePanel: View {
                 if unreadable.isEmpty {
                     Text("No other browser found on this Mac — nothing to bring.")
                         .font(.system(size: 13))
-                        .foregroundStyle(Palette.faint)
+                        .foregroundStyle(Palette.muted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             } else {
@@ -158,7 +159,7 @@ struct WelcomePanel: View {
                     // are in the full sheet (File › Bring Things Over…).
                     Text("\((source ?? sources[0]).name) can bring: \((source ?? sources[0]).canBringLine.lowercased())")
                         .font(.system(size: 12))
-                        .foregroundStyle(Palette.faint)
+                        .foregroundStyle(Palette.muted)
                     if importsPasswords {
                         Choice("Passwords", "macOS will ask once for that browser's keychain key", on: $wantsPasswords)
                     } else {
@@ -188,7 +189,7 @@ struct WelcomePanel: View {
             if !unreadable.isEmpty {
                 Text(unreadable.map(\.message).joined(separator: "\n"))
                     .font(.system(size: 13))
-                    .foregroundStyle(Palette.faint)
+                    .foregroundStyle(Palette.muted)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -241,9 +242,9 @@ struct WelcomePanel: View {
             } else if prefs.looksLikeArc {
                 Text(arcSaid == nil ? "Set up like Arc" : "")
                     .font(.system(size: 12))
-                    .foregroundStyle(Palette.faint)
+                    .foregroundStyle(Palette.muted)
             } else {
-                Big("Set Up Like Arc") {
+                Big("Set up like Arc") {
                     arcSaid = LikeArc.said(withAnimation(Motion.glide) { likeArc.setUp(prefs) })
                 }
             }
@@ -274,7 +275,7 @@ struct WelcomePanel: View {
                     if asked, !isDefault {
                         Text("macOS asks in its own dialog")
                             .font(.system(size: 13))
-                            .foregroundStyle(Palette.faint)
+                            .foregroundStyle(Palette.muted)
                     }
                 }
             }
@@ -283,7 +284,7 @@ struct WelcomePanel: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text("A few things worth knowing")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Palette.faint)
+                    .foregroundStyle(Palette.muted)
                     .textCase(.uppercase)
                     .tracking(0.6)
                     .padding(.top, 6)
@@ -401,7 +402,9 @@ struct WelcomePanel: View {
     }
 
     private func finish() {
-        SyncDefault.welcomeLeft(sync: syncs, handoff: handsOff, prefs: prefs, icloud: ICloudSync.shared)
+        // Never a sync this build can't start: the switch showed off and
+        // out of reach, and its stored default must not wait on iCloud behind it.
+        SyncDefault.welcomeLeft(sync: syncs && ICloudSync.shared.available, handoff: handsOff, prefs: prefs, icloud: ICloudSync.shared)
         prefs.welcomed = true
         withAnimation(Motion.settle) { browser.welcoming = false }
     }
@@ -438,6 +441,7 @@ struct WelcomePanel: View {
         var filled = false
         let act: () -> Void
         @State private var hovering = false
+        @Environment(\.isEnabled) private var enabled
 
         init(_ title: String, filled: Bool = false, act: @escaping () -> Void) {
             self.title = title
@@ -452,10 +456,12 @@ struct WelcomePanel: View {
                     .foregroundStyle(filled ? Palette.ground : Palette.ink)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 9)
-                    .background(filled ? Palette.accent : (hovering ? Palette.hover : Palette.wash), in: Capsule())
+                    .background(filled ? Palette.accent : (hovering && enabled ? Palette.hover : Palette.wash), in: Capsule())
                     .contentShape(Capsule())
             }
             .buttonStyle(.plain)
+            .focusRing(Capsule())
+            .opacity(enabled ? 1 : 0.4)
             .onHover { hovering = $0 }
         }
     }
@@ -464,25 +470,30 @@ struct WelcomePanel: View {
         let title: String
         let detail: String
         @Binding var on: Bool
-        /// The line under in the darker grey, for one that must be read.
-        var plain = false
+        /// Why it can't be turned on, when it can't: the switch is then
+        /// off and out of reach, and the line says so.
+        var unavailable: String?
 
-        init(_ title: String, _ detail: String, on: Binding<Bool>, plain: Bool = false) {
+        init(_ title: String, _ detail: String, on: Binding<Bool>, unavailable: String? = nil) {
             self.title = title
             self.detail = detail
             _on = on
-            self.plain = plain
+            self.unavailable = unavailable
         }
 
         var body: some View {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(.system(size: 13.5)).foregroundStyle(Palette.ink)
-                    Text(detail).font(.system(size: 11.5)).foregroundStyle(plain ? Palette.muted : Palette.faint)
+                    Text(detail).font(.system(size: 11.5)).foregroundStyle(Palette.muted)
                         .fixedSize(horizontal: false, vertical: true)
+                    if let unavailable {
+                        Text(unavailable).font(.system(size: 11.5, weight: .medium)).foregroundStyle(Palette.ink)
+                    }
                 }
                 Spacer()
-                Switch(on: $on)
+                Switch(on: unavailable == nil ? $on : .constant(false), label: title)
+                    .disabled(unavailable != nil)
             }
         }
     }
