@@ -615,6 +615,7 @@ struct PasswordsPanel: View {
         @State private var code = ""
         @State private var urls = ""
         @State private var showing = false
+        @State private var options = PasswordGenerator.Options.saved
         @FocusState private var focus: Int?
 
         private var existing: Item? { if case .existing(let item) = editing { item } else { nil } }
@@ -636,6 +637,7 @@ struct PasswordsPanel: View {
                             .focused($focus, equals: 2)
                             Quick(showing ? "Hide" : "Show") { showing.toggle() }
                         }
+                        generator
                         row("Name (optional)") { TextField("", text: $title) }
                         row("Verification code setup key (optional)") {
                             SecureField("otpauth:// link or setup key", text: $code)
@@ -665,6 +667,44 @@ struct PasswordsPanel: View {
                 }
                 focus = existing == nil ? 0 : 2
             }
+        }
+
+        /// A new password, made here: random characters or a few plain words,
+        /// as strong as the bar says. Generate puts it in the box above and
+        /// shows it, so it can be read before it is kept.
+        private var generator: some View {
+            HStack(spacing: 10) {
+                Picker("", selection: $options.style) {
+                    ForEach(PasswordGenerator.Style.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+                .frame(width: 180)
+                if options.style == .random {
+                    Stepper("Length \(options.length)", value: $options.length, in: PasswordGenerator.Options.lengths)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Palette.muted)
+                        .fixedSize()
+                    Toggle("Symbols", isOn: $options.symbols)
+                        .toggleStyle(.checkbox)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Palette.muted)
+                } else {
+                    Stepper("Words \(options.words)", value: $options.words, in: PasswordGenerator.Options.wordCounts)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Palette.muted)
+                        .fixedSize()
+                }
+                Spacer(minLength: 0)
+                Text(PasswordGenerator.strength(PasswordGenerator.bits(options)))
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Palette.muted)
+                Pill("Generate") {
+                    password = PasswordGenerator.make(options)
+                    showing = true
+                }
+            }
+            .onChange(of: options) { _, new in PasswordGenerator.Options.saved = new }
         }
 
         private func row<Content: View>(_ label: String, tall: Bool = false, @ViewBuilder _ content: () -> Content) -> some View {

@@ -127,6 +127,9 @@ struct AccountList: View {
         case .login(let login):
             Row(mark: .letter(login.user.first.map { String($0).uppercased() } ?? "•"),
                 name: login.user.isEmpty ? "No name" : login.user, detail: login.host, lit: lit) { browser.choose(login) }
+        case .suggest:
+            Row(mark: .symbol("key"), name: "Suggest a strong password",
+                detail: "Made here. Also fills the confirm box", lit: lit) { browser.useSuggestion() }
         case .contact(let contact):
             // A click fills the form; a shift-click, the box alone.
             Row(mark: .symbol("person.crop.circle"), name: contact.title, detail: contact.detail, lit: lit) {
@@ -143,6 +146,7 @@ struct AccountList: View {
 
     private var footer: String {
         if contactsOnly { return "From your card in Contacts" }
+        if asked.suggestsNew && asked.logins.isEmpty && asked.passkeys.isEmpty { return "Made on this Mac, never sent anywhere" }
         if asked.logins.isEmpty { return "Passkeys on this Mac" }
         return "From your keychain"
     }
@@ -217,13 +221,15 @@ extension Browser.Suggesting {
     enum Choice: Equatable {
         case passkey(Passkeys.Offered)
         case login(Kept)
+        /// "Suggest a strong password", under a box for a new one.
+        case suggest
         case contact(MeCard.Offer)
     }
 
     /// The rows top to bottom, as drawn and as ↓ walks them.
     var choices: [Choice] {
         passkeys.map(Choice.passkey) + ownLogins.map(Choice.login)
-            + siteLogins.map(Choice.login) + contacts.map(Choice.contact)
+            + siteLogins.map(Choice.login) + (suggestsNew ? [.suggest] : []) + contacts.map(Choice.contact)
     }
 
     /// Where "Other accounts on …" goes, before the first of the rest of the

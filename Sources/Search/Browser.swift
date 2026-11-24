@@ -980,6 +980,8 @@ final class Browser: NSObject, ObservableObject {
         let clear: Bool
         /// Hung from a first step's name box: a pick puts in the name alone.
         var nameOnly = false
+        /// Under a box for a new password: offer to make one.
+        var suggestsNew = false
         /// When it came up. A page can put the caret in a sign-in box
         /// itself, an invisible one under the pointer included: a click that
         /// was already on its way is not a choice, so the list takes none for
@@ -1109,19 +1111,22 @@ final class Browser: NSObject, ObservableObject {
             guard case .contact(let kind, _) = fill, prefs.fillsContacts, MeCard.allowed else { return [] }
             return MeCard.shared.offers(for: kind)
         }()
-        guard !known.isEmpty || !passkeys.isEmpty || !contacts.isEmpty else {
+        // A sign-up's or a change-password form's box: a strong password, made
+        // here. Never in a private tab, never on a page sent in the clear.
+        let suggests = fill == .fresh && prefs.suggestsPasswords && !tab.shy && !tab.agent && !inTheClear
+        guard !known.isEmpty || !passkeys.isEmpty || !contacts.isEmpty || suggests else {
             suggesting = nil
             return
         }
         // What is under the pointer changed: the half second starts again.
         if let up = suggesting, up.tab == tab.id, up.logins == known, up.passkeys == passkeys, up.nameOnly == name,
-           up.wide == wide, up.contacts == contacts, up.box == box,
+           up.wide == wide, up.contacts == contacts, up.box == box, up.suggestsNew == suggests,
            up.page == (contacts.isEmpty ? nil : tab.pageAddress) {
             suggesting?.spot = spot
             return
         }
         suggesting = Suggesting(tab: tab.id, spot: spot, logins: known, passkeys: passkeys, host: host, clear: inTheClear,
-                                nameOnly: name, wide: wide,
+                                nameOnly: name, suggestsNew: suggests, wide: wide,
                                 contacts: contacts, box: box, page: contacts.isEmpty ? nil : tab.pageAddress)
     }
 
@@ -1145,6 +1150,26 @@ final class Browser: NSObject, ObservableObject {
     func testSuggest(_ list: Suggesting) {
         guard Store.testing else { return }
         suggesting = list
+    }
+
+    /// "Suggest a strong password", picked: one is made here and put into the
+    /// box and its form's confirm box, if the page is still the one it was
+    /// offered on and still over https. It is kept like any other when the form
+    /// is sent (the question to save, as for a password typed by hand).
+    func useSuggestion() {
+        lowering?.cancel()
+        guard let list = suggesting, list.suggestsNew, let tab = tabs.first(where: { $0.id == list.tab }) else { return }
+        guard Date().timeIntervalSince(list.shown) > 0.5 else { return }
+        suggesting = nil
+        guard curtain.host(of: tab.pageAddress) == list.host, tab.pageAddress?.scheme?.lowercased() == "https",
+              !tab.shy, !tab.agent
+        else { return }
+        pickedInto = tab.id
+        let password = PasswordGenerator.make(PasswordGenerator.Options.saved)
+        tab.fillFresh(password, onlyOn: tab.pageAddress) { [weak self] worked in
+            self?.announce(worked ? "A strong password is filled in. \(Brand.name) asks to keep it when you send the form"
+                                  : "Couldn't find the password box anymore")
+        }
     }
 
     /// One of the accounts in the list, picked by name.
@@ -1245,6 +1270,7 @@ final class Browser: NSObject, ObservableObject {
         switch list.choices[at] {
         case .passkey(let passkey): choose(passkey)
         case .login(let login): choose(login)
+        case .suggest: useSuggestion()
         case .contact(let contact): choose(contact, alone: alone)
         }
         return true

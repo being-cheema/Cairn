@@ -72,7 +72,8 @@ final class FormRelay: NSObject, WKScriptMessageHandler {
                     tab?.fieldFocused(CGRect(x: x, y: y, width: w, height: h), passwords: body["passwords"] as? Bool ?? true,
                                       name: body["name"] as? Bool ?? false, wide: body["wide"] as? Bool ?? true,
                                       code: body["code"] as? Bool ?? false,
-                                      fill: (body["contact"] as? String).map { .contact($0, box: body["box"] as? Int ?? 0) })
+                                      fill: body["fresh"] as? Bool == true ? .fresh
+                                          : (body["contact"] as? String).map { .contact($0, box: body["box"] as? Int ?? 0) })
                 } else {
                     tab?.fieldFocused(nil)
                 }
@@ -543,6 +544,12 @@ final class FormRelay: NSObject, WKScriptMessageHandler {
       }
       function nameBox(el) { return !!firstStep(el); }
       function newPassword(el) { return tokens(el).indexOf('new-password') >= 0; }
+      // A password box the page says is for a new password: a sign-up's, or a
+      // change-password form's. A strong one is offered under it.
+      function freshBox(el) {
+        return !!el && (el.tagName || '').toLowerCase() === 'input' && (el.type || '').toLowerCase() === 'password' &&
+          !el.disabled && !el.readOnly && newPassword(el);
+      }
       // What a box the caret is in is offered: null for nothing.
       function judge(el) {
         if (!el || (el.tagName || '').toLowerCase() !== 'input') return null;
@@ -964,6 +971,23 @@ final class FormRelay: NSObject, WKScriptMessageHandler {
         },
         // Whether a box is offered codes, for the tests.
         coded: function (el) { return codeBox(el || active()); },
+        // A new password, into the box the caret is in and the other password
+        // boxes of its form (the confirm box), only if the page marks that
+        // box for a new password.
+        fresh: function (value) {
+          var frame = inFrame();
+          if (frame === false) return false;
+          if (frame) return frame.fresh(value);
+          var box = active();
+          if (!freshBox(box)) return false;
+          var scope = box.form || document;
+          var boxes = Array.prototype.filter.call(scope.querySelectorAll('input[type="password"]'), function (b) {
+            return !b.disabled && !b.readOnly && b.getBoundingClientRect().width > 0 && b.getAttribute('autocomplete') !== 'current-password';
+          });
+          if (boxes.indexOf(box) < 0) boxes.push(box);
+          boxes.forEach(function (b) { keepSecret(b); put(b, value); });
+          return true;
+        },
         // Whether there is still a sign-in on the page. Asked after a
         // password went out, to tell a sign-in that took from one refused.
         hasPassword: function () { return !!pair(); },
@@ -1113,7 +1137,7 @@ final class FormRelay: NSObject, WKScriptMessageHandler {
       }
       // What the box the caret is in was judged to be: judged again when the
       // caret moves, not on every frame of a scroll, which only moves it.
-      var judged = { el: null, verdict: null, code: false, sure: false, contact: null };
+      var judged = { el: null, verdict: null, code: false, sure: false, contact: null, fresh: false };
       // Where a frame's boxes are on the page: its frames' places added up.
       function offset() {
         var x = 0, y = 0;
@@ -1140,7 +1164,8 @@ final class FormRelay: NSObject, WKScriptMessageHandler {
           var seen = judge(el);
           var coded = !seen && codeBox(el);
           judged = { el: el, verdict: seen, code: coded, sure: coded && saysCode(el),
-                     contact: !seen && !coded && window.__officeContacts === true ? contactBox(el) : null };
+                     contact: !seen && !coded && window.__officeContacts === true ? contactBox(el) : null,
+                     fresh: !seen && !coded && freshBox(el) };
           if (coded) codeAt = el;
         }
         var verdict = judged.verdict;
@@ -1154,7 +1179,8 @@ final class FormRelay: NSObject, WKScriptMessageHandler {
         var passwords = !!verdict;
         var name = !!(verdict && verdict.name);
         var wide = code ? judged.sure : !verdict || verdict.wide;
-        if (passwords || code || contact || forPasskeys(el)) {
+        var fresh = judged.fresh;
+        if (passwords || code || contact || fresh || forPasskeys(el)) {
           var r = el.getBoundingClientRect(), at = framed ? offset() : { x: 0, y: 0 };
           if (at && r.width > 0 && r.height > 0) rect = { x: r.left + at.x, y: r.top + at.y, w: r.width, h: r.height };
         }
@@ -1162,7 +1188,7 @@ final class FormRelay: NSObject, WKScriptMessageHandler {
         // A frame the caret has left says nothing: where it went speaks,
         // and would be talked over.
         if (framed && !rect && !document.hasFocus()) return;
-        var now = typing + (rect ? ' ' + passwords + ' ' + name + ' ' + wide + ' ' + code + ' ' + contact + ' ' + rect.x + ' ' + rect.y + ' ' + rect.w + ' ' + rect.h : '');
+        var now = typing + (rect ? ' ' + passwords + ' ' + name + ' ' + wide + ' ' + code + ' ' + contact + ' ' + fresh + ' ' + rect.x + ' ' + rect.y + ' ' + rect.w + ' ' + rect.h : '');
         if (scrolled === true && now === said) return;
         said = now;
         if (rect && hungFrom && hungFrom !== el && contactScope(hungFrom) !== contactScope(el)) {
@@ -1178,6 +1204,7 @@ final class FormRelay: NSObject, WKScriptMessageHandler {
           wide: wide,
           code: code,
           contact: contact,
+          fresh: fresh,
           box: contact ? boxId(el) : null
         });
       }

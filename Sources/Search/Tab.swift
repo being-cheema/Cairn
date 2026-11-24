@@ -684,6 +684,8 @@ final class Tab: ObservableObject, Identifiable {
         /// autocomplete names it ("email", "postal-code"…), and the page's
         /// number for the box, which a pick has to find the caret still in.
         case contact(String, box: Int)
+        /// A box for a new password: a strong one is offered under it.
+        case fresh
     }
     /// The site the sign-in was sent from — not the one it landed on —
     /// then the name and the password, and whether that page came over
@@ -1490,6 +1492,11 @@ final class Tab: ObservableObject, Identifiable {
     }
 
     /// A first step's name alone, picked from the accounts under its box.
+    /// A new password, into the box the caret is in and its form's confirm box.
+    func fillFresh(_ password: String, onlyOn page: URL?, done: ((Bool) -> Void)? = nil) {
+        callForms("fresh(value)", ["value": password], onlyOn: page, done: done)
+    }
+
     func fillName(_ user: String, done: ((Bool) -> Void)? = nil) {
         callForms("name(user)", ["user": user], onlyOn: nil, done: done)
     }

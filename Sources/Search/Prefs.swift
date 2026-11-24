@@ -669,6 +669,11 @@ final class Preferences: ObservableObject {
             Vault.FillProof.forget()
         }
     }
+    /// A strong password offered under a box for a new one (sign-up, change
+    /// password). Made here (PasswordGenerator); on unless turned off.
+    @Published var suggestsPasswords: Bool {
+        didSet { store.set(suggestsPasswords, forKey: "passwords.suggest") }
+    }
     /// One yes to show, copy or remove a password holds for five minutes
     /// (Vault.Unlock). Off, each one asks.
     @Published var keepsVaultUnlocked: Bool {
@@ -1444,6 +1449,7 @@ final class Preferences: ObservableObject {
         fillsPasswords = store.object(forKey: "passwords.fill") as? Bool ?? true
         asksBeforeFilling = store.bool(forKey: "passwords.fill.prove")
         keepsVaultUnlocked = store.object(forKey: Vault.Unlock.key) as? Bool ?? true
+        suggestsPasswords = store.object(forKey: "passwords.suggest") as? Bool ?? true
         claudeModel = ClaudeCode.model(named: store.string(forKey: "claude.model"))
         let contacts = store.bool(forKey: "contacts.fill")
         fillsContacts = contacts
