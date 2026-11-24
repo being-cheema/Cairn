@@ -4604,26 +4604,8 @@ final class Browser: NSObject, ObservableObject {
             Extensions.shared.offerNewTabPage(into: tab)
             return
         }
-        // Reuse an empty tab at the chosen position, clearing its draft:
-        // repeated ⌘T must not leave a row of identical empty tabs. Never
-        // one in a group: ⌘T's tab is in none, and an empty tab left in a
-        // group took the page typed next into it (#1151).
-        if let blank = tabs.last(where: { $0.isBlank && !$0.bench && !$0.shy && split(for: $0) == nil
-                                          && !(prefs.usesTabGroups && group(of: $0) != nil) }) {
-            placeBlank(blank)
-            if activeID != blank.id { leaving() }
-            activeID = blank.id
-            summoning = false
-            typed = ""
-            blank.draft = ""
-            editing = false
-            focusRequest += 1
-            rememberSession()
-            // Asked here too: the blank a window opens with is the one the
-            // first ⌘T after adding an extension lands on.
-            if #available(macOS 15.4, *) { Extensions.shared.offerNewTabPage(into: blank) }
-            return
-        }
+        // Always a fresh tab: ⌘T used to reuse an empty one, so a second press
+        // opened nothing (the owner's call, 24 Nov 2026).
         let tab = Tab(configuration: Web.configuration(space: spaceID))
         prepare(tab)
         tabs.insert(tab, at: placeForFront())
