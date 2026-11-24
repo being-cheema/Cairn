@@ -175,9 +175,6 @@ final class FormFieldCorpusTests: XCTestCase {
         XCTAssertFalse(Vault.belongs("accounts.google.com", to: console, wide: false))
         XCTAssertTrue(Vault.belongs(console, to: console, wide: false))
         XCTAssertFalse(Vault.belongs("google.co.uk", to: console, wide: true), "another site is never offered")
-        XCTAssertTrue(ApplePasswords.belongs(["https://accounts.google.com"], to: console, wide: true))
-        XCTAssertFalse(ApplePasswords.belongs(["https://accounts.google.com"], to: console, wide: false))
-        XCTAssertTrue(ApplePasswords.belongs(["https://www.console.cloud.google.com/"], to: console, wide: false))
     }
 
     // MARK: -

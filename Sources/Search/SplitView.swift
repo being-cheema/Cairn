@@ -49,7 +49,6 @@ struct SplitStage: View {
             hover: { hovered = $0 },
             find: browser.finding ? browser : nil,
             accounts: browser.suggesting.map { (browser, $0) },
-            pairing: browser.applePairing.map { (browser, $0) },
             corner: corner,
             immersed: immersed
         )
@@ -194,8 +193,7 @@ private struct PaneLayers: View {
             }
         }
         // The accounts under a sign-in box are the stage's (PaneStage.showAccounts):
-        // drawn here, they were under the page. So is Apple Passwords' code card
-        // (PaneStage.showPairing).
+        // drawn here, they were under the page.
         .overlay(alignment: .topTrailing) { whose }
         .animation(Motion.quick, value: hovered)
         .background { SplitDropZone(browser: browser, tab: tab, kind: .stage) }

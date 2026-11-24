@@ -68,7 +68,7 @@ struct AccountList: View {
                     scroller.scrollTo(lit)
                 }
             }
-            if !offerOnly {
+            do {
             HStack(spacing: 6) {
                 Image(systemName: contactsOnly ? "person.crop.rectangle" : "key")
                     .font(.system(size: 9, weight: .medium))
@@ -97,7 +97,7 @@ struct AccountList: View {
     /// passkeys, the page's own host's accounts from both places, then the
     /// rest of its site's under a line, so a login saved for example.com is
     /// still there on admin.example.com without passing for admin's; codes,
-    /// the rows about Apple Passwords, your card.
+    /// your card.
     /// `marked`: each row carries its number, for the scroller to find; only
     /// in the one that scrolls, so it never looks in the other.
     private func rows(marked: Bool) -> some View {
@@ -127,19 +127,6 @@ struct AccountList: View {
         case .login(let login):
             Row(mark: .letter(login.user.first.map { String($0).uppercased() } ?? "•"),
                 name: login.user.isEmpty ? "No name" : login.user, detail: login.host, lit: lit) { browser.choose(login) }
-        case .apple(let login):
-            // The Mac's Passwords app, when turned on (ApplePasswords.swift):
-            // marked as Apple's.
-            Row(mark: .letter(login.user.first.map { String($0).uppercased() } ?? "•"),
-                name: login.user.isEmpty ? "No name" : login.user, detail: "Apple Passwords", lit: lit) { browser.choose(login) }
-        case .code(let code):
-            Row(mark: .symbol("number"), name: code.user.isEmpty ? "Verification code" : code.user,
-                detail: code.user.isEmpty ? "Apple Passwords" : "Verification code · Apple Passwords", lit: lit) { browser.choose(code) }
-        case .connect:
-            Row(mark: .symbol("key.icloud"), name: "Connect Apple Passwords…",
-                detail: "Pair once with a code from your Mac", lit: lit) { browser.connectApplePasswords() }
-        case .offer:
-            OfferRow(lit: lit, use: browser.useApplePasswords, never: browser.neverOfferApplePasswords)
         case .contact(let contact):
             // A click fills the form; a shift-click, the box alone.
             Row(mark: .symbol("person.crop.circle"), name: contact.title, detail: contact.detail, lit: lit) {
@@ -149,23 +136,15 @@ struct AccountList: View {
         }
     }
 
-    /// Nothing but the offer: no footer under it, the row says it all.
-    private var offerOnly: Bool {
-        asked.appleOffer != nil && asked.logins.isEmpty && asked.passkeys.isEmpty && asked.apple.isEmpty && asked.codes.isEmpty && !asked.appleConnect
-            && asked.contacts.isEmpty
-    }
-
     /// Nothing but your card's rows.
     private var contactsOnly: Bool {
-        !asked.contacts.isEmpty && asked.logins.isEmpty && asked.passkeys.isEmpty && asked.apple.isEmpty && asked.codes.isEmpty
-            && !asked.appleConnect
+        !asked.contacts.isEmpty && asked.logins.isEmpty && asked.passkeys.isEmpty
     }
 
     private var footer: String {
         if contactsOnly { return "From your card in Contacts" }
-        if asked.logins.isEmpty && asked.apple.isEmpty && asked.codes.isEmpty && !asked.appleConnect { return "Passkeys on this Mac" }
-        if asked.logins.isEmpty { return "From Apple Passwords" }
-        return asked.apple.isEmpty ? "From your keychain" : "From your keychain and Apple Passwords"
+        if asked.logins.isEmpty { return "Passkeys on this Mac" }
+        return "From your keychain"
     }
 
     private enum Mark { case letter(String), symbol(String) }
@@ -185,57 +164,6 @@ struct AccountList: View {
 
         func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
             subviews.first?.place(at: bounds.origin, anchor: .topLeading, proposal: ProposedViewSize(bounds.size))
-        }
-    }
-
-    /// "Use your Apple passwords?", at the bottom: smaller and greyer than
-    /// an account, so it never reads as one. A click turns Apple Passwords
-    /// on and pairs; the ✕ says don't offer again.
-    struct OfferRow: View {
-        /// Come to with ↓ and ↑: Return takes it, as a click on it.
-        var lit = false
-        let use: () -> Void
-        let never: () -> Void
-        @State private var hovering = false
-        @State private var onCross = false
-
-        var body: some View {
-            HStack(spacing: 8) {
-                Button(action: use) {
-                    HStack(spacing: 8) {
-                        Ink("key", size: 9)
-                            .font(.system(size: 9, weight: .medium))
-                            .frame(width: 22)
-                        Text("Use your Apple passwords?")
-                            .font(.system(size: 11.5))
-                            .lineLimit(1)
-                        Spacer(minLength: 0)
-                    }
-                    .foregroundStyle((hovering && !onCross) || lit ? Palette.ink : Palette.muted)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help("Turns on Apple Passwords and pairs with a code from your Mac. Settings › Passwords turns it off.")
-                Button(action: never) {
-                    Ink("xmark", size: 7.5)
-                        .font(.system(size: 7.5, weight: .semibold))
-                        .foregroundStyle(Palette.faint)
-                        .frame(width: 16, height: 16)
-                        .background(Palette.ink.opacity(onCross ? 0.07 : 0), in: Circle())
-                        .contentShape(Circle())
-                }
-                .buttonStyle(.plain)
-                .onHover { onCross = $0 }
-                .help("Don't offer again")
-                .accessibilityLabel("Don't offer again")
-            }
-            .padding(.leading, 10)
-            .padding(.trailing, 8)
-            .padding(.vertical, 6)
-            .background(hovering || lit ? Palette.hover : .clear)
-            .onHover { hovering = $0 }
-            .animation(Motion.quick, value: hovering)
-            .animation(Motion.quick, value: onCross)
         }
     }
 
@@ -289,35 +217,22 @@ extension Browser.Suggesting {
     enum Choice: Equatable {
         case passkey(Passkeys.Offered)
         case login(Kept)
-        case apple(AppleLogin)
-        case code(AppleCode)
-        /// "Connect Apple Passwords…"
-        case connect
-        /// "Use your Apple passwords?"
-        case offer
         case contact(MeCard.Offer)
     }
 
     /// The rows top to bottom, as drawn and as ↓ walks them.
     var choices: [Choice] {
-        passkeys.map(Choice.passkey) + ownLogins.map(Choice.login) + ownApple.map(Choice.apple)
-            + siteLogins.map(Choice.login) + siteApple.map(Choice.apple) + codes.map(Choice.code)
-            + (appleConnect ? [.connect] : []) + (appleOffer != nil ? [.offer] : []) + contacts.map(Choice.contact)
+        passkeys.map(Choice.passkey) + ownLogins.map(Choice.login)
+            + siteLogins.map(Choice.login) + contacts.map(Choice.contact)
     }
 
     /// Where "Other accounts on …" goes, before the first of the rest of the
     /// site's accounts: only when this host has some of its own above them.
     var othersFrom: Int? {
-        guard !(ownLogins.isEmpty && ownApple.isEmpty), !(siteLogins.isEmpty && siteApple.isEmpty) else { return nil }
-        return passkeys.count + ownLogins.count + ownApple.count
+        guard !ownLogins.isEmpty, !siteLogins.isEmpty else { return nil }
+        return passkeys.count + ownLogins.count
     }
 
     private var ownLogins: [Kept] { logins.filter { Vault.belongs($0.host, to: host, wide: false) } }
     private var siteLogins: [Kept] { logins.filter { !Vault.belongs($0.host, to: host, wide: false) } }
-    private var ownApple: [AppleLogin] { apple.filter { owns($0) } }
-    private var siteApple: [AppleLogin] { apple.filter { !owns($0) } }
-
-    private func owns(_ login: AppleLogin) -> Bool {
-        appleHost.map { ApplePasswords.belongs(login.sites, to: $0, wide: false) } ?? false
-    }
 }

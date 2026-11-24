@@ -41,7 +41,7 @@ BEFORE = {
     "fullscreen.escapeTwice": "esc", "fullscreen.keepsWindow": "desktop", "pageZoom": "zoom", "pages.120.mode": "120", "spaces": "spaces",
     "pins.home": "pins", "pins.peek": "pins", "pins.list": "pinned rows", "newtab.floating": "floating",
     "commandbar": "commands", "start.fresh": "fresh window", "passwords.save": "save passwords",
-    "passwords.fill": "fill", "passkeys": "passkeys", "passwords.apple": "apple passwords",
+    "passwords.fill": "fill", "passkeys": "passkeys",
     "shield": "ads", "sites.keep": "tracking", "notifications.ask": "notifications",
     "links.peek": "peek", "links.peekClick": "peek", "autoscroll": "middle button",
     "swipe.history": "swipe", "auto.install": "updates", "bench": "script",

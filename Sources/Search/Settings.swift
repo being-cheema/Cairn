@@ -860,7 +860,6 @@ struct SettingsPanel: View {
         case "passwords.fill": Switch(on: $prefs.fillsPasswords)
         case "passwords.fill.prove": Switch(on: $prefs.asksBeforeFilling)
         case "passkeys": Switch(on: $prefs.passkeys)
-        case "passwords.apple": Switch(on: $prefs.applePasswords)
         // Turned on, macOS is asked whether Search may read Contacts; a no,
         // or no card of yours, leaves it off and says why.
         case "contacts.fill":
@@ -977,9 +976,6 @@ struct SettingsPanel: View {
             if !searched, prefs.agents { RememberedAgents() }
         case "devtools":
             DevToolsPackageList().under()
-        case "passwords.apple":
-            ApplePasswordsCard(prefs: prefs, bare: true)
-                .under()
         case "profiles":
             if !searched {
                 ProfileList(browser: browser)

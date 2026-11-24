@@ -88,7 +88,6 @@ enum SettingsIndex {
         .init(id: "opening", page: .spaces, title: "Opening and starting", icon: "command"),
 
         .init(id: "passwords", page: .passwords, title: "Your passwords", icon: "key"),
-        .init(id: "apple", page: .passwords, title: "Apple Passwords", icon: "lock.rectangle.stack"),
         .init(id: "forms", page: .passwords, title: "Filling in forms", icon: "character.cursor.ibeam"),
 
         .init(id: "blocking", page: .privacy, title: "Blocking", icon: "shield"),

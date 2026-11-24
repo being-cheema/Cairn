@@ -1,7 +1,8 @@
 # Spec: Cairn's own passwords
 
-Status: proposed, waiting for approval. Only step 0 is done (the Apple
-Passwords card no longer shows). Branch per step, off `main`.
+Status: approved ("do it"). Steps 0 and 1 are done. Branch per step, off `main`.
+Defaults taken for the open questions: unlock for 5 minutes, the encrypted
+file is the backup, health shows counts only.
 
 ## Why
 
@@ -24,7 +25,7 @@ this makes it a whole one.
 
 ## What is missing
 
-1. **Locking.** Showing, copying or exporting a password asks Touch ID or the
+1. **Locking.** (The upstream has since added "ask Touch ID before filling", `prefs.asksBeforeFilling`; step 2 builds on it.) Showing, copying or exporting a password asks Touch ID or the
    Mac's password, then stays open for a few minutes and shuts on sleep.
 2. **More than a password.** Title, several addresses, notes, a one-time-code
    secret, created/changed dates.
@@ -116,8 +117,8 @@ under the box when a password changes ("Update the saved one?").
 
 ## Steps (one branch each; I stop after each to be tested)
 
-0. **Apple card off.** Done: no offer, no Settings row, no pairing card.
-1. **Delete the Apple Passwords code** and its tests; keep Vault untouched.
+0. **Apple card off.** Done.
+1. **Delete the Apple Passwords code** and its tests. Done (branch `passwords-1-remove-apple`).
 2. **Items and locking.** The JSON value, migration on edit, Touch ID gate.
 3. **The page.** List, detail, add/edit, search, the four tabs' shells.
 4. **Import.** Format detection, preview, duplicate choice, trash offer.
