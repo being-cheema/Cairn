@@ -38,6 +38,9 @@ enum Palette {
     /// way, and one anybody can (see SiteCard.swift).
     static let safe = Color(nsColor: NS.safe)           // green-700 · green-400
     static let unsafe = Color(nsColor: NS.unsafe)       // amber-700 · amber-400
+    /// What things cast: a warm brown, not black, so a shadow on paper reads
+    /// as paper's and not as dirt.
+    static let shadow = Color(red: 0.28, green: 0.16, blue: 0.08)
     /// Coral: the live marks, links, focus and the one button that matters.
     static let accent = Color(nsColor: NS.accent)
 

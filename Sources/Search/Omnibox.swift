@@ -129,12 +129,12 @@ struct Omnibox: View {
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .strokeBorder(
-                        refused ? Color.red.opacity(0.35) : Palette.hairline,
-                        lineWidth: 1
+                        refused ? Color.red.opacity(0.35) : Palette.accent.opacity(0.55),
+                        lineWidth: 1.5
                     )
                     .allowsHitTesting(false)
             )
-            .shadow(color: .black.opacity(0.06), radius: 24, y: 8)
+            .shadow(color: Palette.shadow.opacity(0.10), radius: 24, y: 8)
             .modifier(Shake(travel: shake))
             .onAppear {
                 shake = 0
@@ -184,7 +184,7 @@ struct Omnibox: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(Palette.hairline, lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.07), radius: 20, y: 6)
+        .shadow(color: Palette.shadow.opacity(0.10), radius: 20, y: 6)
         .transition(.scale(scale: 0.98, anchor: .top).combined(with: .opacity))
     }
 

@@ -1878,14 +1878,14 @@ private struct SideRow: View, Equatable {
         .background { ground.animation(Motion.quick, value: live) }
         .overlay {
             if selected {
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .strokeBorder(Palette.ink.opacity(0.35), lineWidth: 1)
                     .allowsHitTesting(false)
             }
         }
         .modifier(Shake(travel: shake))
         .modifier(Give(pressed: pressed && prefs.tabsGive))
-        .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .modifier(OneClick(double: false) {
             guard interactive, !selectedOnPress, TabClick.flags.intersection([.command, .shift, .option]).isEmpty else { return }
             browser.clearTabSelection()
@@ -1933,13 +1933,13 @@ private struct SideRow: View, Equatable {
                     }
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             .modifier(LiveMatch(id: LivePill.id(browser), in: pill))
         } else if selected {
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(greys.wash)
         } else if hovering {
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(greys.hover)
         }
     }
@@ -1984,10 +1984,10 @@ struct Quiet: View {
             .frame(height: height)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(hovering ? greys.hover : .clear)
             )
-            .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
@@ -2184,7 +2184,7 @@ struct PinCarried: ViewModifier {
             // Under the hand exactly, as a row is (see Carried).
             .transaction { if held { $0.animation = nil } }
             .zIndex(held ? 1 : 0)
-            .shadow(color: .black.opacity(held ? 0.16 : 0), radius: 10, y: 3)
+            .shadow(color: Palette.shadow.opacity(held ? 0.20 : 0), radius: 10, y: 3)
             // Measured in the grid's own space, not the square's: a square
             // that has just been moved to a new cell would otherwise report
             // the drag from where it now is, and shuttle between two cells.

@@ -104,14 +104,14 @@ struct FindBar: View {
         .background(Palette.ground, in: Capsule())
         .overlay(
             Capsule().strokeBorder(
-                browser.missed ? Color.red.opacity(0.35) : Palette.hairline,
+                browser.missed ? Color.red.opacity(0.35) : Palette.accent.opacity(0.5),
                 lineWidth: 1
             )
         )
         .onGeometryChange(for: CGRect.self, of: { $0.frame(in: .named("find")) }) {
             onPillFrame?($0)
         }
-        .shadow(color: .black.opacity(0.10), radius: 18, y: 5)
+        .shadow(color: Palette.shadow.opacity(0.14), radius: 18, y: 5)
         .padding(.top, 12)
         .padding(.trailing, 14)
         .frame(maxWidth: availableWidth == nil ? nil : .infinity,
