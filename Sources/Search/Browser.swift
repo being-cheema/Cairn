@@ -1327,6 +1327,9 @@ final class Browser: NSObject, ObservableObject {
         get { pageTab(.passwords) != nil }
         set { if newValue { show(InternalPage(.passwords)) } else { putAway(.passwords) } }
     }
+    /// A tab the Passwords page should show (all, codes, passkeys, health,
+    /// bring), put here by the bench and taken by the page. A test run only.
+    @Published var passwordsTab: String?
     /// The list, without secrets: see `Kept` and `Vault.all()`.
     @Published private(set) var saved: [Kept] = []
     @Published var hunting = ""

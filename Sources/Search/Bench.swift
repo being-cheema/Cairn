@@ -5539,6 +5539,18 @@ final class Bench {
             // did without a person.
             if let on = request["settings"] as? Bool { browser.tuning = on }
             if let on = request["passwords"] as? Bool, Store.testing { browser.managing = on }
+            // The Passwords page opens on All; this picks the tab, to look at
+            // the others without a click: all, codes, passkeys, health, bring.
+            if let tab = request["passwordsTab"] as? String, Store.testing { browser.passwordsTab = tab }
+            // The Claude panel, and a made-up exchange in it (question, answer
+            // and the steps it took), to see the panel as it looks in use.
+            if let on = request["claude"] as? Bool, Store.testing, on != (browser.sidePanelShown && browser.sidePanel == .claude) {
+                browser.toggleClaudePanel()
+            }
+            if let fake = request["claudeFake"] as? [String: Any], Store.testing {
+                browser.claude.seed(question: fake["question"] as? String ?? "", answer: fake["answer"] as? String ?? "",
+                                    steps: fake["steps"] as? [String] ?? [], failed: fake["failed"] as? String)
+            }
             if let on = request["welcome"] as? Bool { browser.welcoming = on }
             if let on = request["history"] as? Bool { browser.recalling = on }
             if let on = request["downloads"] as? Bool { browser.hoarding = on }

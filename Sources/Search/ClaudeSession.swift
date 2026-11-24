@@ -35,6 +35,18 @@ final class ClaudeSession: ObservableObject {
     }
 
     @Published private(set) var turns: [Turn] = []
+
+    /// A finished exchange put in by the bench, to look at the panel in use
+    /// without Claude Code. A test run only.
+    func seed(question: String, answer: String, steps: [String], failed: String? = nil) {
+        guard Store.testing else { return }
+        var turn = Turn(question: question)
+        turn.answer = answer
+        turn.steps = steps
+        turn.done = true
+        turn.failed = failed
+        turns.append(turn)
+    }
     @Published private(set) var running = false
     @Published private(set) var problem: Problem?
     @Published var draft = ""

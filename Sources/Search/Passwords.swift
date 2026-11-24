@@ -166,7 +166,8 @@ struct PasswordsPanel: View {
         .onChange(of: browser.saved) { _, _ in report = nil }
         .animation(Motion.settle, value: tab)
         .animation(Motion.settle, value: editing)
-        .onAppear { hunting = true }
+        .onAppear { hunting = true; takeBenchTab() }
+        .onChange(of: browser.passwordsTab) { _, _ in takeBenchTab() }
         .task { await refreshLegacy() }
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
             guard let provider = providers.first else { return false }
@@ -186,6 +187,14 @@ struct PasswordsPanel: View {
 
     /// Leaving the All tab with typed changes in the Add or Edit form asks
     /// first, as picking another row does.
+    /// The bench's pick of a tab (a test run only), taken once.
+    private func takeBenchTab() {
+        guard Store.testing, let name = browser.passwordsTab else { return }
+        browser.passwordsTab = nil
+        let picked: Tab? = ["all": .all, "codes": .codes, "passkeys": .passkeys, "health": .health, "bring": .bring][name]
+        if let picked { switchTab(picked) }
+    }
+
     private func switchTab(_ next: Tab) {
         guard next != tab else { return }
         if tab == .all, editing != nil, editDirty {
