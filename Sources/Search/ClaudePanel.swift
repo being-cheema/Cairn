@@ -97,9 +97,11 @@ struct ClaudePanel: View {
     /// Before the first message: what it is for, and a few ways to begin.
     private var welcome: some View {
         VStack(alignment: .leading, spacing: 14) {
+            ArtPicture(name: "chat", size: 112)
+                .frame(maxWidth: .infinity)
             VStack(alignment: .leading, spacing: 4) {
                 Text("What should I do?")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(Typeface.heading(19, weight: .medium))
                     .foregroundStyle(Palette.ink)
                 Text("I work in a clean browser of my own: not signed in to anything, and gone when we're done. You are asked before I start.")
                     .font(.system(size: 12))

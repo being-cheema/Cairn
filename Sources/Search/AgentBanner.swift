@@ -312,10 +312,7 @@ private struct AgentApproval: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 10) {
-                Image(systemName: "hand.raised")
-                    .font(.system(size: 13))
-                    .foregroundStyle(Palette.muted)
-                    .padding(.top, 2)
+                ArtPicture(name: "approval", size: 44)
                 VStack(alignment: .leading, spacing: 4) {
                     Text("“\(session.client)” is waiting for you")
                         .font(.system(size: 12.5, weight: .medium))

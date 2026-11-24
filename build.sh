@@ -156,6 +156,12 @@ cp Search.sdef "$APP/Contents/Resources/"
 # The client a coding agent runs (the side panel's Claude gives it to the
 # person's own Claude Code): a script, run by the system's Python.
 cp search-mcp "$APP/Contents/Resources/"
+# The owner's pictures (Art.swift), when there are any: the app draws a plain
+# circle in each place without them. Never in a DMG (checked above).
+if [ -n "$ART_FILES" ]; then
+  mkdir -p "$APP/Contents/Resources/Art"
+  cp Local/Art/*.png "$APP/Contents/Resources/Art/"
+fi
 
 # Symbols stay out of the app. The linker leaves every function's name and a
 # map back to the source in the binary — 15,000 entries, more than half of

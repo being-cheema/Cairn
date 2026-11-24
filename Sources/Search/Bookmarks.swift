@@ -1280,7 +1280,7 @@ struct BookmarksDropdown: View {
         VStack(alignment: .leading, spacing: 0) {
             if bookmarks.isEmpty {
                 Text("No bookmarks yet")
-                    .font(.system(size: 12.5))
+                    .font(Typeface.heading(13))
                     .foregroundStyle(Palette.muted)
                     .padding(14)
             } else {
@@ -1384,7 +1384,7 @@ struct BookmarksPanel: View {
                     .onSubmit(openFirst)
 
                 if bookmarks.isEmpty {
-                    Card { Nothing("Nothing kept yet. Add this page with ⇧⌘B, or bring yours in below.") }
+                    Card { Nothing("Nothing kept yet. Add this page with ⇧⌘B, or bring yours in below.", art: "bookmark") }
                 } else if !query.isEmpty {
                     found
                 } else {
@@ -1439,7 +1439,7 @@ struct BookmarksPanel: View {
     private var found: some View {
         let hits = bookmarks.matches(query)
         if hits.isEmpty {
-            Card { Nothing("Nothing matches.") }
+            Card { Nothing("Nothing matches.", art: "search") }
         } else {
             ScrollView(showsIndicators: false) {
                 Card {

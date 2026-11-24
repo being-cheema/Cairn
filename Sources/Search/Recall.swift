@@ -58,7 +58,7 @@ struct HistoryPanel: View {
                 Hunt(text: $browser.recallHunt, prompt: "Search everywhere you have been", focus: $hunting)
 
                 if traces.isEmpty {
-                    Card { Nothing(browser.recallHunt.isEmpty ? "Nothing yet." : "Nothing matches.") }
+                    Card { Nothing(browser.recallHunt.isEmpty ? "Nothing yet." : "Nothing matches.", art: browser.recallHunt.isEmpty ? "history" : "search") }
                 } else {
                     // Lazy: only the lines in view are made. Two thousand of
                     // them, each with its icon, took the panel a third of a
@@ -342,7 +342,7 @@ struct DownloadsPanel: View {
     @ViewBuilder
     private var list: some View {
         if fetches.entries.isEmpty && loot.kept.isEmpty {
-            Card { Nothing("Nothing downloaded yet.") }
+            Card { Nothing("Nothing downloaded yet.", art: "download") }
         } else {
             FadingScroll {
                 LazyVStack(alignment: .leading, spacing: 10) {

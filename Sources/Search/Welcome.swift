@@ -63,10 +63,10 @@ struct WelcomePanel: View {
 
     private var welcome: some View {
         VStack(spacing: 22) {
-            Plate(size: 72)
+            if Art.image("welcome") != nil { ArtPicture(name: "welcome", size: 140) } else { Plate(size: 72) }
             VStack(spacing: 10) {
                 Text("Search")
-                    .font(.system(size: 34, weight: .medium))
+                    .font(Typeface.heading(36, weight: .medium))
                     .foregroundStyle(Palette.ink)
                 Text("A browser with nothing in the way. Four megabytes, the engine already in your Mac, and as little around the page as we could manage.")
                     .font(.system(size: 14.5))

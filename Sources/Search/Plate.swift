@@ -234,14 +234,18 @@ struct Hunt: View {
 /// What a panel says when its list is empty.
 struct Nothing: View {
     let text: String
-    init(_ text: String) { self.text = text }
+    var art: String?
+    init(_ text: String, art: String? = nil) { self.text = text; self.art = art }
     var body: some View {
-        Text(text)
-            .font(.system(size: 13))
-            .foregroundStyle(Palette.muted)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 18)
+        HStack(spacing: 12) {
+            if let art { ArtPicture(name: art, size: 64) }
+            Text(text)
+                .font(Typeface.heading(14))
+                .foregroundStyle(Palette.muted)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, art == nil ? 18 : 12)
     }
 }
 
