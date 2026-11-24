@@ -1,6 +1,6 @@
 # Spec: Cairn's own passwords
 
-Status: approved ("do it"). Steps 0 to 6 are done. Branch per step, off `main`.
+Status: approved ("do it"). Steps 0 to 7 are done. Branch per step, off `main`.
 Defaults taken for the open questions: unlock for 5 minutes, the encrypted
 file is the backup, health shows counts only.
 
@@ -124,7 +124,7 @@ under the box when a password changes ("Update the saved one?").
 4. **Import.** Done (branch `passwords-4-import`): drop or pick a file, kind told from its columns (Apple Passwords/Safari, Chrome family, Firefox, Bitwarden CSV and JSON, 1Password CSV, LastPass, KeePass, Dashlane), a preview (new / same / different / can't be taken, no secrets in the reasons), Keep mine or Use the file's for duplicates, then a Trash offer. "Keep both" is not offered: an item is named by site and account, so two can't exist. 1Password's `.1pux` is not read (its CSV is).
 5. **Generator.** Done (branch `passwords-5-generator`): random (12 to 40 characters, no look-alikes, symbols optional) or a passphrase (4 to 8 words from a bundled list, one capitalised, two digits), made from the system's secure random numbers, with a strength word; controls in the Add and Edit form; and under a box the page marks `autocomplete=new-password` a row "Suggest a strong password" (https only, never private or agent tabs) that fills the box and its confirm box. Kept by the existing save question when the form is sent, not before. Settings › Passwords › Suggest strong passwords turns it off.
 6. **Codes.** Done (branch `passwords-6-codes`): RFC 6238 codes (SHA-1/256/512, 6 to 8 digits, any period) from an `otpauth://` link or a setup key, checked against the RFC's own vectors; live code with seconds left in an account's detail and in a Codes tab (read after one unlock, held only while the tab is up); and under a box for a verification code a row per account that keeps a key, which fills the code (asks first when Touch ID before filling is on; never in private or agent tabs or over plain http).
-7. **Export and health.** CSV, encrypted file, the health counts.
+7. **Export and health.** Done (branch `passwords-7-export-health`): Import & export tab takes them out as an encrypted `.cairnvault` (AES-GCM, key from a passphrase by PBKDF2-SHA256, 600,000 rounds; opened again from the same tab with its passphrase and previewed like any file) or as a plain CSV in Chrome's columns plus the code key, after a warning and Touch ID, written 0600 and offered to the Trash. A Health tab counts reused, weak (short, or a common one), old (only where the change date is known) and plain-http passwords, says why per row, jumps to the account, and marks the list with a dot. All of it on this Mac; no breach lookup.
 
 ## Not doing
 

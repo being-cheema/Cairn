@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Every password kept: a list on the left, the one picked on the right. The
 /// same rule as ever: a password is never shown until you have proved you are
@@ -9,7 +10,8 @@ struct PasswordsPanel: View {
     enum Tab: String, CaseIterable, Identifiable {
         case all = "All"
         case codes = "Codes"
-        case bring = "Bring in"
+        case health = "Health"
+        case bring = "Import & export"
         var id: String { rawValue }
     }
 
@@ -39,6 +41,31 @@ struct PasswordsPanel: View {
     /// only then, and let go on leaving it.
     @State private var coded: [CodeItem] = []
     @State private var loadingCodes = false
+    /// What the last check found. Holds no password, only which accounts are
+    /// flagged and why; dropped when the list changes.
+    @State private var report: PasswordHealth.Report?
+    @State private var checking = false
+    @State private var healthFilter: PasswordHealth.Kind?
+    /// A backup file waiting for its passphrase, and the passphrase being typed.
+    @State private var vaultData: Data?
+    @State private var openPass = ""
+    @State private var openError: String?
+    /// Making a backup: the two passphrase fields, while they are up.
+    @State private var askingBackup = false
+    @State private var backupPass = ""
+    @State private var backupAgain = ""
+    @State private var exporting = false
+    /// The last file taken out, for the line under the export card.
+    @State private var exported: Exported?
+    @State private var exportedTrashed = false
+    @State private var cameFromBackup = false
+
+    private struct Exported {
+        let url: URL
+        let plain: Bool
+        let count: Int
+        let missed: Int
+    }
 
     /// The list as the search leaves it, one row per account.
     private var rows: [Kept] { browser.shownSites.flatMap(\.logins) }
@@ -51,6 +78,7 @@ struct PasswordsPanel: View {
                 switch tab {
                 case .all: all
                 case .codes: codesTab
+                case .health: healthTab
                 case .bring: bring
                 }
             }
@@ -63,7 +91,11 @@ struct PasswordsPanel: View {
             }
         }
         .fromSettings()
-        .onChange(of: tab) { _, now in if now == .codes { loadCodes() } else { coded = [] } }
+        .onChange(of: tab) { _, now in
+            if now == .codes { loadCodes() } else { coded = [] }
+            if now == .health { checkHealth() }
+        }
+        .onChange(of: browser.saved) { _, _ in report = nil; if tab == .health { checkHealth() } }
         .animation(Motion.settle, value: tab)
         .animation(Motion.settle, value: editing)
         .onAppear { hunting = true }
@@ -138,7 +170,7 @@ struct PasswordsPanel: View {
                 Card {
                     ForEach(Array(rows.enumerated()), id: \.element.id) { index, login in
                         if index > 0 { Rule() }
-                        Row(login: login, picked: selected == login.id) {
+                        Row(login: login, picked: selected == login.id, flagged: report?.flagged.contains(login.id) ?? false) {
                             editing = nil
                             selected = login.id
                         }
@@ -264,6 +296,104 @@ struct PasswordsPanel: View {
         }
     }
 
+    // MARK: - health
+
+    /// Asks once (Vault.Unlock), then reads every password off the main
+    /// thread and checks them against each other and a short list of the
+    /// commonest. Only the findings come back.
+    private func checkHealth() {
+        guard !checking else { return }
+        checking = true
+        let all = browser.saved
+        Vault.Unlock.ask("check your passwords") { ok in
+            guard ok else { checking = false; tab = .all; return }
+            Task {
+                let found = await Task.detached(priority: .userInitiated) {
+                    let entries = all.compactMap { kept -> PasswordHealth.Entry? in
+                        guard let item = Vault.item(of: kept) else { return nil }
+                        let title = item.extras.title ?? ""
+                        return PasswordHealth.Entry(id: kept.id, name: title.isEmpty ? kept.host : title, user: kept.user,
+                                                    password: item.password, changed: item.extras.changed, clear: kept.clear)
+                    }
+                    return PasswordHealth.check(entries)
+                }.value
+                checking = false
+                report = found
+            }
+        }
+    }
+
+    private func jump(to id: String) {
+        browser.hunting = ""
+        editing = nil
+        selected = id
+        tab = .all
+    }
+
+    @ViewBuilder
+    private var healthTab: some View {
+        if let report {
+            let shown = report.findings.filter { finding in healthFilter.map { finding.kinds.contains($0) } ?? true }
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 10) {
+                    ForEach(PasswordHealth.Kind.allCases) { kind in
+                        let n = report.count(kind)
+                        Button { healthFilter = healthFilter == kind ? nil : kind } label: {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("\(n)")
+                                    .font(Typeface.heading(24, weight: .medium))
+                                    .foregroundStyle(n == 0 ? Palette.muted : Palette.ink)
+                                Text(kind.rawValue).font(.system(size: 12)).foregroundStyle(Palette.muted)
+                            }
+                            .padding(12)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(RoundedRectangle(cornerRadius: 10).fill(healthFilter == kind ? Palette.accent.opacity(0.12) : Palette.wash))
+                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(healthFilter == kind ? Palette.accent : Palette.hairline, lineWidth: 1))
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .help(kind == .reused ? "The same password on more than one account"
+                              : kind == .weak ? "Short, or one of the most common passwords"
+                              : kind == .old ? "Not changed in over a year (only where the date is known)"
+                              : "Kept from a page sent over plain http")
+                    }
+                }
+                if shown.isEmpty {
+                    Card {
+                        Nothing(report.findings.isEmpty ? "Nothing to fix in \(count(report.checked, "password", "passwords"))."
+                                : "Nothing under \(healthFilter?.rawValue ?? "that").", art: "approval")
+                    }
+                } else {
+                    ScrollView(showsIndicators: false) {
+                        Card {
+                            ForEach(Array(shown.enumerated()), id: \.element.id) { index, finding in
+                                if index > 0 { Rule() }
+                                HStack(spacing: 12) {
+                                    VStack(alignment: .leading, spacing: 1) {
+                                        Text(finding.name).font(.system(size: 13)).foregroundStyle(Palette.ink).lineLimit(1)
+                                        Text(finding.user.isEmpty ? finding.why : "\(finding.user) · \(finding.why)")
+                                            .font(.system(size: 11.5)).foregroundStyle(Palette.muted).lineLimit(2)
+                                    }
+                                    Spacer(minLength: 8)
+                                    Quick("Show") { jump(to: finding.id) }
+                                }
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 10)
+                            }
+                        }
+                    }
+                    .frame(maxHeight: 330)
+                }
+                Text("Checked on this Mac, \(count(report.checked, "password", "passwords")), and nothing was sent anywhere. That is also why no password is looked up in a list of leaked ones: that would mean sending something out.")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Palette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        } else {
+            Card { Nothing(checking ? "Checking…" : "Reading your passwords needs a moment and your Mac's say-so.", art: "approval") }
+        }
+    }
+
     // MARK: - bringing them in
 
     private var bring: some View {
@@ -272,13 +402,15 @@ struct PasswordsPanel: View {
                 doneCard(finished)
             } else if let plan = pending {
                 previewCard(plan)
+            } else if vaultData != nil {
+                vaultCard
             } else {
                 Card {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("From another manager or browser")
                             .font(Typeface.heading(15, weight: .medium))
                             .foregroundStyle(Palette.ink)
-                        Text("Drop a passwords file here, or pick one. The Passwords app, Safari, Chrome, Edge, Brave, Firefox, Bitwarden, 1Password, LastPass, KeePass and Dashlane all export one; its kind is worked out from its columns. You see what it would do before anything is kept.")
+                        Text("Drop a passwords file here, or pick one. The Passwords app, Safari, Chrome, Edge, Brave, Firefox, Bitwarden, 1Password, LastPass, KeePass and Dashlane all export one, and so does \(Brand.name) (a backup file asks for its passphrase); its kind is worked out from its columns. You see what it would do before anything is kept.")
                             .font(.system(size: 12))
                             .foregroundStyle(Palette.muted)
                             .fixedSize(horizontal: false, vertical: true)
@@ -297,6 +429,8 @@ struct PasswordsPanel: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
+
+            if pending == nil, finished == nil, vaultData == nil, !browser.saved.isEmpty { exportCard }
 
             // Only while there is something to copy, which is only for a
             // person who had used the app this one comes from.
@@ -423,12 +557,14 @@ struct PasswordsPanel: View {
                 Text(summary(of: result))
                     .font(.system(size: 12.5))
                     .foregroundStyle(Palette.ink)
-                Text("The file still holds every password in plain text. \(Brand.name) keeps no copy of it: move it to the Trash now.")
+                Text(cameFromBackup
+                     ? "\(Brand.name) keeps no copy of the backup file; it stays encrypted wherever you keep it."
+                     : "The file still holds every password in plain text. \(Brand.name) keeps no copy of it: move it to the Trash now.")
                     .font(.system(size: 12))
                     .foregroundStyle(Palette.muted)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 8) {
-                    if pendingFile != nil, !trashed {
+                    if pendingFile != nil, !trashed, !cameFromBackup {
                         Pill("Move the file to the Trash", filled: true) { moveToTrash() }
                     } else if trashed {
                         Text("In the Trash").font(.system(size: 12)).foregroundStyle(Palette.muted)
@@ -443,12 +579,19 @@ struct PasswordsPanel: View {
 
     private func chooseFile() {
         let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.commaSeparatedText, .json, .plainText]
+        panel.allowedContentTypes = [.commaSeparatedText, .json, .plainText] + [UTType(filenameExtension: PasswordExport.ext)].compactMap { $0 }
         panel.allowsMultipleSelection = false
         panel.prompt = "Read"
         panel.message = "A passwords file another manager or browser exported (.csv, or Bitwarden's .json). Nothing is kept until you say so."
         guard panel.runModal() == .OK, let url = panel.url else { return }
         readFile(url)
+    }
+
+    private enum Read {
+        case plan(PasswordImport.Plan)
+        /// One of our own backups: it needs its passphrase first.
+        case vault(Data)
+        case bad
     }
 
     /// Reads and sorts it off the main thread; only the plan comes back.
@@ -457,19 +600,233 @@ struct PasswordsPanel: View {
         reading = true
         finished = nil
         trashed = false
+        openError = nil
         Task {
-            let plan: PasswordImport.Plan? = await Task.detached(priority: .userInitiated) {
-                guard let data = try? Data(contentsOf: url), let parsed = PasswordImport.parse(data) else { return nil }
-                return PasswordImport.plan(parsed, kept: Vault.all(), secret: { Vault.secret(of: $0) })
+            let read: Read = await Task.detached(priority: .userInitiated) {
+                guard let data = try? Data(contentsOf: url) else { return .bad }
+                if PasswordExport.isVault(data) { return .vault(data) }
+                guard let parsed = PasswordImport.parse(data) else { return .bad }
+                return .plan(PasswordImport.plan(parsed, kept: Vault.all(), secret: { Vault.secret(of: $0) }))
             }.value
             reading = false
-            guard let plan else {
+            switch read {
+            case .bad:
                 browser.announce("That doesn't look like a passwords file")
-                return
+            case .vault(let data):
+                pendingFile = url
+                vaultData = data
+                openPass = ""
+                tab = .bring
+            case .plan(let plan):
+                pendingFile = url
+                pending = plan
+                cameFromBackup = false
+                choice = .skip
             }
-            pendingFile = url
-            pending = plan
-            choice = .skip
+        }
+    }
+
+    /// The passphrase is asked for a backup of ours; wrong, and the file stays
+    /// shut.
+    private func openVault() {
+        guard let data = vaultData, !reading else { return }
+        let passphrase = openPass
+        reading = true
+        openError = nil
+        Task {
+            let opened = await Task.detached(priority: .userInitiated) { () -> Result<PasswordImport.Plan, PasswordExport.Failure> in
+                switch PasswordExport.open(data, passphrase: passphrase) {
+                case .failure(let why): return .failure(why)
+                case .success(let parsed):
+                    return .success(PasswordImport.plan(parsed, kept: Vault.all(), secret: { Vault.secret(of: $0) }))
+                }
+            }.value
+            reading = false
+            switch opened {
+            case .success(let plan):
+                openPass = ""
+                vaultData = nil
+                pending = plan
+                cameFromBackup = true
+                choice = .skip
+            case .failure(.wrongPassphrase):
+                openError = "That passphrase doesn't open this file."
+            case .failure(.tooNew):
+                openError = "This backup was made by a newer \(Brand.name)."
+            case .failure(.notAVault):
+                openError = "This isn't a readable \(Brand.name) backup."
+            }
+        }
+    }
+
+    private var vaultCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("A \(Brand.name) backup")
+                    .font(Typeface.heading(15, weight: .medium))
+                    .foregroundStyle(Palette.ink)
+                Text("\(pendingFile?.lastPathComponent ?? "This file") is encrypted. Type the passphrase it was made with.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Palette.muted)
+                SecureField("Passphrase", text: $openPass)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 280)
+                    .onSubmit(openVault)
+                if let openError {
+                    Text(openError).font(.system(size: 12)).foregroundStyle(Palette.accent)
+                }
+                HStack(spacing: 8) {
+                    Pill(reading ? "Opening…" : "Open", filled: true) { openVault() }
+                        .disabled(reading || openPass.isEmpty)
+                    Pill("Cancel") { vaultData = nil; pendingFile = nil; openPass = ""; openError = nil }
+                        .disabled(reading)
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    // MARK: - taking them out
+
+    private enum Out { case csv, backup }
+
+    private var exportCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Take them out")
+                    .font(Typeface.heading(15, weight: .medium))
+                    .foregroundStyle(Palette.ink)
+                Text("A backup is encrypted with a passphrase you choose, and only \(Brand.name) reads it back. A plain file opens in any other manager, but holds every password as readable text.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Palette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                if askingBackup {
+                    VStack(alignment: .leading, spacing: 8) {
+                        SecureField("Passphrase (at least \(PasswordExport.shortest) characters)", text: $backupPass)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 320)
+                        SecureField("Again", text: $backupAgain)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 320)
+                        Text(backupPass.isEmpty || backupAgain.isEmpty || backupPass == backupAgain
+                             ? "There is no way to open the backup without it: not even for \(Brand.name)."
+                             : "The two don't match.")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(!backupPass.isEmpty && !backupAgain.isEmpty && backupPass != backupAgain ? Palette.accent : Palette.muted)
+                        HStack(spacing: 8) {
+                            Pill(exporting ? "Saving…" : "Save backup…", filled: true) {
+                                let passphrase = backupPass
+                                askingBackup = false; backupPass = ""; backupAgain = ""
+                                export(.backup, passphrase: passphrase)
+                            }
+                            .disabled(exporting || backupPass.count < PasswordExport.shortest || backupPass != backupAgain)
+                            Pill("Cancel") { askingBackup = false; backupPass = ""; backupAgain = "" }
+                        }
+                    }
+                } else {
+                    HStack(spacing: 8) {
+                        Pill("Encrypted backup…", filled: true) { askingBackup = true; exported = nil }
+                            .disabled(exporting)
+                        Pill("Plain file (CSV)…") { confirmPlain() }
+                            .disabled(exporting)
+                    }
+                }
+                if let exported {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(exportedLine(exported))
+                            .font(.system(size: 12))
+                            .foregroundStyle(Palette.ink)
+                            .fixedSize(horizontal: false, vertical: true)
+                        HStack(spacing: 8) {
+                            Pill("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([exported.url]) }
+                            if exported.plain, !exportedTrashed {
+                                Pill("Move it to the Trash") { trashExport(exported.url) }
+                            } else if exportedTrashed {
+                                Text("In the Trash").font(.system(size: 12)).foregroundStyle(Palette.muted)
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func exportedLine(_ done: Exported) -> String {
+        let what = count(done.count, "password", "passwords")
+        var line = done.plain
+            ? "\(what) written to \(done.url.lastPathComponent), as plain text. Anyone who opens it can read them: move it to the Trash when you have used it."
+            : "\(what) sealed in \(done.url.lastPathComponent). Keep the passphrase: it can't be recovered."
+        if done.missed > 0 { line += " \(done.missed) couldn't be read from the keychain and are not in it." }
+        return line
+    }
+
+    /// A plain file is the one way out that leaves passwords readable, so it
+    /// asks first, and says so.
+    private func confirmPlain() {
+        let alert = NSAlert()
+        alert.messageText = "Write every password as plain text?"
+        alert.informativeText = "The file holds each site, account and password readable by anything that opens it, and by anyone who gets the file. Use an encrypted backup unless another manager needs a CSV."
+        alert.addButton(withTitle: "Write the file…")
+        alert.addButton(withTitle: "Cancel")
+        alert.alertStyle = .warning
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        exported = nil
+        export(.csv, passphrase: "")
+    }
+
+    /// Where to put it first, then the Mac's proof, then the read: nothing is
+    /// held while a panel is up.
+    private func export(_ kind: Out, passphrase: String) {
+        let panel = NSSavePanel()
+        panel.canCreateDirectories = true
+        switch kind {
+        case .csv:
+            panel.nameFieldStringValue = "\(Brand.name) passwords.csv"
+            panel.allowedContentTypes = [.commaSeparatedText]
+            panel.message = "This file will hold every password as plain text."
+        case .backup:
+            panel.nameFieldStringValue = "\(Brand.name) passwords.\(PasswordExport.ext)"
+            panel.allowedContentTypes = [UTType(filenameExtension: PasswordExport.ext)].compactMap { $0 }
+            panel.message = "An encrypted backup, opened with its passphrase."
+        }
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        exporting = true
+        let all = browser.saved
+        Vault.Unlock.ask("take your passwords out") { ok in
+            guard ok else { exporting = false; return }
+            Task {
+                let made: (data: Data, count: Int)? = await Task.detached(priority: .userInitiated) {
+                    let items = all.compactMap { Vault.item(of: $0) }
+                    let data: Data?
+                    switch kind {
+                    case .csv: data = PasswordExport.csv(items).data(using: .utf8)
+                    case .backup: data = PasswordExport.seal(items, passphrase: passphrase)
+                    }
+                    return data.map { ($0, items.count) }
+                }.value
+                exporting = false
+                guard let made else { browser.announce("Couldn't make the file"); return }
+                do {
+                    try made.data.write(to: url, options: .atomic)
+                    // Only the one who made it reads it.
+                    try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+                    exportedTrashed = false
+                    exported = Exported(url: url, plain: kind == .csv, count: made.count, missed: all.count - made.count)
+                } catch {
+                    browser.announce("Couldn't save the file")
+                }
+            }
+        }
+    }
+
+    private func trashExport(_ url: URL) {
+        NSWorkspace.shared.recycle([url]) { _, error in
+            DispatchQueue.main.async {
+                if error == nil { exportedTrashed = true } else { browser.announce("Couldn't move it to the Trash") }
+            }
         }
     }
 
@@ -525,6 +882,8 @@ struct PasswordsPanel: View {
     private struct Row: View {
         let login: Kept
         let picked: Bool
+        /// The last health check found something to say about it.
+        let flagged: Bool
         let pick: () -> Void
         @State private var hovering = false
 
@@ -543,6 +902,10 @@ struct PasswordsPanel: View {
                         .truncationMode(.middle)
                 }
                 Spacer(minLength: 0)
+                if flagged {
+                    Circle().fill(Palette.accent).frame(width: 6, height: 6)
+                        .help("The Health tab has something to say about this one")
+                }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)

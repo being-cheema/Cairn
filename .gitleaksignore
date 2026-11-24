@@ -1,0 +1,2 @@
+# A made-up setup key in a test (HOTP is refused), not a secret.
+df52568a542d3cb3c9ca171cc86cb998db9f3703:Tests/SearchTests/TOTPTests.swift:generic-api-key:33
