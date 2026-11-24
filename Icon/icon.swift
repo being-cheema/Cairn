@@ -12,14 +12,14 @@ let out = URL(fileURLWithPath: CommandLine.arguments.dropFirst().first ?? "AppIc
 /// one, as Chrome Canary does, so the build from a worktree and the installed
 /// app are told apart at a glance: in the Dock, in ⌘Tab, at 16 points.
 let dev = ProcessInfo.processInfo.environment["SEARCH_DEV"] == "1"
-let plateColor = dev ? NSColor(srgbRed: 1.0, green: 0.8, blue: 0.2, alpha: 1) : NSColor.white
+let plateColor = dev ? NSColor(srgbRed: 1.0, green: 0.8, blue: 0.2, alpha: 1) : NSColor(srgbRed: 0.980, green: 0.969, blue: 0.949, alpha: 1)
 try? FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
 
-/// Drice's Subtract.svg (22 September 2026): a pill with an S cut out of it,
-/// on its own 608 × 276 canvas. The same path is in Design.swift's
-/// `Logomark` and in the website's mark — one shape, three places.
-let canvas = (width: 608.0, height: 276.0)
-let markData = "M469.443 0C545.471 0.00013198 607.103 61.6325 607.104 137.66C607.104 213.688 545.471 275.321 469.443 275.321H137.66C61.6323 275.321 0 213.688 0 137.66C0.00016085 61.6325 61.6325 0.000140192 137.66 0H469.443ZM138.104 51.5977C127.234 51.5977 117.512 53.5115 108.938 57.3389C100.518 61.0132 93.8581 66.2188 88.959 72.9551C84.2132 79.5381 81.8398 87.3464 81.8398 96.3789C81.8399 105.258 83.6773 112.607 87.3516 118.425C91.0258 124.089 95.9251 128.682 102.049 132.203C108.173 135.571 114.833 138.327 122.028 140.471L151.652 149.197C158.389 151.188 163.9 154.249 168.187 158.383C172.473 162.516 174.617 168.028 174.617 174.917C174.617 182.572 171.402 188.849 164.972 193.748C158.695 198.494 150.122 200.867 139.252 200.867C132.21 200.867 125.702 199.413 119.731 196.504C113.914 193.442 109.091 189.308 105.264 184.103C101.436 178.744 99.2169 172.697 98.6045 165.961H97.6855L75.4102 171.013C76.3287 180.658 79.697 189.308 85.5146 196.963C91.3322 204.618 98.9103 210.665 108.249 215.104C117.741 219.544 128.076 221.765 139.252 221.765C151.193 221.765 161.68 219.774 170.713 215.794C179.746 211.813 186.711 206.225 191.61 199.029C196.662 191.834 199.188 183.414 199.188 173.769C199.188 164.124 197.352 156.239 193.678 150.115C190.003 143.838 185.104 138.863 178.98 135.188C172.857 131.514 166.044 128.605 158.542 126.462L128.229 117.735C121.799 115.898 116.516 113.219 112.383 109.698C108.402 106.177 106.412 101.354 106.412 95.2305C106.412 88.188 109.168 82.6758 114.68 78.6953C120.344 74.5619 128.152 72.4951 138.104 72.4951C147.901 72.4952 155.939 74.9448 162.216 79.8438C168.493 84.7428 172.397 91.1729 173.928 99.1338H174.847L196.663 93.8525C195.745 85.5853 192.605 78.3131 187.247 72.0361C181.889 65.6061 174.923 60.6306 166.35 57.1094C157.929 53.4351 148.514 51.5977 138.104 51.5977Z"
+/// The mark: a cairn, three stones stacked, each a little off the one under
+/// it, on its own 400 × 360 canvas. (It was the upstream's pill with an S; this
+/// is Cairn's own.) Design.swift's `Logomark` is still the upstream's.
+let canvas = (width: 400.0, height: 360.0)
+let markData = "M350 284C350 322.66 282.85 354 200 354C117.16 354 50 322.66 50 284C50 245.34 117.16 214 200 214C282.85 214 350 245.34 350 284ZM312 154C312 184.93 264.54 210 206 210C147.46 210 100 184.93 100 154C100 123.07 147.46 98 206 98C264.54 98 312 123.07 312 154ZM260 50C260 74.3 231.35 94 196 94C160.65 94 132 74.3 132 50C132 25.7 160.65 6 196 6C231.35 6 260 25.7 260 50Z"
 
 /// A tiny reader for the one path the mark is: absolute M, L, H, V, C, Z —
 /// what Figma writes for a flattened shape, and nothing else.
@@ -111,8 +111,8 @@ func draw(_ size: CGFloat) -> NSImage {
     // The mark, black on the plate, at the proportion of Drice's search.jpg
     // (22 September 2026): 607 of a 1000-wide canvas, which on a plate that
     // is 824 of 1024 comes to three quarters of the plate.
-    NSColor(red: 0.09, green: 0.09, blue: 0.09, alpha: 1).setFill()
-    markPath(in: plate, fraction: 0.754).fill()
+    NSColor(srgbRed: 0.784, green: 0.380, blue: 0.247, alpha: 1).setFill()
+    markPath(in: plate, fraction: 0.72).fill()
     return image
 }
 
@@ -164,15 +164,16 @@ if CommandLine.arguments.count > 2 {
 
     // An Icon Composer canvas is the plate, 1024 points across; the mark
     // takes the same share of it as it does of the plate drawn above.
-    let width = 1024 * 0.754
+    let width = 1024 * 0.72
     let height = width * canvas.height / canvas.width
     let svg = """
     <svg xmlns="http://www.w3.org/2000/svg" width="\(width)" height="\(height)" viewBox="0 0 \(Int(canvas.width)) \(Int(canvas.height))">\
-    <path fill-rule="evenodd" fill="#171717" d="\(markData)"/></svg>
+    <path fill-rule="evenodd" fill="#C8613F" d="\(markData)"/></svg>
     """
     try svg.write(to: assets.appendingPathComponent("mark.svg"), atomically: true, encoding: .utf8)
 
-    let white = #"{ "solid" : "srgb:1.00000,1.00000,1.00000,1.00000" }"#
+    let white = #"{ "solid" : "srgb:0.98000,0.96900,0.94900,1.00000" }"#
+    let coral = #"{ "solid" : "srgb:0.78400,0.38000,0.24700,1.00000" }"#
     let yellow = #"{ "solid" : "srgb:1.00000,0.80000,0.20000,1.00000" }"#
     let ink = #"{ "solid" : "srgb:0.09000,0.09000,0.09000,1.00000" }"#
     // A dev build keeps its yellow in Dark too: the plate yellow in light,
@@ -193,7 +194,7 @@ if CommandLine.arguments.count > 2 {
               "image-name" : "mark.svg",
               "glass" : false,
               "fill-specializations" : [
-                { "value" : \(ink) },
+                { "value" : \(coral) },
                 { "appearance" : "dark", "value" : \(plate) },
                 { "appearance" : "tinted", "value" : \(white) }
               ]
