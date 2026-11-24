@@ -172,7 +172,7 @@ struct PasswordsPanel: View {
             guard let provider = providers.first else { return false }
             _ = provider.loadObject(ofClass: URL.self) { url, _ in
                 guard let url else { return }
-                DispatchQueue.main.async { tab = .bring; readFile(url) }
+                DispatchQueue.main.async { switchTab(.bring); readFile(url) }
             }
             return true
         }
@@ -184,10 +184,21 @@ struct PasswordsPanel: View {
 
     // MARK: - the tabs
 
+    /// Leaving the All tab with typed changes in the Add or Edit form asks
+    /// first, as picking another row does.
+    private func switchTab(_ next: Tab) {
+        guard next != tab else { return }
+        if tab == .all, editing != nil, editDirty {
+            confirmDiscard { editDirty = false; editing = nil; tab = next }
+        } else {
+            tab = next
+        }
+    }
+
     private var tabs: some View {
         HStack(spacing: 18) {
             ForEach(Tab.allCases) { each in
-                Button { tab = each } label: {
+                Button { switchTab(each) } label: {
                     VStack(spacing: 5) {
                         Text(each.rawValue)
                             .font(.system(size: 13, weight: tab == each ? .medium : .regular))

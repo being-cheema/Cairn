@@ -1455,6 +1455,13 @@ final class Preferences: ObservableObject {
         asksWhereToSave = store.bool(forKey: "downloads.ask")
         savesPasswords = store.object(forKey: "passwords.save") as? Bool ?? true
         fillsPasswords = store.object(forKey: "passwords.fill") as? Bool ?? true
+        // A new profile asks Touch ID before a saved password goes into a
+        // page; one from before this was settled keeps its choice (off). The
+        // answer is written down so the next launch doesn't take it for new.
+        if store.object(forKey: "passwords.fill.prove") == nil {
+            // "welcomed" is written when the welcome is finished, after this.
+            store.set(store.object(forKey: "welcomed") == nil, forKey: "passwords.fill.prove")
+        }
         asksBeforeFilling = store.bool(forKey: "passwords.fill.prove")
         keepsVaultUnlocked = store.object(forKey: Vault.Unlock.key) as? Bool ?? true
         suggestsPasswords = store.object(forKey: "passwords.suggest") as? Bool ?? true
