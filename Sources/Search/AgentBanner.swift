@@ -349,7 +349,7 @@ private struct AgentQuestion: View {
 /// An action the browser is holding for you (AgentGate): said by the
 /// browser in its own words, with Approve and Don't Approve, pressed only by
 /// a fresh click of yours (AgentControl.answerHeld).
-private struct AgentApproval: View {
+struct AgentApproval: View {
     @ObservedObject var session: AgentSession
     let held: HeldAction
 
@@ -358,14 +358,14 @@ private struct AgentApproval: View {
             HStack(alignment: .top, spacing: 10) {
                 ArtPicture(name: "approval", size: 44)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("“\(session.client)” is waiting for you")
+                    Text(verbatim: AgentApproval.title(client: session.client, hold: held.hold))
                         .font(.system(size: 12.5, weight: .medium))
                         .foregroundStyle(Palette.ink)
-                    Text(verbatim: held.hold.summary)
+                    Text(verbatim: AgentApproval.detail(held.hold))
                         .font(.system(size: 11.5))
                         .foregroundStyle(Palette.ink)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text("Nothing happens until you approve. The words in quotes are the page's own.")
+                    Text(verbatim: AgentApproval.footnote(held.hold))
                         .font(.system(size: 10.5))
                         .foregroundStyle(Palette.muted)
                         .fixedSize(horizontal: false, vertical: true)
@@ -399,6 +399,28 @@ private struct AgentApproval: View {
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Palette.hairline, lineWidth: 1))
         .shadow(color: .black.opacity(0.12), radius: 20, y: 6)
         .padding(.horizontal, 16)
+    }
+}
+
+extension AgentApproval {
+    /// The card's words. A move to another site is said as one, with the
+    /// site, rather than as the rule's name; the rest as the browser holds
+    /// them (AgentGate), the page's words in quotes.
+    static func title(client: String, hold: AgentGate.Hold) -> String {
+        hold.reason == .leave ? "“\(client)” wants to go to another site" : "“\(client)” is waiting for you"
+    }
+
+    static func detail(_ hold: AgentGate.Hold) -> String {
+        guard hold.reason == .leave else { return hold.summary }
+        return "\(hold.site ?? "A new site") — this task hasn't used it yet."
+    }
+
+    static func footnote(_ hold: AgentGate.Hold) -> String {
+        if hold.reason == .leave {
+            return "It's paused until you answer. A page can try to send an agent elsewhere: approve only if this is what you asked for."
+        }
+        let quotes = hold.summary.contains("“") || hold.summary.contains("\"")
+        return "It's paused until you answer." + (quotes ? " The words in quotes are the page's own." : "")
     }
 }
 

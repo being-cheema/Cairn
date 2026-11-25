@@ -67,6 +67,9 @@ final class ClaudeSession: ObservableObject {
     private var input: FileHandle?
     private var folder: URL?
     private var pending = Data()
+    /// Which run's words are heard: a new one with each start, and none
+    /// once Stop has let a run go.
+    private var generation = 0
     /// Words of the message in progress arrived as they were written, so the
     /// finished message repeating them is not shown twice.
     private var streamed = false
@@ -77,9 +80,10 @@ final class ClaudeSession: ObservableObject {
     /// then gives the very same answer again is shown saying it once.
     private var current = ""
     private var previous = ""
-    /// Tools already shown for this turn: told as they begin and again in the
-    /// finished message.
-    private var seenTools = Set<String>()
+    /// Tools already shown for this turn, and where in its steps: told as
+    /// they begin and again in the finished message, which may say more (the
+    /// site it opens), so the step is said again in place, not added.
+    private var seenTools: [String: Int] = [:]
     /// A line longer than this is not the program speaking: it is ended.
     private static let longest = 8 << 20
 
@@ -115,7 +119,7 @@ final class ClaudeSession: ObservableObject {
         problem = nil
         draft = ""
         turns.append(Turn(question: text))
-        seenTools = []
+        seenTools = [:]
         streamed = false
         needBreak = false
         current = ""
@@ -140,12 +144,16 @@ final class ClaudeSession: ObservableObject {
         draft = ""
     }
 
+    /// The window the panel is in, where its run works and asks.
+    var browser: Browser? { window() }
+
     /// What it is doing now, while it is: the last thing it said it was at.
     var step: String? { running ? turns.last?.steps.last : nil }
 
     /// Ends the run, for Stop, for closing the panel, for a window going.
     func stop() {
         let wasRunning = running
+        generation += 1
         let live = process
         process = nil
         input = nil
@@ -154,10 +162,13 @@ final class ClaudeSession: ObservableObject {
         (live?.standardError as? Pipe)?.fileHandleForReading.readabilityHandler = nil
         if live?.isRunning == true { live?.terminate() }
         cleanUp()
-        if wasRunning { finish(failing: "Stopped.") }
+        if wasRunning { finish(failing: Self.stopped) }
         running = false
         disarm()
     }
+
+    /// What a turn ended by Stop says.
+    static let stopped = "Stopped."
 
     /// The turn is over: the run's pass lets nothing in until the next Send.
     private func disarm() {
@@ -197,10 +208,12 @@ final class ClaudeSession: ObservableObject {
         run.standardOutput = fromIt
         run.standardError = errors
 
+        generation += 1
+        let mine = generation
         fromIt.fileHandleForReading.readabilityHandler = { [weak self] handle in
             let data = handle.availableData
             guard !data.isEmpty else { handle.readabilityHandler = nil; return }
-            DispatchQueue.main.async { MainActor.assumeIsolated { self?.take(data) } }
+            DispatchQueue.main.async { MainActor.assumeIsolated { self?.take(data, from: mine) } }
         }
         // Read and dropped: a full pipe would stop it, and what it says there
         // may carry a page's words, so none of it is kept or logged.
@@ -239,7 +252,12 @@ final class ClaudeSession: ObservableObject {
 
     // MARK: - what comes back
 
-    private func take(_ data: Data) {
+    private func take(_ data: Data, from run: Int) {
+        // Words already on their way when Stop was pressed, or from a run
+        // since let go, belong to no turn: a step added after "Stopped."
+        // would say it went on. (A run that ended by itself is still heard
+        // out: its last words may come after the news of its end.)
+        guard run == generation else { return }
         pending.append(data)
         if pending.count > Self.longest {
             finish(failing: "Claude Code sent more than expected, so it was stopped.")
@@ -275,8 +293,13 @@ final class ClaudeSession: ObservableObject {
                 turns[last].answer += (turns[last].answer.isEmpty ? "" : "\n\n") + text
                 current += text
             case .tool(let id, let step):
-                if let id { guard seenTools.insert(id).inserted else { continue } }
-                else if turns[last].steps.last == step { continue }
+                if let id {
+                    if let at = seenTools[id] {
+                        if turns[last].steps.indices.contains(at) { turns[last].steps[at] = step }
+                        continue
+                    }
+                    seenTools[id] = turns[last].steps.count
+                } else if turns[last].steps.last == step { continue }
                 turns[last].steps.append(step)
             case .done:
                 dropRepeat(last)

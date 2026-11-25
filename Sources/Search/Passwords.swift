@@ -3,7 +3,13 @@ import UniformTypeIdentifiers
 
 /// The one tint for taking something away, wherever it is on this page.
 private enum Tone {
-    static let remove = Color.red.opacity(0.75)
+    /// A red that reads as text on paper (about 5:1) and on the dark ground
+    /// (about 6:1); the plain red at 75% was 2.2:1 in light.
+    static let remove = Color(nsColor: NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            ? NSColor(srgbRed: 1.0, green: 0.45, blue: 0.42, alpha: 1)
+            : NSColor(srgbRed: 0.72, green: 0.13, blue: 0.11, alpha: 1)
+    })
 }
 
 /// What the Passwords page puts on the clipboard goes the same way: this Mac's

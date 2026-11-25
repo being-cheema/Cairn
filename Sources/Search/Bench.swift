@@ -1,5 +1,6 @@
 import AppKit
 import AuthenticationServices
+import CryptoKit
 import LocalAuthentication
 import SwiftUI
 import WebKit
@@ -2602,6 +2603,97 @@ final class Bench {
                         "announced": browser.announcement ?? ""])
             }
             settled()
+
+        case "passkeys":
+            // Cairn's own passkeys in a test run. "real": a page's request
+            // answered by them (SoftPasskeys, Touch ID as `ui confirm` says)
+            // instead of the made-up rehearsal, to try them on a real site.
+            // "seed": passkeys made up for sites ({rp, user, display}),
+            // "logins": passwords kept ({host, user, password, title, notes,
+            // totp}), to see the Passwords page with things in it. "forget":
+            // every passkey of this world. Answers with what is kept — never
+            // a key. Only on a SEARCH_PROBE run: the keychain items are the
+            // test world's own, by label.
+            guard Store.testing else { answer(["error": "passkeys only works on a --test run"]); return }
+            if let on = request["real"] as? Bool { Passkeys.realInTests = on }
+            if request["forget"] as? Bool == true { PasskeyStore.all().forEach { PasskeyStore.remove($0) } }
+            for (n, seed) in (request["seed"] as? [[String: Any]] ?? []).enumerated() {
+                guard let rp = seed["rp"] as? String else { continue }
+                let user = seed["user"] as? String ?? "user\(n)"
+                let record = PasskeyRecord(rp: rp, credentialID: Data((0..<32).map { _ in UInt8.random(in: 0...255) }),
+                                           userHandle: Data(user.utf8), userName: user,
+                                           displayName: seed["display"] as? String ?? user,
+                                           created: Date().addingTimeInterval(-Double(n) * 86_400 * 9),
+                                           lastUsed: n.isMultiple(of: 2) ? Date().addingTimeInterval(-3600) : nil)
+                PasskeyStore.save(record, key: P256.Signing.PrivateKey())
+            }
+            for login in request["logins"] as? [[String: Any]] ?? [] {
+                guard let host = login["host"] as? String, let password = login["password"] as? String else { continue }
+                let extras = Extras(title: login["title"] as? String, notes: login["notes"] as? String,
+                                    totp: login["totp"] as? String, urls: nil,
+                                    changed: (login["age"] as? Double).map { Date().addingTimeInterval(-$0 * 86_400) } ?? Date())
+                Vault.save(host: host, user: login["user"] as? String ?? "", password: password, extras: extras)
+            }
+            if request["logins"] != nil { browser.relist() }
+            answer(["real": Passkeys.realInTests, "soft": SoftPasskeys.on, "last": Passkeys.last, "asked": Passkeys.asked,
+                    "kept": PasskeyStore.all().map { ["rp": $0.rp, "user": $0.userName, "id": $0.credentialID.base64EncodedString(),
+                                                      "used": $0.lastUsed != nil] }])
+
+        case "axpress":
+            // A control of the window pressed by its accessibility name, as
+            // VoiceOver would: SwiftUI's own buttons (Check passwords, a row
+            // of a list) in a hidden probe, where a click never reaches them.
+            // "list": the names there are, to find one. Test runs only.
+            guard Store.testing else { answer(["error": "axpress only works on a --test run"]); return }
+            guard let window = browser.window else { answer(["error": "no window"]); return }
+            // "at": a click at a point of the window from its top-left,
+            // through the window as AppKit hands one over.
+            if let at = request["at"] as? [Double], at.count == 2 {
+                let point = NSPoint(x: at[0], y: Double(window.contentView?.frame.height ?? window.frame.height) - at[1])
+                // Each press numbered apart, as the Mac numbers them: SwiftUI
+                // takes a press with the number of one before for that one.
+                Bench.pressed += 1
+                for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+                    if let event = NSEvent.mouseEvent(with: type, location: point, modifierFlags: [],
+                                                      timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                                                      context: nil, eventNumber: Bench.pressed, clickCount: 1,
+                                                      pressure: type == .leftMouseDown ? 1 : 0) {
+                        window.sendEvent(event)
+                    }
+                }
+                answer(["clicked": at])
+                return
+            }
+            var names: [String] = []
+            var found: NSAccessibilityElementProtocol?
+            let wanted = request["name"] as? String
+            func walk(_ element: Any, depth: Int) {
+                guard depth < 60, found == nil, let node = element as? NSAccessibilityProtocol else { return }
+                let label = [node.accessibilityLabel(), node.accessibilityTitle(), node.accessibilityValue() as? String]
+                    .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " | ")
+                if !label.isEmpty, node.accessibilityRole() == .button || node.accessibilityRole() == .cell
+                    || node.accessibilityRole() == .row || request["any"] as? Bool == true {
+                    names.append("\(node.accessibilityRole()?.rawValue ?? "?"): \(label)")
+                }
+                if let wanted, label == wanted || label.hasPrefix(wanted + " | "), let element = element as? NSAccessibilityElementProtocol {
+                    found = element
+                    return
+                }
+                let children = node.accessibilityChildren() ?? []
+                for child in children { walk(child, depth: depth + 1) }
+                // A view whose tree hasn't been asked for yet (no
+                // assistive app has looked): its subviews, which build theirs.
+                if children.isEmpty, let view = element as? NSView {
+                    for sub in view.subviews { walk(sub, depth: depth + 1) }
+                }
+            }
+            walk(window.contentView ?? window, depth: 0)
+            if let found = found as? NSAccessibilityProtocol {
+                let pressed = found.accessibilityPerformPress()
+                answer(["pressed": pressed])
+            } else {
+                answer(wanted == nil ? ["names": names] : ["error": "nothing named \(wanted ?? "")", "names": names])
+            }
 
         case "history":
             // History on a --test run: "take" puts an address in as an import
@@ -5874,6 +5966,9 @@ final class Bench {
         weak var view: NSView?
         init(_ view: NSView?) { self.view = view }
     }
+
+    /// How many presses `axpress` "at" has made, to number the next.
+    static var pressed = 0
 
     /// The view a `split mouse … to: view` press landed on, for the rest of it.
     private weak var pressed: NSView?

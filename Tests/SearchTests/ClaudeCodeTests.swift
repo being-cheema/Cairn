@@ -176,7 +176,7 @@ final class ClaudeCodeTests: XCTestCase {
 
     func testAnAnswerHasItsTextAndItsToolsInOrder() {
         let line = #"{"type":"assistant","message":{"content":[{"type":"text","text":"Opening it."},{"type":"tool_use","id":"t1","name":"mcp__search__open_tab","input":{"url":"https://example.org"}},{"type":"text","text":""}]}}"#
-        XCTAssertEqual(ClaudeCode.events(from: line), [.text("Opening it."), .tool(id: "t1", step: "Opening a tab")])
+        XCTAssertEqual(ClaudeCode.events(from: line), [.text("Opening it."), .tool(id: "t1", step: "Opening example.org")])
     }
 
     func testWhatAToolReturnedIsNeverShown() {

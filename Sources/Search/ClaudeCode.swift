@@ -246,7 +246,7 @@ enum ClaudeCode {
             case "content_block_start":
                 guard let block = event["content_block"] as? [String: Any], block["type"] as? String == "tool_use",
                       let name = block["name"] as? String else { return [] }
-                return [.tool(id: block["id"] as? String, step: describe(tool: name))]
+                return [.tool(id: block["id"] as? String, step: describe(tool: name, input: block["input"] as? [String: Any]))]
             default:
                 return []
             }
@@ -263,7 +263,7 @@ enum ClaudeCode {
                     return .text(text)
                 case "tool_use":
                     guard let name = block["name"] as? String else { return nil }
-                    return .tool(id: block["id"] as? String, step: describe(tool: name))
+                    return .tool(id: block["id"] as? String, step: describe(tool: name, input: block["input"] as? [String: Any]))
                 default:
                     return nil
                 }
@@ -279,8 +279,12 @@ enum ClaudeCode {
         }
     }
 
-    /// `mcp__search__read_page` as the person would say it.
-    static func describe(tool name: String) -> String {
+    /// `mcp__search__read_page` as the person would say it; with the site,
+    /// for a tab opened or a page gone to, once its input has arrived (the
+    /// finished message carries it; the first word of a tool does not).
+    /// Only the address's host, and only one made of a host's letters: never
+    /// other words of the input, which a page may have put there.
+    static func describe(tool name: String, input: [String: Any]? = nil) -> String {
         let prefix = "mcp__\(server)__"
         let bare = name.hasPrefix(prefix) ? String(name.dropFirst(prefix.count)) : name
         let known: [String: String] = [
@@ -297,9 +301,32 @@ enum ClaudeCode {
             "screenshot": "Looking at the page",
             "press": "Pressing a key",
             "scroll": "Scrolling",
+            // It is done with the browser: its tabs close.
+            "disconnect": "Closing its tabs",
         ]
+        if let host = site(input?["url"] as? String) {
+            switch bare {
+            case "open_tab": return "Opening \(host)"
+            case "navigate": return "Going to \(host)"
+            default: break
+            }
+        }
         if let said = known[bare] { return said }
         let spaced = bare.replacingOccurrences(of: "_", with: " ")
         return spaced.prefix(1).uppercased() + spaced.dropFirst()
+    }
+
+    /// The host of an address a tool was given, as shown in a step: lower
+    /// case, "www." dropped, nothing but a host's letters, and short.
+    static func site(_ address: String?) -> String? {
+        guard var address = address?.trimmingCharacters(in: .whitespaces) else { return nil }
+        // "example.org", as a model often writes it, is opened as https.
+        if !address.contains("://") { address = "https://" + address }
+        guard let url = URL(string: address), let scheme = url.scheme?.lowercased(),
+              ["http", "https"].contains(scheme), var host = url.host()?.lowercased() else { return nil }
+        if host.hasPrefix("www.") { host.removeFirst(4) }
+        let allowed = Set("abcdefghijklmnopqrstuvwxyz0123456789.-")
+        guard !host.isEmpty, host.count <= 64, host.allSatisfy(allowed.contains) else { return nil }
+        return host
     }
 }

@@ -76,6 +76,17 @@ final class Passkeys: NSObject {
     private(set) static var asked = 0
     private(set) static var last: [String: Any] = [:]
 
+    /// A test run's switch (bench `passkeys` "real"): Cairn's own passkeys
+    /// (SoftPasskeys) answer instead of a made-up credential, so they can be
+    /// tried against a real site. Kept under the test world's keychain label
+    /// (PasskeyStore), Touch ID answered as `ui confirm` says. Never on
+    /// outside a test run.
+    static var realInTests = false
+
+    /// A test run answering with a made-up credential, as it does unless
+    /// switched to the real ones.
+    static var rehearsing: Bool { Store.testing && !realInTests }
+
     /// The one on screen, and whom to answer when it ends. A new request
     /// ends the one before, as a page asking twice gets in any browser.
     private var controller: ASAuthorizationController?
@@ -182,7 +193,7 @@ final class Passkeys: NSObject {
         let allowed = Set(Passkeys.descriptors(body["allowCredentials"]).map(\.id))
         // A test run never asks the Mac: it would list the passkeys of
         // whoever is working beside it. One made up, for the site.
-        if Store.testing {
+        if Passkeys.rehearsing {
             return settle(key, token: body["token"] as? String, [Offered(id: Passkeys.rehearsalID, name: "probe@\(rp)", provider: "Test")])
         }
         if SoftPasskeys.on {
@@ -228,7 +239,7 @@ final class Passkeys: NSObject {
         Passkeys.asked += 1
         Passkeys.last = ["kind": "get", "rp": waiting.rp, "origin": waiting.origin, "requests": 1, "conditional": true]
         Passkeys.log.notice("picked under the field for \(waiting.rp, privacy: .private)")
-        if Store.testing {
+        if Passkeys.rehearsing {
             var reply = Passkeys.rehearsal("get", rp: waiting.rp, origin: waiting.origin, challenge: waiting.clientData.challenge)
             if waiting.body["prf"] is [String: Any] {
                 reply["prf"] = Passkeys.prfReply(enabled: nil, first: SymmetricKey(data: SHA256.hash(data: Data("rehearsal".utf8))),
@@ -367,7 +378,7 @@ final class Passkeys: NSObject {
         // whoever is working beside it. It gets a credential made up on the
         // spot instead, so the checks above and the page's side are still
         // what they are for real.
-        if Store.testing {
+        if Passkeys.rehearsing {
             var reply = Passkeys.rehearsal(kind, rp: rp, origin: origin, challenge: challenge, key: keysOnly)
             if body["prf"] is [String: Any] {
                 // Made-up output, sealed the way a real one is, so the page's
@@ -1218,11 +1229,15 @@ final class PasskeyRelay: NSObject, WKScriptMessageHandlerWithReply {
         return send(request, options.signal, pk.extensions);
       });
 
-    \(keysOnly ? "" : capabilities + "\n")})();
+    \(keysOnly ? "" : capabilities(macs: !SoftPasskeys.on) + "\n")})();
     """ }
 
-    /// What this browser says it can do, with passkeys on.
-    private static let capabilities = """
+    /// What this browser says it can do, with passkeys on. `macs`: the
+    /// Mac's own passkeys (the entitled build). Cairn's own (SoftPasskeys)
+    /// make no PRF output and can't be reached from a phone, so a build
+    /// using them says neither: a site that reads the capabilities first
+    /// then never counts on a PRF secret it won't get.
+    static func capabilities(macs: Bool) -> String { """
       // What this browser can and can't do, for the pages that ask first:
       // passkeys from the Mac, a phone or a key, under the field too, and
       // none of what WebKit would have answered for itself.
@@ -1235,17 +1250,17 @@ final class PasskeyRelay: NSObject, WKScriptMessageHandlerWithReply {
           function ours(c) {
             c = Object.assign({}, c);
             Object.keys(c).forEach(function (k) { if (k.indexOf('extension:') === 0 && k !== 'extension:credProps') c[k] = false; });
-            c['extension:prf'] = \(Passkeys.prfAvailable);
+            c['extension:prf'] = \(macs && Passkeys.prfAvailable);
             return Object.assign(c, {
               conditionalCreate: false, conditionalGet: true, conditionalMediation: true, relatedOrigins: false,
               signalAllAcceptedCredentials: false, signalCurrentUserDetails: false, signalUnknownCredential: false,
-              hybridTransport: true, passkeyPlatformAuthenticator: true, userVerifyingPlatformAuthenticator: true
+              hybridTransport: \(macs), passkeyPlatformAuthenticator: true, userVerifyingPlatformAuthenticator: true
             });
           }
           return nativeCapabilities.call(P).then(ours, function () { return ours({}); });
         });
       }
-    """
+    """ }
 
     /// Search's side of it, in Search's own world (Web.world), where the
     /// handler is and a page can't look. A request the page dispatches is

@@ -13,8 +13,9 @@ import AuthenticationServices
 @MainActor
 enum SoftPasskeys {
     /// On whenever the Mac's own can't be had. A build with the entitlement
-    /// keeps using the Mac's.
-    static var on: Bool { !Preferences.entitledToPasskeys }
+    /// keeps using the Mac's; a test run switched to the real ones
+    /// (Passkeys.realInTests) uses these, never the Mac's sheet.
+    static var on: Bool { !Preferences.entitledToPasskeys || (Store.testing && Passkeys.realInTests) }
 
     /// The client data the signature covers, written here: the origin in it is
     /// the one WebKit reports for the frame (see Passkeys.perform), never one

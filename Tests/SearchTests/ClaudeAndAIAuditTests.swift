@@ -67,7 +67,7 @@ final class ClaudeAndAIAuditTests: XCTestCase {
         chat.submit()
         await wait("the answer") { chat.turns.last?.done == true }
         XCTAssertEqual(chat.turns.last?.answer, "The title is Example Domain.\n\nAnything else?")
-        XCTAssertEqual(chat.turns.last?.steps, ["Disconnect"])
+        XCTAssertEqual(chat.turns.last?.steps, ["Closing its tabs"])
         chat.stop()
     }
 

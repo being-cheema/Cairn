@@ -36,6 +36,12 @@ struct ClaudePanel: View {
                 .onChange(of: session.turns.count) { _, _ in scrollToEnd(scroller) }
             }
 
+            // Held for the person (AgentGate): said here too, above the box,
+            // where it can't scroll away — the card with Approve is at the
+            // foot of the page, and a click of yours there is the only answer.
+            PanelHeld(claude: session) { waiting in
+                if waiting { PanelWaiting(claude: session) }
+            }
             composer
         }
         .onAppear { typing = true }
@@ -52,12 +58,20 @@ struct ClaudePanel: View {
                 Text("Claude")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Palette.ink)
-                if let step = session.step {
-                    Text(verbatim: step + "…")
-                        .font(.system(size: 11))
-                        .foregroundStyle(Palette.muted)
-                        .lineLimit(1)
-                        .transition(.opacity)
+                PanelHeld(claude: session) { waiting in
+                    if waiting {
+                        Text("Waiting for your approval")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(Palette.accent)
+                            .lineLimit(1)
+                            .transition(.opacity)
+                    } else if let step = session.step {
+                        Text(verbatim: step + "…")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Palette.muted)
+                            .lineLimit(1)
+                            .transition(.opacity)
+                    }
                 }
             }
             Spacer(minLength: 0)
@@ -147,6 +161,13 @@ struct ClaudePanel: View {
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Palette.wash.opacity(0.6), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    /// A turn you stopped, said as what you did rather than as a fault.
+    static let stoppedWords = "You stopped it. Its tabs were closed."
+
+    static func earlier(_ count: Int) -> String {
+        count == 1 ? "1 earlier step" : "\(count) earlier steps"
     }
 
     static func say(_ problem: ClaudeSession.Problem) -> String {
@@ -276,7 +297,7 @@ struct ClaudePanel: View {
                 if !turn.steps.isEmpty {
                     VStack(alignment: .leading, spacing: 5) {
                         if turn.steps.count > Self.shown {
-                            Text("\(turn.steps.count - Self.shown) earlier steps")
+                            Text(verbatim: ClaudePanel.earlier(turn.steps.count - Self.shown))
                                 .font(.system(size: 11))
                                 .foregroundStyle(Palette.muted)
                         }
@@ -284,11 +305,16 @@ struct ClaudePanel: View {
                         ForEach(tail, id: \.offset) { index, step in
                             let live = working && index == tail.count - 1 && turn.answer.isEmpty
                             HStack(spacing: 6) {
-                                if live {
-                                    ProgressView().controlSize(.mini).frame(width: 9, height: 9)
-                                } else {
-                                    Ink("checkmark", size: 13).font(.system(size: 8.5, weight: .semibold))
+                                // One column for the tick and the spinner,
+                                // so the words line up either way.
+                                Group {
+                                    if live {
+                                        ProgressView().controlSize(.mini)
+                                    } else {
+                                        Ink("checkmark", size: 13).font(.system(size: 8.5, weight: .semibold))
+                                    }
                                 }
+                                .frame(width: 12, height: 12)
                                 Text(verbatim: step)
                                     .font(.system(size: 11.5))
                             }
@@ -299,7 +325,7 @@ struct ClaudePanel: View {
 
                 if turn.answer.isEmpty, turn.failed == nil, working, turn.steps.isEmpty {
                     HStack(spacing: 6) {
-                        ProgressView().controlSize(.mini).frame(width: 9, height: 9)
+                        ProgressView().controlSize(.mini).frame(width: 12, height: 12)
                         Text("Thinking").font(.system(size: 11.5))
                     }
                     .foregroundStyle(Palette.muted)
@@ -318,15 +344,98 @@ struct ClaudePanel: View {
                 }
 
                 if let failed = turn.failed {
+                    // Your Stop is not a fault: said as what you did.
+                    let stopped = failed == ClaudeSession.stopped
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Ink("exclamationmark.triangle", size: 13).font(.system(size: 10, weight: .medium))
-                        Text(verbatim: failed).font(.system(size: 11.5)).fixedSize(horizontal: false, vertical: true)
+                        Ink(stopped ? "stop.circle" : "exclamationmark.triangle", size: 13).font(.system(size: 10, weight: .medium))
+                        Text(verbatim: stopped ? ClaudePanel.stoppedWords : failed).font(.system(size: 11.5)).fixedSize(horizontal: false, vertical: true)
                     }
                     .foregroundStyle(Palette.muted)
                     .padding(8)
                     .background(Palette.wash, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
             }
+        }
+    }
+}
+
+/// Whether the panel's own run is held for the person (AgentGate) in this
+/// window: the agent connected is the panel's, and something waits for
+/// Approve. Read from AgentControl, which alone answers it.
+struct PanelHeld<Content: View>: View {
+    @ObservedObject var claude: ClaudeSession
+    @ObservedObject private var agents = AgentControl.shared
+    @ViewBuilder let content: (Bool) -> Content
+
+    var body: some View {
+        if let session = agents.session {
+            Watch(session: session, browser: claude.browser, content: content)
+        } else {
+            content(false)
+        }
+    }
+
+    private struct Watch: View {
+        @ObservedObject var session: AgentSession
+        let browser: Browser?
+        let content: (Bool) -> Content
+
+        var body: some View {
+            content(PanelHeld<Content>.waiting(panel: session.panel, held: session.held != nil,
+                                               here: browser != nil && session.browser === browser))
+        }
+    }
+
+    /// The panel says it waits only for its own run, held, in its window.
+    static func waiting(panel: Bool, held: Bool, here: Bool) -> Bool { panel && held && here }
+}
+
+/// Above the box while the run is held: that it waits for you, for what,
+/// and where to answer. No Approve here: the card's buttons are the only
+/// ones, pressed only by a click of yours on them (AgentRules.isClick).
+struct PanelWaiting: View {
+    @ObservedObject var claude: ClaudeSession
+    @ObservedObject private var agents = AgentControl.shared
+
+    var body: some View {
+        if let session = agents.session, let held = session.held {
+            HStack(alignment: .top, spacing: 8) {
+                Ink("hand.raised", size: 13)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Palette.accent)
+                    .padding(.top, 1)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Paused: waiting for you")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Palette.ink)
+                    Text(verbatim: PanelWaiting.say(held.hold))
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Palette.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Palette.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Palette.accent.opacity(0.35), lineWidth: 1))
+            .padding(.horizontal, 12)
+            .padding(.top, 6)
+            .transition(.opacity)
+        }
+    }
+
+    /// In the browser's words: the site for a move to another one, the kind
+    /// of thing otherwise — never the page's words, which the card quotes.
+    static func say(_ hold: AgentGate.Hold) -> String {
+        let answer = " Approve or Don't Approve on the card at the foot of the page."
+        switch hold.reason {
+        case .leave:
+            return "Claude wants to go to \(hold.site ?? "another site"), a site this task hasn't used yet." + answer
+        case .pay: return "Claude wants to pay for something." + answer
+        case .send: return "Claude wants to send something." + answer
+        case .signIn: return "Claude wants to sign in somewhere." + answer
+        case .submit: return "Claude wants to submit a form." + answer
         }
     }
 }
