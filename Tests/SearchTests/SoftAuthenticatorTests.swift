@@ -100,6 +100,24 @@ final class SoftAuthenticatorTests: XCTestCase {
         XCTAssertFalse(key.publicKey.isValidSignature(signature, for: signed + Data([0])))
     }
 
+    func testMadeHereStaysDeviceBound() {
+        let key = P256.Signing.PrivateKey()
+        XCTAssertEqual(SoftAuthenticator.assertion(rp: "a.test", clientDataJSON: Data(), key: key, userVerified: true).authenticatorData[32] & 0x18, 0)
+        XCTAssertEqual(SoftAuthenticator.assertion(rp: "a.test", clientDataJSON: Data(), key: key, userVerified: true,
+                                                   backupEligible: true).authenticatorData[32] & 0x18, 0x08)
+    }
+
+    func testAPagesNameCannotWriteIntoTheTouchIDLine() {
+        // A second line, a right-to-left override and a tab are flattened.
+        XCTAssertEqual(SoftPasskeys.shown("ada\n\nCairn is trying to approve a payment"), "ada Cairn is trying to approve a payment")
+        XCTAssertEqual(SoftPasskeys.shown("evil\u{202E}moc.knab"), "evil moc.knab")
+        XCTAssertEqual(SoftPasskeys.shown("\tada\r"), "ada")
+        XCTAssertEqual(SoftPasskeys.shown("ada@example.com"), "ada@example.com")
+        let long = SoftPasskeys.shown(String(repeating: "a", count: 500))
+        XCTAssertEqual(long.count, 65)
+        XCTAssertTrue(long.hasSuffix("…"))
+    }
+
     func testCounterIsBigEndian() {
         let data = SoftAuthenticator.authenticatorData(rp: "a.test", flags: 0x01, counter: 0x0102_0304, attested: nil)
         XCTAssertEqual(Array(data[33..<37]), [1, 2, 3, 4])

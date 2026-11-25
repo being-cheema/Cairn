@@ -128,7 +128,9 @@ enum PasskeyImport {
         guard let key = privateKey(passkey.key) else { return .failure(.notES256) }
         let display = passkey.userDisplayName.isEmpty ? passkey.userName : passkey.userDisplayName
         let record = PasskeyRecord(rp: rp, credentialID: passkey.credentialID, userHandle: passkey.userHandle,
-                                   userName: passkey.userName, displayName: display, created: created, lastUsed: nil)
+                                   userName: passkey.userName, displayName: display, created: created, lastUsed: nil,
+                                   // Made synced where it came from: its BE stays set (PasskeyRecord).
+                                   backupEligible: true)
         return .success((record, key))
     }
 
@@ -239,7 +241,8 @@ enum PasskeyImport {
                              : "Nothing in the export Cairn can keep")
             return
         }
-        let from = mapped.source.isEmpty ? "another app" : mapped.source
+        // The exporter names itself; it goes in the Touch ID line, so cleaned as a site's names are.
+        let from = mapped.source.isEmpty ? "another app" : SoftPasskeys.shown(mapped.source)
         Vault.prove("bring in \(counted(mapped.passkeys.count, "passkey")) and \(counted(mapped.logins.count, "password")) from \(from)") { ok in
             guard ok else { return browser.announce("Nothing was brought in") }
             var kept = 0, refused = 0

@@ -27,9 +27,20 @@ enum TOTP {
         func value(_ name: String) -> String? { parts.queryItems?.first { $0.name.lowercased() == name }?.value }
         guard let secret = value("secret").flatMap(base32) else { return nil }
         var key = Key(secret: secret)
-        if let digits = value("digits").flatMap(Int.init), (6...8).contains(digits) { key.digits = digits }
-        if let period = value("period").flatMap(Int.init), (10...120).contains(period) { key.period = period }
-        if let name = value("algorithm"), let algorithm = Algorithm(rawValue: name.uppercased()) { key.algorithm = algorithm }
+        // A setting this can't honour is refused, not dropped: a key made
+        // with the defaults instead would show codes the site never accepts.
+        if let text = value("digits") {
+            guard let digits = Int(text), (6...8).contains(digits) else { return nil }
+            key.digits = digits
+        }
+        if let text = value("period") {
+            guard let period = Int(text), (10...120).contains(period) else { return nil }
+            key.period = period
+        }
+        if let name = value("algorithm") {
+            guard let algorithm = Algorithm(rawValue: name.uppercased()) else { return nil }
+            key.algorithm = algorithm
+        }
         return key
     }
 

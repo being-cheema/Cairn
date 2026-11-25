@@ -23,6 +23,8 @@ enum PasskeyStore {
         var displayName: String
         var created: Date
         var lastUsed: Date?
+        /// Optional: items kept before it existed read as made here.
+        var backupEligible: Bool?
     }
 
     private static func account(_ record: PasskeyRecord) -> String { record.id }
@@ -129,7 +131,7 @@ enum PasskeyStore {
     private static func encode(_ record: PasskeyRecord) -> Data? {
         try? JSONEncoder().encode(Fields(userHandle: record.userHandle, userName: record.userName,
                                          displayName: record.displayName, created: record.created,
-                                         lastUsed: record.lastUsed))
+                                         lastUsed: record.lastUsed, backupEligible: record.backupEligible ? true : nil))
     }
 
     private static func record(from row: [String: Any]) -> PasskeyRecord? {
@@ -140,6 +142,7 @@ enum PasskeyStore {
         let parts = account.components(separatedBy: "\u{1}")
         guard parts.count == 2, let id = Data(base64Encoded: parts[1]) else { return nil }
         return PasskeyRecord(rp: parts[0], credentialID: id, userHandle: fields.userHandle, userName: fields.userName,
-                             displayName: fields.displayName, created: fields.created, lastUsed: fields.lastUsed)
+                             displayName: fields.displayName, created: fields.created, lastUsed: fields.lastUsed,
+                             backupEligible: fields.backupEligible ?? false)
     }
 }

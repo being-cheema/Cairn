@@ -56,8 +56,14 @@ enum SoftAuthenticator {
 
     /// Signs a sign-in: the authenticator data, then the signature over it
     /// and the hash of the client data, in the DER form WebAuthn expects.
-    static func assertion(rp: String, clientDataJSON: Data, key: P256.Signing.PrivateKey, userVerified: Bool) -> (authenticatorData: Data, signature: Data) {
-        let data = authenticatorData(rp: rp, flags: userVerified ? 0x05 : 0x01, counter: 0, attested: nil)
+    /// `backupEligible` sets BE (0x08) for a passkey brought in from a synced
+    /// manager, as it was registered; BS stays 0, since the copy here isn't
+    /// backed up, and BS may change where BE may not.
+    static func assertion(rp: String, clientDataJSON: Data, key: P256.Signing.PrivateKey, userVerified: Bool,
+                          backupEligible: Bool = false) -> (authenticatorData: Data, signature: Data) {
+        var flags: UInt8 = userVerified ? 0x05 : 0x01
+        if backupEligible { flags |= 0x08 }
+        let data = authenticatorData(rp: rp, flags: flags, counter: 0, attested: nil)
         let signed = data + Data(SHA256.hash(data: clientDataJSON))
         // signature(for:) hashes its input with SHA-256, as ES256 means.
         let signature = (try? key.signature(for: signed).derRepresentation) ?? Data()

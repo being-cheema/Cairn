@@ -76,6 +76,17 @@ final class PasskeyImportTests: XCTestCase {
         XCTAssertTrue(entry.key.publicKey.isValidSignature(signature, for: message))
     }
 
+    func testABroughtInPasskeyKeepsItsBackupEligibility() throws {
+        guard #available(macOS 26.0, *) else { throw XCTSkip("Credential Exchange is macOS 26 and later") }
+        let entry = try XCTUnwrap(PasskeyImport.map(export([item([passkey(key: p256PKCS8)])])).passkeys.first)
+        // Registered synced in the Passwords app (BE = 1): a sign-in from here
+        // must say BE = 1 too, or a site checking it refuses.
+        XCTAssertTrue(entry.record.backupEligible)
+        let signed = SoftAuthenticator.assertion(rp: entry.record.rp, clientDataJSON: Data(), key: entry.key, userVerified: true,
+                                                 backupEligible: entry.record.backupEligible)
+        XCTAssertEqual(signed.authenticatorData[32], 0x0D, "UP, UV and BE; BS clear")
+    }
+
     func testKeyGivenAsBase64URLTextIsReadToo() throws {
         let text = p256PKCS8.base64EncodedString().replacingOccurrences(of: "+", with: "-")
             .replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")

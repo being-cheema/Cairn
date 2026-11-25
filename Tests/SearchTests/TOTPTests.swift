@@ -41,3 +41,13 @@ final class TOTPTests: XCTestCase {
         XCTAssertEqual(TOTP.spaced("123456"), "123 456")
     }
 }
+
+final class TOTPRefusalTests: XCTestCase {
+    /// Better no code than one with the wrong length or period.
+    func testASettingItCantHonourRefusesTheKey() {
+        XCTAssertNil(TOTP.key(from: "otpauth://totp/x?secret=GEZDGNBVGY3TQOJQ&digits=9"))
+        XCTAssertNil(TOTP.key(from: "otpauth://totp/x?secret=GEZDGNBVGY3TQOJQ&period=300"))
+        XCTAssertNil(TOTP.key(from: "otpauth://totp/x?secret=GEZDGNBVGY3TQOJQ&algorithm=MD5"))
+        XCTAssertNotNil(TOTP.key(from: "otpauth://totp/x?secret=GEZDGNBVGY3TQOJQ&digits=8&period=60&algorithm=SHA256"))
+    }
+}

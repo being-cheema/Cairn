@@ -34,6 +34,17 @@ enum SoftPasskeys {
         text.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
     }
 
+    /// A name the page chose, made fit for the Touch ID line and the picker:
+    /// no line breaks, control or direction-changing characters (with which a
+    /// page could write a second line into the Mac's own prompt, or turn the
+    /// text around), and short.
+    nonisolated static func shown(_ text: String, limit: Int = 64) -> String {
+        let cut = CharacterSet.controlCharacters.union(.newlines).union(.illegalCharacters)
+        let flat = String(String.UnicodeScalarView(text.unicodeScalars.map { cut.contains($0) ? " " : $0 }))
+            .split(separator: " ", omittingEmptySubsequences: true).joined(separator: " ")
+        return flat.count > limit ? String(flat.prefix(limit)) + "…" : flat
+    }
+
     private static func fail(_ answer: ([String: Any]) -> Void, _ name: String, _ message: String) {
         answer(["error": name, "message": message])
     }
@@ -63,7 +74,7 @@ enum SoftPasskeys {
         if !excluded.isEmpty, !PasskeyStore.records(rp: rp, allowed: excluded).isEmpty {
             return fail(answer, "InvalidStateError", "A passkey for this account is already kept here.")
         }
-        Vault.prove("save a passkey for \(rp) as \(name)") { ok in
+        Vault.prove("save a passkey for \(rp) as \(shown(name))") { ok in
             guard ok else { return fail(answer, "NotAllowedError", "The operation either timed out or was not allowed.") }
             let json = clientDataJSON(type: "create", clientData)
             let made = SoftAuthenticator.makeCredential(rp: rp, clientDataJSON: json, userHandle: userID, userName: name,
@@ -93,12 +104,13 @@ enum SoftPasskeys {
         guard let record = pick(from: matches, rp: rp) else {
             return fail(answer, "NotAllowedError", "The operation either timed out or was not allowed.")
         }
-        Vault.prove("sign in to \(rp) as \(record.userName)") { ok in
+        Vault.prove("sign in to \(rp) as \(shown(record.userName.isEmpty ? record.displayName : record.userName))") { ok in
             guard ok, let key = PasskeyStore.key(for: record) else {
                 return fail(answer, "NotAllowedError", "The operation either timed out or was not allowed.")
             }
             let json = clientDataJSON(type: "get", clientData)
-            let signed = SoftAuthenticator.assertion(rp: rp, clientDataJSON: json, key: key, userVerified: true)
+            let signed = SoftAuthenticator.assertion(rp: rp, clientDataJSON: json, key: key, userVerified: true,
+                                                     backupEligible: record.backupEligible)
             PasskeyStore.touch(record)
             answer(Passkeys.assertionReply(id: record.credentialID, clientData: json, authenticatorData: signed.authenticatorData,
                                            signature: signed.signature, user: record.userHandle, attachment: "platform"))
@@ -113,12 +125,20 @@ enum SoftPasskeys {
         alert.messageText = "Sign in to \(rp) with a passkey"
         alert.informativeText = "Which account?"
         let menu = NSPopUpButton(frame: NSRect(x: 0, y: 0, width: 260, height: 26), pullsDown: false)
-        for record in records { menu.addItem(withTitle: record.userName.isEmpty ? record.displayName : record.userName) }
+        // Items added to the menu itself, each tagged with its place: the
+        // button's addItem(withTitle:) drops an earlier item of the same
+        // title, which would shift every index after it and sign in as the
+        // wrong account when two share a name.
+        for (index, record) in records.enumerated() {
+            let item = NSMenuItem(title: shown(record.userName.isEmpty ? record.displayName : record.userName), action: nil, keyEquivalent: "")
+            item.tag = index
+            menu.menu?.addItem(item)
+        }
         alert.accessoryView = menu
         alert.addButton(withTitle: "Continue")
         alert.addButton(withTitle: "Cancel")
-        guard alert.runModal() == .alertFirstButtonReturn, records.indices.contains(menu.indexOfSelectedItem) else { return nil }
-        return records[menu.indexOfSelectedItem]
+        guard alert.runModal() == .alertFirstButtonReturn, let at = menu.selectedItem?.tag, records.indices.contains(at) else { return nil }
+        return records[at]
     }
 
     // MARK: - offered under a field

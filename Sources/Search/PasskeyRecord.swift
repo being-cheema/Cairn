@@ -12,6 +12,11 @@ struct PasskeyRecord: Identifiable, Equatable {
     var displayName: String
     var created: Date
     var lastUsed: Date?
+    /// Brought in from another manager (PasskeyImport), where it was made
+    /// synced: WebAuthn's BE flag is fixed for a credential's life, and a site
+    /// that kept BE = 1 at registration may refuse a sign-in that says 0
+    /// (WebAuthn L3, verifying an assertion). One made here is device-bound.
+    var backupEligible = false
 
     var id: String { rp + "\u{1}" + credentialID.base64EncodedString() }
 }

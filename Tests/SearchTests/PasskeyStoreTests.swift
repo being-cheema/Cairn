@@ -43,6 +43,15 @@ final class PasskeyStoreTests: XCTestCase {
         XCTAssertEqual(back.rawRepresentation, key.rawRepresentation)
     }
 
+    func testBackupEligibilityIsKept() throws {
+        var r = record(rp: "be.example", user: 1)
+        XCTAssertTrue(keep(r))
+        XCTAssertEqual(PasskeyStore.records(rp: "be.example", allowed: []).first?.backupEligible, false)
+        r.backupEligible = true
+        XCTAssertTrue(keep(r))
+        XCTAssertEqual(PasskeyStore.records(rp: "be.example", allowed: []).first?.backupEligible, true)
+    }
+
     func testAllowedNarrowsAndNewestComesFirst() {
         let old = record(rp: "b.example", user: 1, at: 1_000)
         let new = record(rp: "b.example", user: 2, at: 2_000)

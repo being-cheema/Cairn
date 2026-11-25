@@ -3220,6 +3220,46 @@ final class Bench {
                 answer(["error": "ai mock URL | key PROVIDER KEY | ask PROVIDER MODEL TEXT | read ID | check TEXT"])
             }
 
+        case "claude":
+            // The side panel's Claude as its composer would drive it: a
+            // message typed and sent, Stop, New Chat, and what the panel
+            // shows. "program" puts a stand-in in place of the person's own
+            // claude — a path that isn't there, or one said not to be signed
+            // — to see the panel's troubles; "real" puts it back. Only on a
+            // SEARCH_PROBE run: on yours, only you type to it.
+            guard Store.testing else { answer(["error": "claude only works on a --test run"]); return }
+            switch request["action"] as? String ?? "state" {
+            case "send":
+                browser.claude.draft = request["text"] as? String ?? ""
+                browser.claude.submit()
+            case "stop": browser.claude.stop()
+            case "new": browser.claude.newChat()
+            case "program":
+                browser.claude.stop()
+                let path = request["path"] as? String
+                let signed = request["signed"] as? Bool ?? true
+                browser.claude = ClaudeSession(
+                    agentsOn: { [weak browser] in browser?.prefs.agents ?? false },
+                    executable: path.map { URL(fileURLWithPath: $0) },
+                    verify: signed ? ClaudeCode.signedByAnthropic : { _ in false },
+                    options: { [weak browser] in ClaudeCode.Options(acts: true, signIn: true, model: browser?.prefs.claudeModel) })
+            case "real":
+                browser.claude.stop()
+                browser.claude = ClaudeSession(
+                    agentsOn: { [weak browser] in browser?.prefs.agents ?? false },
+                    options: { [weak browser] in ClaudeCode.Options(acts: true, signIn: true, model: browser?.prefs.claudeModel) })
+            case "state": break
+            default:
+                answer(["error": "claude send TEXT | stop | new | program PATH [signed] | real | state"]); return
+            }
+            let session = browser.claude
+            answer([
+                "running": session.running, "problem": session.problem.map { "\($0)" } ?? "",
+                "said": session.problem.map(ClaudePanel.say) ?? "", "step": session.step ?? "",
+                "turns": session.turns.map { ["question": $0.question, "answer": $0.answer, "steps": $0.steps,
+                                              "done": $0.done, "failed": $0.failed ?? ""] as [String: Any] },
+            ])
+
         case "notifications":
             // What a test run would have posted, and every site's answer.
             guard Store.testing else { answer(["error": "notifications only works on a --test run"]); return }

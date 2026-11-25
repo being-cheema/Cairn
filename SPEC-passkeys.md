@@ -15,7 +15,7 @@ without the entitlement (`Preferences.entitledToPasskeys == false`).
 1. `SoftAuthenticator.swift` (pure, no keychain, no UI): CBOR writer, authenticator
    data, `makeCredential` (attestation `none`, ES256 / P-256, COSE key), and
    `assertion` (sign authData || SHA256(clientDataJSON)). Flags: UP always,
-   UV when proven, AT on create, BE/BS 0 (device-bound). Sign counter 0.
+   UV when proven, AT on create, BE/BS 0 (device-bound) for passkeys made here; a passkey brought in from Apple's Passwords keeps BE=1 (it was synced), so the flag matches what the site registered. Sign counter 0.
 2. `PasskeyStore.swift` (keychain only): the records and private keys.
 3. Integration in `Passkeys.perform` + conditional list (`offered`, `sign`):
    Touch ID (`Vault.prove`), save/choose sheets, excludeCredentials, errors
