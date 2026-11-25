@@ -1,6 +1,6 @@
 # A made-up setup key in a test (HOTP is refused), not a secret.
 df52568a542d3cb3c9ca171cc86cb998db9f3703:Tests/SearchTests/TOTPTests.swift:generic-api-key:33
-# Code that names a private-key type (`key: P256.Signing.PrivateKey`), not a key.
+# Code that only names a private-key type, not a secret.
 f251d2157703cc733d6d6e1c3d19ba053f9331f5:SPEC-passkeys.md:generic-api-key:44
 b28b97e001cc5a3f9954791d5f91548ef03cafbc:Tests/SearchTests/PasskeyStoreTests.swift:generic-api-key:32
 b28b97e001cc5a3f9954791d5f91548ef03cafbc:Sources/Search/SoftAuthenticator.swift:generic-api-key:22
