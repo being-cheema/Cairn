@@ -24,16 +24,16 @@ final class OptInTests: XCTestCase {
 
     // MARK: - flags
 
-    func testOfferedUntilAnEmailIsGiven() {
-        XCTAssertTrue(OptIn.offered(store), "nothing given: offered")
+    func testNeverOfferedBecauseNothingIsSentToTheUpstreamList() {
+        XCTAssertFalse(OptIn.offered(store), "nothing given: still never offered")
         XCTAssertFalse(OptIn.joined(store))
         XCTAssertFalse(OptIn.askedBeta(store))
     }
 
-    func testClosingWithoutOneOffersItAgainNextVersion() {
-        // A card shown and closed writes nothing: the next one offers again.
-        XCTAssertTrue(OptIn.offered(store))
-        XCTAssertTrue(OptIn.offered(store), "still offered on the next version's card")
+    func testClosingWithoutOneStillNeverOffersItAndWritesNothing() {
+        // A card shown and closed writes nothing, and the next one stays off too.
+        XCTAssertFalse(OptIn.offered(store))
+        XCTAssertFalse(OptIn.offered(store), "still not offered on the next version's card")
         XCTAssertTrue(store.dictionaryRepresentation().keys.filter { $0.hasPrefix("optin.") }.isEmpty)
     }
 
@@ -54,7 +54,7 @@ final class OptInTests: XCTestCase {
         OptIn.remember(.iPhoneBeta, in: store)
         XCTAssertTrue(OptIn.askedBeta(store))
         XCTAssertFalse(OptIn.joined(store))
-        XCTAssertTrue(OptIn.offered(store), "the iPhone beta from Settings isn't the updates list")
+        XCTAssertFalse(OptIn.offered(store), "the card stays off whatever was asked")
     }
 
     func testOnlyBooleansAreStored() {
@@ -97,7 +97,7 @@ final class OptInTests: XCTestCase {
 
     func testHeadersCarryNoVersionOrLanguage() {
         let request = OptIn.request(email: "test+d@example.com", list: .news(iPhoneBeta: false), source: .settings)
-        XCTAssertEqual(request.value(forHTTPHeaderField: "User-Agent"), "Search")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "User-Agent"), "Cairn")
         XCTAssertEqual(request.value(forHTTPHeaderField: "Accept-Language"), "en")
         XCTAssertFalse(request.httpShouldHandleCookies)
         XCTAssertNil(OptIn.session.configuration.httpCookieStorage)
@@ -163,7 +163,9 @@ final class OptInTests: XCTestCase {
 
     func testFailureLeavesNothingRemembered() {
         _ = send("test+h@example.com", .news(iPhoneBeta: true), status: 503)
-        XCTAssertTrue(OptIn.offered(store))
+        XCTAssertFalse(OptIn.joined(store))
+        XCTAssertFalse(OptIn.askedBeta(store))
+        XCTAssertFalse(OptIn.offered(store))
     }
 }
 

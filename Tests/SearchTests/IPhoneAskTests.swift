@@ -20,29 +20,26 @@ final class IPhoneAskTests: XCTestCase {
         super.tearDown()
     }
 
-    func testOpenUntilJoinedOrDismissed() {
-        XCTAssertTrue(IPhoneAsk.open(store))
+    func testStaysOffWhateverHappens() {
+        XCTAssertFalse(IPhoneAsk.on)
+        XCTAssertFalse(IPhoneAsk.open(store))
         IPhoneAsk.dismiss(store)
         XCTAssertFalse(IPhoneAsk.open(store))
         XCTAssertFalse(IPhoneAsk.onNewTab(store))
     }
 
-    func testOnlyTheIPhoneBetaEndsIt() {
+    func testNoAnswerBringsItBack() {
         OptIn.remember(.news(iPhoneBeta: false), in: store)
-        XCTAssertTrue(IPhoneAsk.open(store), "the Mac news list alone: still offered")
-        OptIn.remember(.news(iPhoneBeta: true), in: store)
-        XCTAssertFalse(IPhoneAsk.open(store), "the card with the iPhone box ticked")
+        XCTAssertFalse(IPhoneAsk.open(store), "the Mac news list alone: still off")
         store.removePersistentDomain(forName: suite)
         OptIn.remember(.iPhoneBeta, in: store)
         XCTAssertFalse(IPhoneAsk.open(store), "asked for the beta from any place")
     }
 
-    func testNewTabForThreeDaysFromFirstSeen() {
+    func testNewTabNeverOffersItAtAnyTime() {
         let start = Date(timeIntervalSince1970: 2_000_000_000)
-        XCTAssertTrue(IPhoneAsk.onNewTab(store, now: start))
-        IPhoneAsk.seenOnNewTab(store, now: start)
-        IPhoneAsk.seenOnNewTab(store, now: start.addingTimeInterval(86_400))
-        XCTAssertTrue(IPhoneAsk.onNewTab(store, now: start.addingTimeInterval(2.9 * 86_400)))
+        XCTAssertFalse(IPhoneAsk.onNewTab(store, now: start))
+        XCTAssertFalse(IPhoneAsk.onNewTab(store, now: start.addingTimeInterval(2.9 * 86_400)))
         XCTAssertFalse(IPhoneAsk.onNewTab(store, now: start.addingTimeInterval(3.1 * 86_400)))
     }
 
