@@ -135,7 +135,10 @@ final class Assistant: ObservableObject, Identifiable {
         guard !turns.isEmpty, let read else { return }
         var turn = turns[turns.count - 1]
         turn.done = true
-        turn.failed = failed
+        // A stream that ended well with nothing in it (a provider's safety
+        // stop, a model that wrote nothing) would leave the question with
+        // no answer and no word on why: it is said.
+        turn.failed = failed ?? (turn.answer.isEmpty && !Task.isCancelled ? "No answer came back. Try asking again." : nil)
         turns[turns.count - 1] = turn
         // Checked away from the window's thread: a long answer is a long look.
         let id = turn.id, answer = turn.answer
@@ -146,7 +149,7 @@ final class Assistant: ObservableObject, Identifiable {
                 self.turns[index].strays = strays
             }
         }
-        if failed == nil, !turn.answer.isEmpty {
+        if turn.failed == nil, !turn.answer.isEmpty {
             messages.append(AIMessage(role: .assistant, text: turn.answer))
         } else if !messages.isEmpty {
             // A question that got no answer isn't part of what follows; the

@@ -67,6 +67,11 @@ final class ClaudeSession: ObservableObject {
     private var streamed = false
     /// The next words open a new paragraph.
     private var needBreak = false
+    /// The words of the message in progress, and of the one before it in
+    /// this turn: a model that answers, uses a tool (disconnect, often) and
+    /// then gives the very same answer again is shown saying it once.
+    private var current = ""
+    private var previous = ""
     /// Tools already shown for this turn: told as they begin and again in the
     /// finished message.
     private var seenTools = Set<String>()
@@ -85,7 +90,16 @@ final class ClaudeSession: ObservableObject {
         self.script = script
         self.world = world
         self.options = options
+        // Quitting is Stop too: the run's folder goes with it, rather than
+        // being left in the temporary folder for good.
+        quitting = NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("NSApplicationWillTerminateNotification"), object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.stop() }
+        }
     }
+
+    private var quitting: NSObjectProtocol?
 
     // MARK: - sending
 
@@ -101,6 +115,8 @@ final class ClaudeSession: ObservableObject {
         seenTools = []
         streamed = false
         needBreak = false
+        current = ""
+        previous = ""
         running = true
         let line = ClaudeCode.message(text)
         do {
@@ -140,7 +156,10 @@ final class ClaudeSession: ObservableObject {
     // MARK: - starting
 
     private func start() -> Bool {
-        guard let claude = executable ?? ClaudeCode.locate() else { problem = .notInstalled; return false }
+        // A program that has gone since it was found (uninstalled, a link
+        // left dangling) is not there, rather than "not signed".
+        guard let claude = executable ?? ClaudeCode.locate(),
+              FileManager.default.isExecutableFile(atPath: claude.path) else { problem = .notInstalled; return false }
         guard verify(claude) else { problem = .notSigned; return false }
         guard let script = script ?? ClaudeCode.mcpScript() else { problem = .noScript; return false }
 
@@ -226,21 +245,25 @@ final class ClaudeSession: ObservableObject {
             case .ready:
                 break
             case .start:
+                dropRepeat(last)
                 streamed = false
                 needBreak = !turns[last].answer.isEmpty
             case .delta(let text):
                 if needBreak { turns[last].answer += "\n\n"; needBreak = false }
                 turns[last].answer += text
+                current += text
                 streamed = true
             case .text(let text):
                 // Already shown as it was written.
                 if streamed { continue }
                 turns[last].answer += (turns[last].answer.isEmpty ? "" : "\n\n") + text
+                current += text
             case .tool(let id, let step):
                 if let id { guard seenTools.insert(id).inserted else { continue } }
                 else if turns[last].steps.last == step { continue }
                 turns[last].steps.append(step)
             case .done:
+                dropRepeat(last)
                 turns[last].done = true
                 running = false
             case .failed(let why):
@@ -251,6 +274,21 @@ final class ClaudeSession: ObservableObject {
                 finish(failing: Self.explain(why))
             }
         }
+    }
+
+    /// The message just ended, taken back out of the answer when it said
+    /// word for word what the one before it did (seen with a real Claude
+    /// Code: the answer, a call to disconnect, then the answer again).
+    private func dropRepeat(_ last: Int) {
+        defer {
+            if !current.isEmpty { previous = current }
+            current = ""
+        }
+        let said = current.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !said.isEmpty, said == previous.trimmingCharacters(in: .whitespacesAndNewlines),
+              turns[last].answer.hasSuffix(current) else { return }
+        turns[last].answer.removeLast(current.count)
+        while turns[last].answer.last?.isNewline == true { turns[last].answer.removeLast() }
     }
 
     /// The turn in hand ends badly.
