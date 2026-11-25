@@ -10,9 +10,11 @@ import Foundation
 // — the words of a page — is never shown here at all, so a page can't speak in
 // the model's voice.
 //
-// The browser side is not here: it is AgentControl, which asks you in the
-// window, with Allow, the first time Claude Code uses a tool, and which keeps
-// it to tabs it opened, away from passwords and the rest (see its notes).
+// The browser side is not here: it is AgentControl, which keeps it to tabs
+// it opened, away from passwords and the rest (see its notes). Your press of
+// Send is the consent: the run started here is let in without a second
+// question, by a pass made for this run alone and only while a message of
+// yours is being answered (PanelRun). Nothing to switch on first.
 
 @MainActor
 final class ClaudeSession: ObservableObject {
@@ -31,7 +33,6 @@ final class ClaudeSession: ObservableObject {
         case notInstalled
         case notSigned
         case noScript
-        case agentsOff
     }
 
     @Published private(set) var turns: [Turn] = []
@@ -51,12 +52,16 @@ final class ClaudeSession: ObservableObject {
     @Published private(set) var problem: Problem?
     @Published var draft = ""
 
-    private let agentsOn: () -> Bool
     private let executable: URL?
     private let verify: (URL) -> Bool
     private let script: URL?
     private let world: String?
     private let options: () -> ClaudeCode.Options
+    /// The window the panel is in: where the run works.
+    private let window: () -> Browser?
+    /// What lets this run, and only this one, in without a question
+    /// (PanelRun); new with each run.
+    private var pass = ""
 
     private var process: Process?
     private var input: FileHandle?
@@ -78,18 +83,18 @@ final class ClaudeSession: ObservableObject {
     /// A line longer than this is not the program speaking: it is ended.
     private static let longest = 8 << 20
 
-    init(agentsOn: @escaping () -> Bool,
-         executable: URL? = nil,
+    init(executable: URL? = nil,
          verify: @escaping (URL) -> Bool = ClaudeCode.signedByAnthropic,
          script: URL? = nil,
          world: String? = Store.world,
-         options: @escaping () -> ClaudeCode.Options = { ClaudeCode.Options() }) {
-        self.agentsOn = agentsOn
+         options: @escaping () -> ClaudeCode.Options = { ClaudeCode.Options() },
+         window: @escaping () -> Browser? = { nil }) {
         self.executable = executable
         self.verify = verify
         self.script = script
         self.world = world
         self.options = options
+        self.window = window
         // Quitting is Stop too: the run's folder goes with it, rather than
         // being left in the temporary folder for good.
         quitting = NotificationCenter.default.addObserver(
@@ -106,8 +111,6 @@ final class ClaudeSession: ObservableObject {
     func submit() {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !running else { return }
-        // Coding agents are the person's to allow, in Settings: this is one.
-        guard agentsOn() else { problem = .agentsOff; return }
         if process == nil, !start() { return }
         problem = nil
         draft = ""
@@ -118,6 +121,8 @@ final class ClaudeSession: ObservableObject {
         current = ""
         previous = ""
         running = true
+        // This Send is the consent for what the run does to answer it.
+        AgentControl.shared.panelArm(pass: pass, true)
         let line = ClaudeCode.message(text)
         do {
             try input?.write(contentsOf: line)
@@ -151,6 +156,12 @@ final class ClaudeSession: ObservableObject {
         cleanUp()
         if wasRunning { finish(failing: "Stopped.") }
         running = false
+        disarm()
+    }
+
+    /// The turn is over: the run's pass lets nothing in until the next Send.
+    private func disarm() {
+        AgentControl.shared.panelArm(pass: pass, false)
     }
 
     // MARK: - starting
@@ -166,9 +177,10 @@ final class ClaudeSession: ObservableObject {
         // A folder for this run alone, to be empty and to go.
         let files = FileManager.default
         let home = files.temporaryDirectory.appendingPathComponent("cairn-claude-\(UUID().uuidString)", isDirectory: true)
+        let pass = PanelRun.newPass()
         do {
             try files.createDirectory(at: home, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
-            try ClaudeCode.mcpConfig(script: script, world: world).write(to: home.appendingPathComponent("mcp.json"))
+            try ClaudeCode.mcpConfig(script: script, world: world, pass: pass).write(to: home.appendingPathComponent("mcp.json"))
         } catch {
             try? files.removeItem(at: home)
             problem = .noScript
@@ -207,6 +219,8 @@ final class ClaudeSession: ObservableObject {
             return false
         }
         process = run
+        self.pass = pass
+        AgentControl.shared.panelStarted(pass: pass, pid: run.processIdentifier, browser: window())
         // A write to a program that has gone fails; it must not raise SIGPIPE.
         _ = fcntl(toIt.fileHandleForWriting.fileDescriptor, F_SETNOSIGPIPE, 1)
         input = toIt.fileHandleForWriting
@@ -216,6 +230,8 @@ final class ClaudeSession: ObservableObject {
     }
 
     private func cleanUp() {
+        AgentControl.shared.panelEnded(pass: pass)
+        pass = ""
         if let folder { try? FileManager.default.removeItem(at: folder) }
         folder = nil
         pending = Data()
@@ -266,6 +282,7 @@ final class ClaudeSession: ObservableObject {
                 dropRepeat(last)
                 turns[last].done = true
                 running = false
+                disarm()
             case .failed(let why):
                 // The program says its trouble twice, as words and as the
                 // result: once is enough.
@@ -297,6 +314,7 @@ final class ClaudeSession: ObservableObject {
         if turns[last].failed == nil { turns[last].failed = why }
         turns[last].done = true
         running = false
+        disarm()
     }
 
     /// Its own words, with what to do about the ones people meet.

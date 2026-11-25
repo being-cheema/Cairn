@@ -169,26 +169,12 @@ final class Preferences: ObservableObject {
     /// The setting said on at launch with no mark from the switch behind it,
     /// and was put back to off.
     private(set) var benchRefused = false
-    /// Coding agents may ask to use the window (AgentControl). Off unless
-    /// turned on in Settings, which leaves the mark it needs at launch, as
-    /// the bench's switch does.
-    @Published var agents: Bool {
-        didSet {
-            store.set(agents, forKey: "agents")
-            agents ? Preferences.agentsMark.grant() : Preferences.agentsMark.revoke()
-            // Turned off, or on afresh: nobody is remembered (AgentTrust).
-            if agents != oldValue { AgentTrust.shared.forgetAll() }
-        }
-    }
-    static let agentsMark = SwitchMark(service: Brand.service("agents"))
     /// The model the side panel's Claude runs (ClaudePanel), by the alias
     /// Claude Code knows it by: nil is whatever the person's own Claude Code
     /// is set to use. Only ever one of ClaudeCode.models.
     @Published var claudeModel: String? {
         didSet { store.set(claudeModel, forKey: "claude.model") }
     }
-    /// Found on at launch without the mark, and put back to off.
-    private(set) var agentsRefused = false
     /// Light, dark, or the Mac's own.
     @Published var look: Look {
         didSet {
@@ -1297,13 +1283,6 @@ final class Preferences: ObservableObject {
         if scripted, !allowed {
             benchRefused = true
             store.set(false, forKey: "bench")
-        }
-        let agentsAsked = store.bool(forKey: "agents")
-        let agentsAllowed = agentsAsked && (Store.testing || Preferences.agentsMark.given)
-        agents = agentsAllowed
-        if agentsAsked, !agentsAllowed {
-            agentsRefused = true
-            store.set(false, forKey: "agents")
         }
         let chosen = store.string(forKey: "look").flatMap(Look.init) ?? .system
         look = chosen

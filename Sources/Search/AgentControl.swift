@@ -1,17 +1,16 @@
 import AppKit
 import OSLog
+import Security
 import WebKit
 
 // A coding agent on this Mac — Claude Code, Codex — using the window you
 // already have open, when you let it.
 //
-// Off unless switched on in Settings › About › Developer, and the switch
-// leaves a mark in the keychain as the bench's does (SwitchMark): a setting
-// some other program wrote is put back to off at launch. On, Search listens
-// on a Unix socket, Agent/agent.sock in its own folder: the folder 0700 and
-// this user's, the socket 0600, and the other end checked for the same uid
-// before a byte is read. Never on the network. `search-mcp` at the root of
-// the repository is the client an agent runs.
+// Always there: Search listens on a Unix socket, Agent/agent.sock in its
+// own folder: the folder 0700 and this user's, the socket 0600, and the other
+// end checked for the same uid before a byte is read. Never on the network.
+// `search-mcp` at the root of the repository is the client an agent runs.
+// Listening lets nobody in by itself: see the next paragraph.
 //
 // Each connection asks first. Its first line says who it is, and the window
 // shows "<name> wants to use Search" with Allow and Don't Allow; nothing
@@ -27,6 +26,14 @@ import WebKit
 // a question left unanswered, nobody asks again for a few seconds, so a
 // client can't bury you in questions.
 //
+// One exception, and only one: the side panel's own Claude (ClaudeSession).
+// Your press of Send there is the consent, so the run it started is let in
+// without a second question — but only that run: its search-mcp shows a pass
+// made for that run alone (never written anywhere an agent's tools reach), it
+// must be a child of the very `claude` process the panel started (pid and
+// start time), and only while a message you sent is being answered. Any other
+// program, whatever it says it is, is asked as above (PanelRun).
+//
 // It works in tabs of its own: opened at the end of your row, never
 // selected for you, never in your session, never a script's (the bench's).
 // Your own tabs it can list and read only if you ticked "Let it see my open
@@ -40,12 +47,10 @@ import WebKit
 // any box seen as a password, stay secret for good — and pictures black out
 // those, every frame, and whatever can't be read. Secret-looking values are
 // taken out of the addresses it is given. No cookies, no storage, nothing
-// from the keychain — but for one verb, `sign_in`: Search itself
-// fills the login saved for that exact https site into a page of the agent's
-// own and says only that it did and the account's name, never the password.
-// No camera, microphone, screen, location or
-// notifications, and no offer to save a password it signed in with. No
-// files chosen, no downloads, and no address but http and https: not
+// from the keychain: no saved password, passkey or code is ever filled for an
+// agent, by any verb — signing in is the person's, in their own tab. No
+// camera, microphone, screen, location or notifications. No files chosen,
+// no downloads, and no address but http and https: not
 // Search's own pages, Settings, extensions or file://, and no link handed
 // to another app. Keys and clicks go to its page's view, never through the
 // app, so none of Search's shortcuts hears them, and ⌘ and ctrl-letters
@@ -121,6 +126,62 @@ struct AgentConsent: Equatable {
     func may(_ use: Use, own: Bool) -> Bool {
         guard state == .allowed else { return false }
         return own || (use == .read && seesTabs)
+    }
+}
+
+// MARK: - the panel's own run
+
+/// The side panel's own run of `claude` (ClaudeSession), let in without the
+/// question because the person's press of Send was the consent. Plain, so
+/// who it lets in can be tested without a socket.
+///
+/// Three things, all of them: the pass made for this run (random, 32 bytes,
+/// handed to its search-mcp in its environment, never to the model); the
+/// connecting process's parent being the very `claude` the panel started —
+/// its pid and the moment it started, so a pid given to someone else later
+/// doesn't count; and a message of the person's being answered now (armed
+/// at Send, disarmed when the turn ends, when Stop is pressed, and when the
+/// run goes). A pass alone, read from wherever, lets nobody in.
+struct PanelRun: Equatable {
+    let pass: String
+    /// The `claude` the panel started.
+    let pid: pid_t
+    let started: timeval?
+    /// A message of the person's is being answered.
+    var armed = false
+
+    static func == (a: PanelRun, b: PanelRun) -> Bool {
+        a.pass == b.pass && a.pid == b.pid && a.armed == b.armed
+            && a.started?.tv_sec == b.started?.tv_sec && a.started?.tv_usec == b.started?.tv_usec
+    }
+
+    /// A new pass: 64 hex digits from the system's random source.
+    static func newPass() -> String {
+        var bytes = [UInt8](repeating: 0, count: 32)
+        guard SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) == errSecSuccess else {
+            // No randomness, no pass: nobody can show one that matches.
+            return ""
+        }
+        return bytes.map { String(format: "%02x", $0) }.joined()
+    }
+
+    /// Whether a connection that showed `offered`, from a process whose
+    /// parent is `parent` (started at `parentStarted`), is this run, now.
+    func admits(offered: String?, parent: pid_t?, parentStarted: timeval?) -> Bool {
+        guard armed, pass.count == 64, let offered, Self.same(offered, pass),
+              let parent, parent > 1, parent == pid,
+              let started, let parentStarted,
+              started.tv_sec == parentStarted.tv_sec, started.tv_usec == parentStarted.tv_usec else { return false }
+        return true
+    }
+
+    /// Compared in time that doesn't depend on where they differ.
+    static func same(_ a: String, _ b: String) -> Bool {
+        let x = Array(a.utf8), y = Array(b.utf8)
+        guard x.count == y.count else { return false }
+        var differ: UInt8 = 0
+        for i in x.indices { differ |= x[i] ^ y[i] }
+        return differ == 0
     }
 }
 
@@ -414,6 +475,11 @@ final class AgentSession: ObservableObject, Identifiable {
     fileprivate var greeted = false
     /// The bench ticked "Always" for a launcher that can't be (test runs).
     fileprivate var simulated = false
+    /// The pass its hello showed, if any: the panel's run's (PanelRun), or
+    /// nothing that lets it in.
+    fileprivate var offeredPass: String?
+    /// Let in as the side panel's own run, by the Send that started it.
+    @Published fileprivate(set) var panel = false
     /// Working now: a request in hand, or one a moment ago. Connected and
     /// quiet, the line says so (an agent that finished its turn without
     /// disconnecting keeps its connection until it goes idle for good).
@@ -587,7 +653,7 @@ final class AgentControl: ObservableObject {
     }
 
     func stop() {
-        if let session { end(session, "the setting was turned off") }
+        if let session { end(session, "\(Brand.name) stopped listening") }
         guard running else { return }
         accepting?.cancel()
         accepting = nil
@@ -833,7 +899,11 @@ final class AgentControl: ObservableObject {
         let was = session.consent.state
         // Stopped, let in without asking or not: never let in again without
         // asking, until you tick "Always allow" for it again in the question.
-        if why.hasPrefix("stopped"), was == .allowed {
+        if why.hasPrefix("stopped"), was == .allowed, session.panel {
+            // The panel's run: not let in again until your next Send.
+            if let pass = session.offeredPass { panelArm(pass: pass, false) }
+            Self.log.notice("stopped: the panel's Claude is let in again only by your next message")
+        } else if why.hasPrefix("stopped"), was == .allowed {
             AgentTrust.shared.suspend(client: session.client, also: session.admittedBy)
             Self.log.notice("stopped: \(session.client, privacy: .public) is asked about again from now on")
         }
@@ -1000,6 +1070,10 @@ final class AgentControl: ObservableObject {
         session.consent.hello()
         session.asked = Date()
         session.askedUptime = ProcessInfo.processInfo.systemUptime
+        if session.offeredPass != nil {
+            if admitsAsPanel(session) { return }
+            Self.log.notice("a pass that isn't the panel's run now: asking")
+        }
         guard let entry = AgentTrust.match(client: session.client, launcher: session.launcher, passed: passed,
                                            among: trust.remembered) else {
             if !trust.requirements(for: session.client).isEmpty {
@@ -1021,6 +1095,73 @@ final class AgentControl: ObservableObject {
         hello?(["allowed": true, "seesTabs": session.consent.seesTabs, "remembered": true])
         began(session)
         pump(session)
+    }
+
+    // MARK: the panel's own run
+
+    private struct PanelEntry {
+        var run: PanelRun
+        weak var browser: Browser?
+    }
+
+    /// The side panel's runs of `claude` that are alive, by nothing a client
+    /// can look up: only PanelRun.admits says whether one is shown.
+    private var panelRuns: [PanelEntry] = []
+
+    /// ClaudeSession started `claude` (pid) for the panel in `browser`, and
+    /// gave its search-mcp `pass`.
+    func panelStarted(pass: String, pid: pid_t, browser: Browser?) {
+        guard !pass.isEmpty, pid > 1 else { return }
+        panelRuns.removeAll { $0.run.pass == pass }
+        panelRuns.append(PanelEntry(run: PanelRun(pass: pass, pid: pid, started: AgentIdentity.process(pid)?.started),
+                                    browser: browser))
+    }
+
+    /// Send pressed (armed), or the turn over (not).
+    func panelArm(pass: String, _ on: Bool) {
+        for index in panelRuns.indices where panelRuns[index].run.pass == pass { panelRuns[index].run.armed = on }
+    }
+
+    /// The run is over: its pass lets nothing in again.
+    func panelEnded(pass: String) {
+        panelRuns.removeAll { $0.run.pass == pass }
+    }
+
+    private func panelEntry(for offered: String?) -> PanelEntry? {
+        guard let offered else { return nil }
+        return panelRuns.first { PanelRun.same(offered, $0.run.pass) }
+    }
+
+    /// Whether a connection with these would be let in as the panel's run
+    /// now (PanelRun.admits against the runs registered): for the tests.
+    func panelAdmitsForTest(offered: String?, parent: pid_t?, parentStarted: timeval?) -> Bool {
+        panelEntry(for: offered)?.run.admits(offered: offered, parent: parent, parentStarted: parentStarted) ?? false
+    }
+
+    private func panelWindow(for offered: String?) -> Browser? {
+        guard let browser = panelEntry(for: offered)?.browser, Browsers.all.contains(where: { $0 === browser }) else { return nil }
+        return browser
+    }
+
+    /// The panel's own run, let in by the Send that started its turn: no
+    /// question, never your tabs, and nothing remembered.
+    private func admitsAsPanel(_ session: AgentSession) -> Bool {
+        guard let entry = panelEntry(for: session.offeredPass), let token = session.token else { return false }
+        let peer = AgentIdentity.pid(token)
+        let parent = AgentIdentity.process(peer)?.parent
+        let parentStarted = parent.flatMap { AgentIdentity.process($0)?.started }
+        guard entry.run.admits(offered: session.offeredPass, parent: parent, parentStarted: parentStarted),
+              // Still the process that connected, after the looking.
+              AgentIdentity.process(peer)?.parent == parent else { return false }
+        session.panel = true
+        session.consent.answer(allow: true, seesTabs: false)
+        Self.log.notice("let in: the side panel's own Claude, by your message")
+        let hello = session.hello
+        session.hello = nil
+        hello?(["allowed": true, "seesTabs": false])
+        began(session)
+        pump(session)
+        return true
     }
 
     /// Let in without asking, said where you'll see it: the column's line
@@ -1106,7 +1247,7 @@ final class AgentControl: ObservableObject {
                 "program": session.program, "seesTabs": session.consent.seesTabs, "wantsTabs": session.wantsTabs,
                 "drawn": allowButton?.window != nil && tabsBox?.window != nil,
                 "own": session.own.count, "held": session.held?.hold.summary ?? "", "heldReason": session.held?.hold.reason.rawValue ?? "",
-                "auto": session.auto, "justAdmitted": session.justAdmitted, "admissions": admissions, "wantsAlways": session.wantsAlways,
+                "auto": session.auto, "panel": session.panel, "justAdmitted": session.justAdmitted, "admissions": admissions, "wantsAlways": session.wantsAlways,
                 "offersAlways": session.noAlways == nil, "noAlways": session.noAlways ?? "",
                 "alwaysDrawn": alwaysBox?.window != nil, "busy": session.busy,
                 "pillDrawn": stopButton?.window != nil, "overPage": stopOverPage,
@@ -1226,12 +1367,30 @@ final class AgentControl: ObservableObject {
 
     // MARK: - the verbs
 
+    /// Every verb an agent may ask for, and nothing else. No `sign_in`, and
+    /// no other way to have a saved password, passkey or code filled: an
+    /// agent never signs in with what the person saved.
+    static let verbs: Set<String> = [
+        "hello", "status", "tabs", "open", "go", "back", "forward", "close", "read", "click", "type",
+        "press", "scroll", "wait_for", "shot", "bye",
+    ]
+
+    /// Why a verb is refused before anything is looked at: one not in `verbs`.
+    static func unknown(_ verb: String) -> AgentRefusal? {
+        verbs.contains(verb) ? nil : AgentRefusal(code: "no_verb", message: "\(Brand.name) doesn't do “\(AgentGate.quoted(verb))” for an agent")
+    }
+
     private func run(_ verb: String, _ request: [String: Any], in session: AgentSession, _ answer: @escaping ([String: Any]) -> Void) {
         func refuse(_ refusal: AgentRefusal) { answer(refusal.said) }
+        if let refusal = Self.unknown(verb) { return refuse(refusal) }
         if verb == "hello" {
             session.greeted = true
             session.client = AgentRules.clientName(request["client"])
-            session.browser = Browsers.all.first { $0.window?.isKeyWindow == true } ?? Browsers.primary
+            session.offeredPass = (request["pass"] as? String).flatMap { $0.isEmpty ? nil : String($0.prefix(128)) }
+            // The panel's window, for its own run: only where it works and
+            // asks. Whether it is let in is greet's (PanelRun.admits).
+            session.browser = panelWindow(for: session.offeredPass)
+                ?? Browsers.all.first { $0.window?.isKeyWindow == true } ?? Browsers.primary
             guard session.browser != nil else {
                 refuse(AgentRefusal(code: "no_window", message: "\(Brand.name) has no window open"))
                 end(session, "no window")
@@ -1370,8 +1529,6 @@ final class AgentControl: ObservableObject {
                         }
                     }
                 }
-            case "sign_in":
-                try signIn(request, session, browser, answer)
             case "scroll":
                 try scroll(request, session, browser, answer)
             case "wait_for":
@@ -1413,57 +1570,6 @@ final class AgentControl: ObservableObject {
         default:
             if session.pages[handle] != nil { session.forget(handle) }
             throw AgentRefusal(code: "stale_page", message: "No page \(handle.isEmpty ? "given" : "“\(handle)”")", hint: "Use list_tabs or open_tab.")
-        }
-    }
-
-    /// Sign in on a page of its own, with an account the person saved for that
-    /// exact site. There is no switch for it any more (it went with the
-    /// Developer switches, f8d15ec): any agent let in may ask. The
-    /// browser does it: the account is looked up and its secret read here, and
-    /// handed to the page's form by Search's own script, never returned. What
-    /// the agent is told is that the fields were filled, and the account's
-    /// name. Only https, only the page's own host (not another of the site's:
-    /// accounts.example.com's login is not offered on a look-alike), only a
-    /// page of its own, and only while the page is still that address: the
-    /// script checks again as it fills. Nothing here is logged. It does not
-    /// press anything: submitting is the agent's own click, like any other.
-    private func signIn(_ request: [String: Any], _ session: AgentSession, _ browser: Browser, _ answer: @escaping ([String: Any]) -> Void) throws {
-        let tab = try self.tab(request, session, browser, .drive)
-        guard let address = tab.pageAddress, address.scheme?.lowercased() == "https",
-              let host = browser.curtain.host(of: address)
-        else {
-            throw AgentRefusal(code: "not_secure", message: "Only an https page can be signed in to this way",
-                               hint: "Go to the site's https sign-in page first.")
-        }
-        // This site's own accounts, kept from https, newest first.
-        let accounts = Vault.kept(matching: host, wide: false).filter { !$0.clear }
-        guard !accounts.isEmpty else {
-            throw AgentRefusal(code: "no_saved_login", message: "No login is saved for \(host)",
-                               hint: "Tell the person what you need: the account to use, and that they must sign in themselves or save it first.")
-        }
-        let wanted = (request["user"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let chosen: Kept
-        if wanted.isEmpty {
-            chosen = accounts[0]
-        } else if let named = accounts.first(where: { $0.user.caseInsensitiveCompare(wanted) == .orderedSame }) {
-            chosen = named
-        } else {
-            throw AgentRefusal(code: "no_such_account", message: "No saved account called that for \(host)",
-                               hint: "Saved for this site: " + accounts.map(\.user).joined(separator: ", "))
-        }
-        guard live(session) else { throw AgentRefusal(code: "stopped", message: "Stopped in \(Brand.name)") }
-        guard let login = Vault.login(chosen) else {
-            throw AgentRefusal(code: "keychain_refused", message: "The keychain didn't hand the login over",
-                               hint: "Tell the person: it may need their Mac password, or Touch ID, to be allowed.")
-        }
-        tab.fill(user: login.user, password: login.password, onlyOn: address) { worked in
-            guard worked else {
-                return answer(AgentRefusal(code: "no_form", message: "No sign-in form on this page to fill",
-                                           hint: "Some sites ask for the account name first; type that, press Enter, then call sign_in again on the password step.").said)
-            }
-            Vault.touch(login)
-            answer(["filled": true, "user": login.user,
-                    "note": "The saved password is in the form. Click the site's sign-in button to submit it."])
         }
     }
 

@@ -40,8 +40,8 @@ final class ClaudeSessionTests: XCTestCase {
         return file
     }
 
-    private func session(_ exe: URL?, agents: Bool = true, verify: @escaping (URL) -> Bool = { _ in true }) throws -> ClaudeSession {
-        ClaudeSession(agentsOn: { agents }, executable: exe, verify: verify, script: try script(), world: nil)
+    private func session(_ exe: URL?, verify: @escaping (URL) -> Bool = { _ in true }) throws -> ClaudeSession {
+        ClaudeSession(executable: exe, verify: verify, script: try script(), world: nil)
     }
 
     private func wait(_ what: String, timeout: TimeInterval = 10, _ done: () -> Bool) async {
@@ -103,13 +103,34 @@ final class ClaudeSessionTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: String(folder)), "and gone when it is")
     }
 
-    func testNothingStartsWhileCodingAgentsAreOff() throws {
-        let session = try session(try program(reply: good), agents: false)
+    /// Nothing to switch on first: Send starts it, with the prefs as they
+    /// come. And its search-mcp is handed the run's own pass, in its
+    /// environment, never in an argument or the model's brief.
+    func testSendStartsItWithNoSwitchAndAPassForThisRunOnly() async throws {
+        let session = try session(try program(reply: good))
         session.draft = "go"; session.submit()
-        XCTAssertEqual(session.problem, .agentsOff)
-        XCTAssertFalse(session.running)
-        XCTAssertTrue(session.turns.isEmpty)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: record.path), "the program was never started")
+        XCTAssertNil(session.problem)
+        XCTAssertTrue(session.running)
+        await wait("the turn to end") { !session.running }
+        let lines = try String(contentsOf: record, encoding: .utf8).split(separator: "\n").map(String.init)
+        let folder = String(try XCTUnwrap(lines.first { $0.hasPrefix("PWD=") }).dropFirst(4))
+        let config = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: URL(fileURLWithPath: folder).appendingPathComponent("mcp.json"))) as? [String: Any])
+        let server = try XCTUnwrap((config["mcpServers"] as? [String: Any])?["search"] as? [String: Any])
+        let pass = try XCTUnwrap((server["env"] as? [String: String])?[ClaudeCode.passVariable])
+        XCTAssertEqual(pass.count, 64)
+        let args = lines.filter { $0.hasPrefix("ARG=") }
+        XCTAssertFalse(args.contains { $0.contains(pass) }, "not in claude's arguments, nor its brief")
+        XCTAssertFalse(lines.contains { $0.hasPrefix("ENV=") && $0.contains(pass) }, "nor claude's own environment")
+        XCTAssertFalse((server["args"] as? [String] ?? []).contains(pass), "nor search-mcp's arguments")
+        session.newChat()
+        session.draft = "again"; session.submit()
+        await wait("the second run") { !session.running && session.turns.count == 1 }
+        let again = try String(contentsOf: record, encoding: .utf8).split(separator: "\n").map(String.init)
+        let second = String(try XCTUnwrap(again.first { $0.hasPrefix("PWD=") }).dropFirst(4))
+        let next = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: URL(fileURLWithPath: second).appendingPathComponent("mcp.json"))) as? [String: Any])
+        let nextPass = ((next["mcpServers"] as? [String: Any])?["search"] as? [String: Any]).flatMap { ($0["env"] as? [String: String])?[ClaudeCode.passVariable] }
+        XCTAssertNotEqual(nextPass, pass, "a new run, a new pass")
+        session.stop()
     }
 
     func testAProgramNotSignedByAnthropicIsNotStarted() throws {

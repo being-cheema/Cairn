@@ -180,12 +180,21 @@ final class AgentTrustTests: XCTestCase {
         XCTAssertTrue(AgentTrust(vault: vault).remembered.isEmpty)
     }
 
-    func testTheSwitchForgetsWhenTurnedOffOrOn() throws {
-        // Preferences' switch calls AgentTrust.shared.forgetAll(): checked
-        // in its source, as a unit test has no keychain of Search's own.
-        let source = try String(contentsOfFile: #filePath.replacingOccurrences(of: "Tests/SearchTests/AgentTrustTests.swift",
-                                                                                 with: "Sources/Search/Prefs.swift"), encoding: .utf8)
-        XCTAssertTrue(source.contains("if agents != oldValue { AgentTrust.shared.forgetAll() }"))
+    /// There is no switch to turn agents on any more: nothing in the prefs
+    /// for one, and Settings › About › Developer keeps only the list of
+    /// agents you always allow, each with Forget.
+    func testThereIsNoSwitchToTurnOn() throws {
+        func source(_ name: String) throws -> String {
+            try String(contentsOfFile: #filePath.replacingOccurrences(of: "Tests/SearchTests/AgentTrustTests.swift",
+                                                                     with: "Sources/Search/\(name)"), encoding: .utf8)
+        }
+        XCTAssertFalse(try source("Prefs.swift").contains("var agents:"))
+        XCTAssertFalse(try source("Settings.swift").contains("$prefs.agents"))
+        XCTAssertTrue(try source("Settings.swift").contains("RememberedAgents()"))
+        let row = try XCTUnwrap(SettingsIndex.items.first { $0.id == "agents" })
+        XCTAssertFalse(row.title.lowercased().contains("let coding agents"))
+        XCTAssertTrue(row.keys.isEmpty, "no setting behind it")
+        XCTAssertFalse(SettingsIndex.items.contains { $0.title.contains("Let coding agents") })
     }
 
     /// Written by some other program, where it can write: the defaults, a

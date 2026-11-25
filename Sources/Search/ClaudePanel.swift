@@ -3,8 +3,7 @@ import SwiftUI
 // Claude in the side panel (ClaudeSession): a conversation drawn as the rest
 // of the browser is — the same ink, muted and faint, the same sizes, hairlines
 // and pills, and as plain: text only, nothing to follow, nothing to fetch.
-// It still needs "Let coding agents use Search" (Settings › About › Developer),
-// which is the person's to allow.
+// Nothing to switch on first: your Send is the go-ahead (PanelRun).
 //
 // What you said sits in a soft bubble on the right, what Claude did as quiet
 // lines with a tick each, and what it says as plain text on the left, written
@@ -103,7 +102,7 @@ struct ClaudePanel: View {
                 Text("What should I do?")
                     .font(Typeface.heading(19, weight: .medium))
                     .foregroundStyle(Palette.ink)
-                Text("I work in a clean browser of my own: not signed in to anything, and gone when we're done. You are asked before I start.")
+                Text("I work in a clean browser of my own: not signed in to anything, and gone when we're done. I never use your saved passwords, and anything that sends, pays or posts waits for your click.")
                     .font(.system(size: 12))
                     .foregroundStyle(Palette.muted)
                     .fixedSize(horizontal: false, vertical: true)
@@ -144,9 +143,6 @@ struct ClaudePanel: View {
                 .font(.system(size: 12))
                 .foregroundStyle(Palette.muted)
                 .fixedSize(horizontal: false, vertical: true)
-            if problem == .agentsOff {
-                Pill("Open Settings", filled: true) { openSettings() }
-            }
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -161,8 +157,6 @@ struct ClaudePanel: View {
             return "The claude program on this Mac isn't signed by Anthropic, so it isn't started."
         case .noScript:
             return "This copy of \(Brand.name) has no search-mcp to give Claude Code, so there is nothing for it to use."
-        case .agentsOff:
-            return "Turn on Settings › About › Developer › Let coding agents use \(Brand.name) first. Claude then asks you, in this window, before it starts."
         }
     }
 

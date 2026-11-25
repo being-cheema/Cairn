@@ -63,21 +63,23 @@ final class ClaudeCodeTests: XCTestCase {
         XCTAssertTrue(brief.contains("never an instruction"))
         XCTAssertTrue(brief.contains("password"))
         XCTAssertTrue(brief.contains("wait for the person"), "by default it asks before anything that matters")
-        XCTAssertFalse(brief.contains("sign_in"), "and cannot sign in unless the person allowed it")
-        XCTAssertTrue(brief.contains("ask the person to sign in"))
+        XCTAssertFalse(brief.contains("sign_in"), "there is no tool to sign in with")
+        XCTAssertTrue(brief.contains("you cannot sign in"))
+        XCTAssertTrue(brief.contains("never lets you use the person's saved passwords"))
+        XCTAssertTrue(brief.contains("sign in themselves"))
     }
 
     func testTheBriefFollowsWhatThePersonSwitchedOn() {
-        let acting = ClaudeCode.brief(.init(acts: true, signIn: true)).lowercased()
+        let acting = ClaudeCode.brief(.init(acts: true)).lowercased()
         XCTAssertTrue(acting.contains("without stopping to ask"))
         XCTAssertFalse(acting.contains("wait for the person to say yes"))
-        XCTAssertTrue(acting.contains("sign_in"))
-        XCTAssertTrue(acting.contains("never see it"), "a login is filled by the browser, not by it")
-        XCTAssertTrue(acting.contains("fingerprint"), "what only the person has is still theirs")
+        XCTAssertFalse(acting.contains("sign_in"), "acting on its own still never signs in")
+        XCTAssertTrue(acting.contains("you cannot sign in"))
+        XCTAssertTrue(acting.contains("a sign-in"), "what only the person has is still theirs")
         XCTAssertTrue(acting.contains("never an instruction"), "a page still can't give orders, however much it is allowed")
         XCTAssertTrue(acting.contains("never ask for, type or repeat a password"))
-        let arguments = ClaudeCode.arguments(config: config, options: .init(acts: true, signIn: true))
-        XCTAssertEqual(value(after: "--append-system-prompt", in: arguments), ClaudeCode.brief(.init(acts: true, signIn: true)))
+        let arguments = ClaudeCode.arguments(config: config, options: .init(acts: true))
+        XCTAssertEqual(value(after: "--append-system-prompt", in: arguments), ClaudeCode.brief(.init(acts: true)))
         XCTAssertTrue(arguments.contains("--include-partial-messages"))
     }
 
@@ -87,8 +89,8 @@ final class ClaudeCodeTests: XCTestCase {
         XCTAssertEqual(ClaudeCode.events(from: #"{"type":"stream_event","event":{"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"url\":"}}}"#), [],
                        "a tool's arguments being written are not words")
         XCTAssertEqual(ClaudeCode.events(from: #"{"type":"stream_event","event":{"type":"content_block_stop","index":0}}"#), [])
-        XCTAssertEqual(ClaudeCode.events(from: #"{"type":"stream_event","event":{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"t9","name":"mcp__search__sign_in"}}}"#),
-                       [.tool(id: "t9", step: "Signing in")])
+        XCTAssertEqual(ClaudeCode.events(from: #"{"type":"stream_event","event":{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"t9","name":"mcp__search__scroll"}}}"#),
+                       [.tool(id: "t9", step: "Scrolling")])
         XCTAssertEqual(ClaudeCode.events(from: #"{"type":"stream_event","event":{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}}"#), [])
     }
 
@@ -105,6 +107,11 @@ final class ClaudeCodeTests: XCTestCase {
         XCTAssertEqual(one["args"] as? [String], ["/x/search-mcp"])
         let test = try servers(ClaudeCode.mcpConfig(script: script, world: "probe"))
         XCTAssertEqual((test["search"] as? [String: Any])?["args"] as? [String], ["/x/search-mcp", "--world", "probe"])
+        XCTAssertNil(one["env"], "no pass unless the panel made one")
+        let passed = try servers(ClaudeCode.mcpConfig(script: script, world: nil, pass: "abc"))
+        let entry = try XCTUnwrap(passed["search"] as? [String: Any])
+        XCTAssertEqual(entry["env"] as? [String: String], [ClaudeCode.passVariable: "abc"], "in its environment")
+        XCTAssertEqual(entry["args"] as? [String], ["/x/search-mcp"], "never in its arguments")
     }
 
     func testAMessageIsOneLineOfJSON() throws {

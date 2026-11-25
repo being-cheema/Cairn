@@ -680,8 +680,8 @@ final class Bench {
                 default: agents.answer(allow: which == "allow", event: made)
                 }
             case "stop": agents.stopSession()
-            // The switch in Settings turned off, as its click would.
-            case "off": browser.prefs.agents = false
+            // The socket closed, as quitting closes it.
+            case "off": agents.stop()
             default: break
             }
             var out = agents.state
@@ -3239,15 +3239,15 @@ final class Bench {
                 let path = request["path"] as? String
                 let signed = request["signed"] as? Bool ?? true
                 browser.claude = ClaudeSession(
-                    agentsOn: { [weak browser] in browser?.prefs.agents ?? false },
                     executable: path.map { URL(fileURLWithPath: $0) },
                     verify: signed ? ClaudeCode.signedByAnthropic : { _ in false },
-                    options: { [weak browser] in ClaudeCode.Options(acts: true, signIn: true, model: browser?.prefs.claudeModel) })
+                    options: { [weak browser] in ClaudeCode.Options(acts: true, model: browser?.prefs.claudeModel) },
+                    window: { [weak browser] in browser })
             case "real":
                 browser.claude.stop()
                 browser.claude = ClaudeSession(
-                    agentsOn: { [weak browser] in browser?.prefs.agents ?? false },
-                    options: { [weak browser] in ClaudeCode.Options(acts: true, signIn: true, model: browser?.prefs.claudeModel) })
+                    options: { [weak browser] in ClaudeCode.Options(acts: true, model: browser?.prefs.claudeModel) },
+                    window: { [weak browser] in browser })
             case "state": break
             default:
                 answer(["error": "claude send TEXT | stop | new | program PATH [signed] | real | state"]); return

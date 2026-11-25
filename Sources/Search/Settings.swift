@@ -942,7 +942,7 @@ struct SettingsPanel: View {
         case "about.feedback": Pill("Send feedback") { Links.writeFeedback() }
         case "about.notes": Pill("What's new…") { browser.lead(to: InternalPage(.notes)) }
         case "bench": Switch(on: $prefs.bench)
-        case "agents": Switch(on: $prefs.agents)
+        case "agents": Always(text: "Asks first")
         case "news.updates": OptInSettingsField(betaOnly: false) { _ = browser.open($0, foreground: true) }
         case "news.iphone": OptInSettingsField(betaOnly: true) { _ = browser.open($0, foreground: true) }
         default: EmptyView()
@@ -996,7 +996,7 @@ struct SettingsPanel: View {
                 }
             }
         case "agents":
-            if !searched, prefs.agents { RememberedAgents() }
+            if !searched { RememberedAgents() }
         case "devtools":
             // A copy with no update feed has none to offer; one that already
             // holds a package still lists it, to remove it.
@@ -2000,7 +2000,7 @@ private struct PermissionSiteRow: View {
 
 /// The coding agents you said to always allow (AgentTrust), each with who
 /// signed the program that starts it and when it was last let in, and
-/// Forget. Under "Let coding agents use Search".
+/// Forget. Under "Coding agents".
 private struct RememberedAgents: View {
     @ObservedObject private var trust = AgentTrust.shared
 

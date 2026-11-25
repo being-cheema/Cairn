@@ -239,6 +239,119 @@ final class AgentControlTests: XCTestCase {
         XCTAssertEqual(later.delay(at: 1.2), 0, accuracy: 0.001)
     }
 
+    // MARK: - no password filling, by any agent
+
+    /// sign_in is gone: AgentControl refuses it as a verb it doesn't do,
+    /// before anything is looked at, and no verb it does fills a login.
+    func testSignInIsNotAVerb() {
+        XCTAssertFalse(AgentControl.verbs.contains("sign_in"))
+        XCTAssertEqual(AgentControl.unknown("sign_in")?.code, "no_verb")
+        XCTAssertEqual(AgentControl.unknown("signIn")?.code, "no_verb")
+        XCTAssertEqual(AgentControl.unknown("fill")?.code, "no_verb")
+        for verb in ["hello", "open", "read", "click", "type", "press", "bye"] { XCTAssertNil(AgentControl.unknown(verb), verb) }
+    }
+
+    /// search-mcp, as an agent sees it: no sign_in in its tools, a call to
+    /// one answered as no such tool, and its words say signing in is the
+    /// person's. Run as an agent runs it, with nothing connected to Search.
+    func testSearchMCPOffersNoSignIn() throws {
+        let script = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("search-mcp")
+        let run = Process()
+        run.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
+        run.arguments = [script.path, "--world", "agent-tests-no-socket"]
+        let input = Pipe(), output = Pipe()
+        run.standardInput = input
+        run.standardOutput = output
+        run.standardError = FileHandle.nullDevice
+        try run.run()
+        let lines = [
+            #"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","clientInfo":{"name":"claude-code"}}}"#,
+            #"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#,
+            #"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"sign_in","arguments":{"page":"p1"}}}"#,
+        ]
+        input.fileHandleForWriting.write(Data((lines.joined(separator: "\n") + "\n").utf8))
+        try input.fileHandleForWriting.close()
+        let data = output.fileHandleForReading.readDataToEndOfFile()
+        run.waitUntilExit()
+        let answers = try String(decoding: data, as: UTF8.self).split(separator: "\n").map {
+            try XCTUnwrap(JSONSerialization.jsonObject(with: Data($0.utf8)) as? [String: Any])
+        }
+        XCTAssertEqual(answers.count, 3)
+        let instructions = try XCTUnwrap((answers[0]["result"] as? [String: Any])?["instructions"] as? String)
+        XCTAssertTrue(instructions.contains("never fills a saved password"))
+        XCTAssertTrue(instructions.contains("sign in themselves"))
+        let tools = try XCTUnwrap((answers[1]["result"] as? [String: Any])?["tools"] as? [[String: Any]])
+        let names = tools.compactMap { $0["name"] as? String }
+        XCTAssertTrue(names.contains("open_tab"))
+        XCTAssertFalse(names.contains("sign_in"))
+        XCTAssertFalse(tools.contains { ($0["description"] as? String ?? "").contains("saved login") })
+        let call = try XCTUnwrap(answers[2]["result"] as? [String: Any])
+        XCTAssertEqual(call["isError"] as? Bool, true)
+        XCTAssertTrue(String(describing: call["content"] ?? "").contains("no_tool"))
+    }
+
+    // MARK: - the panel's own run
+
+    private func started(_ seconds: Int, _ micro: Int32 = 0) -> timeval { timeval(tv_sec: seconds, tv_usec: micro) }
+
+    /// The panel's own run is let in by its Send, and nothing else is: a
+    /// connection without the run's pass, with a pass but from any process
+    /// but a child of the panel's own `claude`, from a pid reused since, or
+    /// with no message of the person's being answered, is asked about (the
+    /// question, Allow) as every other agent is.
+    func testOnlyThePanelsOwnRunIsLetInWithoutAsking() {
+        let pass = PanelRun.newPass()
+        XCTAssertEqual(pass.count, 64)
+        XCTAssertNotEqual(pass, PanelRun.newPass())
+        var run = PanelRun(pass: pass, pid: 4242, started: started(100, 5))
+        // Not armed: no message of the person's is being answered.
+        XCTAssertFalse(run.admits(offered: pass, parent: 4242, parentStarted: started(100, 5)))
+        run.armed = true
+        XCTAssertTrue(run.admits(offered: pass, parent: 4242, parentStarted: started(100, 5)), "the run, while a Send is answered")
+        // Without the pass: asked.
+        XCTAssertFalse(run.admits(offered: nil, parent: 4242, parentStarted: started(100, 5)))
+        XCTAssertFalse(run.admits(offered: "", parent: 4242, parentStarted: started(100, 5)))
+        XCTAssertFalse(run.admits(offered: String(pass.dropLast()) + "0", parent: 4242, parentStarted: started(100, 5)))
+        XCTAssertFalse(run.admits(offered: pass.uppercased(), parent: 4242, parentStarted: started(100, 5)))
+        // With the pass, from anyone but the panel's own claude: asked.
+        XCTAssertFalse(run.admits(offered: pass, parent: 4243, parentStarted: started(100, 5)), "another program that read it")
+        XCTAssertFalse(run.admits(offered: pass, parent: nil, parentStarted: nil))
+        XCTAssertFalse(run.admits(offered: pass, parent: 1, parentStarted: started(100, 5)), "an orphan, adopted by launchd")
+        XCTAssertFalse(run.admits(offered: pass, parent: 4242, parentStarted: started(101, 5)), "the pid given to someone else since")
+        XCTAssertFalse(run.admits(offered: pass, parent: 4242, parentStarted: started(100, 6)))
+        XCTAssertFalse(run.admits(offered: pass, parent: 4242, parentStarted: nil))
+        // A run whose start couldn't be read lets nobody in.
+        var unknown = PanelRun(pass: pass, pid: 4242, started: nil)
+        unknown.armed = true
+        XCTAssertFalse(unknown.admits(offered: pass, parent: 4242, parentStarted: started(100, 5)))
+        // No randomness, no pass: nothing matches an empty one.
+        var empty = PanelRun(pass: "", pid: 4242, started: started(100, 5))
+        empty.armed = true
+        XCTAssertFalse(empty.admits(offered: "", parent: 4242, parentStarted: started(100, 5)))
+    }
+
+    /// The same through AgentControl: a pass registered for a run, armed by
+    /// Send, does nothing for a pass nobody registered, and nothing once the
+    /// turn is over or the run is gone.
+    func testThePanelsPassIsArmedBySendAndGoesWithTheRun() {
+        let control = AgentControl.shared
+        let pass = PanelRun.newPass()
+        control.panelStarted(pass: pass, pid: getpid(), browser: nil)
+        defer { control.panelEnded(pass: pass) }
+        let me = AgentIdentity.process(getpid())?.started
+        XCTAssertFalse(control.panelAdmitsForTest(offered: pass, parent: getpid(), parentStarted: me), "not before Send")
+        control.panelArm(pass: pass, true)
+        XCTAssertTrue(control.panelAdmitsForTest(offered: pass, parent: getpid(), parentStarted: me))
+        XCTAssertFalse(control.panelAdmitsForTest(offered: PanelRun.newPass(), parent: getpid(), parentStarted: me), "a pass of no run")
+        XCTAssertFalse(control.panelAdmitsForTest(offered: nil, parent: getpid(), parentStarted: me), "no pass: the question")
+        control.panelArm(pass: pass, false)
+        XCTAssertFalse(control.panelAdmitsForTest(offered: pass, parent: getpid(), parentStarted: me), "the turn over")
+        control.panelArm(pass: pass, true)
+        control.panelEnded(pass: pass)
+        XCTAssertFalse(control.panelAdmitsForTest(offered: pass, parent: getpid(), parentStarted: me), "the run gone")
+    }
+
     // MARK: - what a page gives back
 
     private func page(_ html: String) async throws -> WKWebView {
@@ -313,6 +426,8 @@ final class AgentControlTests: XCTestCase {
 
     func testSocketIsThisUsersOnly() throws {
         let control = AgentControl.shared
+        // Listening already, as every first window now starts it: from scratch.
+        control.stop()
         let path = AgentControl.socket.path, dir = AgentControl.folder.path
         try FileManager.default.createDirectory(at: AgentControl.folder, withIntermediateDirectories: true)
         // A folder left open to everyone, and a file there before, are not kept as they were.
@@ -344,6 +459,8 @@ final class AgentControlTests: XCTestCase {
 
     // L4: a folder that is a link to somewhere else is not listened in.
     func testALinkedFolderIsRefused() throws {
+        // Listening already, as every first window now starts it: from scratch.
+        AgentControl.shared.stop()
         let elsewhere = FileManager.default.temporaryDirectory.appendingPathComponent("agent-elsewhere-\(getpid())")
         try FileManager.default.createDirectory(at: elsewhere, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: AgentControl.folder.deletingLastPathComponent(), withIntermediateDirectories: true)

@@ -563,12 +563,12 @@ final class Browser: NSObject, ObservableObject {
     /// The conversation in the side panel's Claude (ClaudePanel), made when
     /// the panel first asks for it. Nothing runs until something is sent.
     lazy var claude = ClaudeSession(
-        agentsOn: { [weak self] in self?.prefs.agents ?? false },
-        // The agent's browser rules (clean browser, commit gates, saved
-        // logins by the browser) are always on; what it is told matches.
+        // The agent's browser rules (clean browser, commit gates, no saved
+        // password ever filled for it) are always on; what it is told matches.
         options: { [weak self] in
-            ClaudeCode.Options(acts: true, signIn: true, model: self?.prefs.claudeModel)
-        })
+            ClaudeCode.Options(acts: true, model: self?.prefs.claudeModel)
+        },
+        window: { [weak self] in self })
     /// The Settings page it opens on next.
     var settingsPage: SettingsPanel.Page {
         get {
@@ -2901,11 +2901,8 @@ final class Browser: NSObject, ObservableObject {
             } else if prefs.benchRefused {
                 announce("“Let a script drive \(Brand.name)” was turned on outside Settings, and stays off")
             }
-            if prefs.agents {
-                AgentControl.shared.start()
-            } else if prefs.agentsRefused {
-                announce("“Let coding agents use \(Brand.name)” was turned on outside Settings, and stays off")
-            }
+            // Always listening; nobody is let in without your say (AgentControl).
+            AgentControl.shared.start()
             welcoming = !prefs.welcomed
             newsShowing = WhatsNew.due(prefs: prefs, welcoming: welcoming)
             // Once a day, quietly: is there a newer one?
@@ -3283,14 +3280,6 @@ final class Browser: NSObject, ObservableObject {
                 guard let self else { return }
                 if on { Bench.shared.start(for: self) } else { Bench.shared.stop() }
                 announce(on ? "Scripts can drive \(Brand.name) — see ./bench" : "The bench is closed")
-            }
-            .store(in: &bag)
-
-        prefs.$agents
-            .dropFirst()
-            .removeDuplicates()
-            .sink { on in
-                if on { AgentControl.shared.start() } else { AgentControl.shared.stop() }
             }
             .store(in: &bag)
 
