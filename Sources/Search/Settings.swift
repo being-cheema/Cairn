@@ -386,8 +386,12 @@ struct SettingsPanel: View {
         }
     }
 
-    /// In its section, a dependent row is there only while it counts.
-    private func shown(_ item: SettingsItem) -> Bool { SettingsIndex.applies(item, prefs) }
+    /// In its section, a dependent row is there only while it counts, save
+    /// the ones the pictures above them turn on and off: those stay, dimmed
+    /// (row), or every pick would move what is under the pointer.
+    private func shown(_ item: SettingsItem) -> Bool {
+        SettingsIndex.staysPut.contains(item.id) || SettingsIndex.applies(item, prefs)
+    }
 
     private func rows(_ items: [SettingsItem], searched: Bool) -> some View {
         ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
@@ -1238,7 +1242,7 @@ struct SettingsPanel: View {
     private var versionDetail: String {
         switch updater.stage {
         case .none:
-            guard Updater.configured else { return "This copy has no update feed, so it never looks. Build a newer one" }
+            guard Updater.configured else { return "Updates aren't set up in this build" }
             return updater.lastChecked.map { "Checked \($0.formatted(.relative(presentation: .named))), every hour on its own" }
                 ?? "Checked every hour on its own"
         case .fetching(let next):
@@ -1369,7 +1373,6 @@ struct SettingRow<Control: View>: View {
                         Text(detail)
                             .font(.system(size: 11.5))
                             .foregroundStyle(Palette.muted)
-                            .lineLimit(2)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     if open, let more {

@@ -335,12 +335,13 @@ struct PasswordsPanel: View {
                     VStack(spacing: 0) {
                         ForEach(Array(rows.enumerated()), id: \.element.id) { index, login in
                             if index > 0 { Rule() }
-                            Row(login: login, picked: selected == login.id, flagged: report?.flagged.contains(login.id) ?? false,
+                            Row(login: login, picked: selected == login.id, flaw: report?.findings.first { $0.id == login.id }?.why,
                                 focus: $focusedRow) {
                                 guardEdits { editing = nil; selected = login.id }
                             }
                         }
                     }
+                    .padding(.bottom, 10)
                 }
             }
             .onKeyPress(.upArrow) { step(-1); return .handled }
@@ -589,7 +590,7 @@ struct PasswordsPanel: View {
                     .font(.system(size: 12))
                     .foregroundStyle(Palette.ink)
                     .fixedSize(horizontal: false, vertical: true)
-                Text("macOS decides which apps that list offers, and it may not include \(Brand.name). Only ES256 passkeys can be used here; any others are counted and left out. Passwords already kept here stay as they are.")
+                Text("macOS decides which apps that list offers, and it may not include \(Brand.name). Only the standard kind of passkey (ES256) works here; others are skipped. Passwords already kept here stay as they are.")
                     .font(.system(size: 11.5))
                     .foregroundStyle(Palette.muted)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1206,8 +1207,8 @@ struct PasswordsPanel: View {
     private struct Row: View {
         let login: Kept
         let picked: Bool
-        /// The last health check found something to say about it.
-        let flagged: Bool
+        /// What the last health check found wrong with it, if anything.
+        let flaw: String?
         let focus: FocusState<String?>.Binding
         let pick: () -> Void
         @State private var hovering = false
@@ -1228,9 +1229,10 @@ struct PasswordsPanel: View {
                             .truncationMode(.middle)
                     }
                     Spacer(minLength: 0)
-                    if flagged {
+                    if let flaw {
                         Circle().fill(Palette.accent).frame(width: 6, height: 6)
-                            .help("The Health tab has something to say about this one")
+                            .help(flaw)
+                            .accessibilityLabel(flaw)
                     }
                 }
                 .padding(.horizontal, 12)

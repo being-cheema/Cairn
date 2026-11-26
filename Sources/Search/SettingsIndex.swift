@@ -699,7 +699,7 @@ enum SettingsIndex {
               keys: ["bench"], words: ["automation", "script", "developer"]),
         .init(id: "agents", group: "developer", icon: "cursorarrow.rays",
               title: "Coding agents", detail: "Claude Code or Codex can ask to browse in tabs of its own, while you watch",
-              more: "Nothing to turn on. The side panel's Claude starts when you send it a message: that is your go-ahead. Any other program that connects is asked about in the window first, unless you ticked “Always allow” for it — offered only for Claude Code's own `claude`, signed by Anthropic; kept 30 days at most and 7 after its last use, never with your tabs, and asked again after you press Stop; forget it here. Nothing is drawn over the page: the tab it works in wears a small dot, and Stop is on the column's foot (or the tab strip) and in File › Stop Agent (⌃⌥⌘.) until it goes. It works in tabs of its own; your tabs it can read only if you tick “Let it see my open tabs”, and never uses. It never sees passwords, card numbers, one-time codes, private tabs, cookies or Settings, is never given a saved password, passkey or code to sign in with, and can't download or choose files. It connects through a file on this Mac only, never the network: claude mcp add search -- /path/to/\(Brand.name)/search-mcp.",
+              more: "Nothing to turn on. The side panel's Claude starts when you send it a message: that is your go-ahead. Any other program that connects is asked about in the window first, unless you ticked “Always allow” for it — offered only for Claude Code's own `claude`, signed by Anthropic; kept 30 days at most and 7 after its last use, never with your tabs, and asked again after you press Stop; forget it here. Nothing is drawn over the page: the tab it works in wears a small dot, and Stop is on the column's foot (or the tab strip) and in File › Stop Agent (⌃⌥⌘.) until it goes. It works in tabs of its own; your tabs it can read only if you tick “Let it read my open tabs, except private ones”, and never uses. It never sees passwords, card numbers, one-time codes, private tabs, cookies or Settings, is never given a saved password, passkey or code to sign in with, and can't download or choose files. It connects through a file on this Mac only, never the network: claude mcp add search -- /path/to/\(Brand.name).app/Contents/MacOS/cairn-mcp.",
               words: ["agent", "claude code", "codex", "mcp", "always allow", "forget agent", "developer"]),
 
         // Moved to a menu, or always on: only the find field says so.
@@ -791,6 +791,9 @@ enum SettingsIndex {
     }
 
     private static func groupOrder(_ id: String) -> Int { groups.firstIndex { $0.id == id } ?? 0 }
+
+    /// Rows kept in their section while they don't count (SettingsPanel).
+    static let staysPut: Set<String> = ["pages.dusk", "inspector.dark"]
 
     /// Whether a dependent row means anything as things are set now. Its
     /// section hides it otherwise; the find field shows it dimmed.

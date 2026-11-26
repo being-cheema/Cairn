@@ -1470,11 +1470,11 @@ struct BookmarksPanel: View {
             }
         } foot: {
             HStack(spacing: 8) {
-                Text("Bring in from")
+                Text("Import from")
                     .font(.system(size: 12))
                     .foregroundStyle(Palette.muted)
-                Pill("Bring in…") { browser.lead(to: InternalPage(.importing)) }
-                Pill("File…") { browser.importFile() }
+                Pill("Another browser…") { browser.lead(to: InternalPage(.importing)) }
+                Pill("Exported file…") { browser.importFile() }
                 Spacer()
                 Pill("New Folder…") { bookmarks.askNewFolder(in: nil) }
                 Text(bookmarks.count == 1 ? "1 bookmark" : "\(bookmarks.count) bookmarks")

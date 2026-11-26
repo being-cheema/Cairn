@@ -114,15 +114,18 @@ struct WelcomePanel: View {
     private var devices: some View {
         VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 14) {
-                Choice("Sync with iCloud", "Open tabs, pins, spaces, bookmarks and a few settings, on your iPhone and other Macs. End-to-end encrypted, in your own iCloud.", on: $syncs,
-                       unavailable: ICloudSync.shared.available ? nil : "Needs a build of \(Brand.name) signed for iCloud")
-                Rule(inset: 0)
+                // Left out where this build can't reach iCloud: leaving the
+                // welcome keeps sync off there whatever it said (finish).
+                if ICloudSync.shared.available {
+                    Choice("Sync with iCloud", "Open tabs, pins, spaces, bookmarks and a few settings, on your iPhone and other Macs. End-to-end encrypted, in your own iCloud.", on: $syncs)
+                    Rule(inset: 0)
+                }
                 Choice("Handoff", "The page in front shows up on your iPhone and iPad.", on: $handsOff)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
             .background(Palette.wash, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            Text("Nothing starts until you leave this welcome. Both are in Settings › General.")
+            Text("Nothing starts until you leave this welcome. You can change this in Settings › General.")
                 .font(.system(size: 11.5))
                 .foregroundStyle(Palette.muted)
                 .padding(.horizontal, 4)
@@ -195,7 +198,7 @@ struct WelcomePanel: View {
 
             // Safari, a browser on another Mac, one \(Brand.name) can't read: what
             // it exported, bookmarks, passwords or Safari's own ZIP.
-            Pill("From a file another browser exported…") { browser.importFile() }
+            Big("From a file another browser exported…") { browser.importFile() }
         }
     }
 
