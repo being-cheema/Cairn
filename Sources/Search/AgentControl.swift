@@ -1372,7 +1372,10 @@ final class AgentControl: ObservableObject {
         Browsers.all.flatMap { browser in
             browser.tabs.filter { handed.contains($0.id) }.map { tab -> [String: Any] in
                 ["id": Bench.short(tab), "title": tab.title, "active": tab.id == browser.activeID,
-                 "persistent": tab.store.isPersistent, "agent": tab.agent, "working": tab.agentWorking]
+                 "persistent": tab.store.isPersistent, "agent": tab.agent, "working": tab.agentWorking,
+                 // The Dev Bridge's, which a handed-over tab carries none of.
+                 "dressed": DevBridge.shared.isDressed(tab.id),
+                 "heard": DevBridge.shared.log(of: tab.id).console.count + DevBridge.shared.log(of: tab.id).network.count]
             }
         }
     }

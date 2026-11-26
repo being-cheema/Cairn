@@ -22,6 +22,9 @@ import WebKit
 //
 // Only while an agent has the tab. Handed to you (AgentEnd), it is yours, and
 // your own router is yours to visit.
+//
+// One way in, which you open yourself: the Local Dev Bridge (DevBridge.swift)
+// for one local origin, port and all. It adds nothing to `allowed` here.
 
 enum PrivateNetwork {
     /// Names that only ever mean this Mac or the network it is on.

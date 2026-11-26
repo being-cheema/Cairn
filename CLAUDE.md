@@ -99,6 +99,7 @@ app may carry them only with the icons8 link in Settings › About
 | What needs the user's click | `AgentGate.swift` (pure), `AgentBanner.swift` |
 | What an agent's tab may load | `NavigationPolicyEngine.swift` (pure), `AgentNetwork.swift` |
 | A task's tabs and its store | `AgentWorkspaceCoordinator.swift` |
+| Local Dev Bridge, Send Element | `DevBridge.swift` (pure), `DevBridgeLive.swift`, `ElementPicker.swift` |
 | Shared with the MCP server | `../CairnProtocol/` |
 | Reading and acting in pages | `PageHands.swift` |
 | Claude side panel | `ClaudeCode.swift` (pure), `ClaudeSession.swift`, `ClaudePanel.swift` |
@@ -142,3 +143,17 @@ A change to any of these needs its tests (`Agent*Tests.swift`) and a probe run.
   name that points inside are known gaps.
 - A task that ends normally hands its tabs to the user, still in their own
   store. Stop, quit, misbehaviour and a declined site change close them.
+- **Local Dev Bridge.** Only a real click on its switch turns it on: no menu
+  item, key, verb, accessibility press or Developer Mode. A grant is one
+  origin with its port (localhost, `*.localhost`, 127.0.0.0/8, `[::1]`),
+  held in memory, made from one tab of the user's, never a private one. It
+  ends when that tab's view goes (closed, a pin put down, asleep), when the
+  tab leaves the origin, and on Stop. Never add a local host to
+  `PrivateNetwork.allowed`, which knows no ports: the way in is a per-tab
+  rule list with `if-top-url` and `DevChain` in `vet`, which refuses links
+  and redirects from public pages. Console and requests are heard only on
+  the run's own tabs, never the tab it was granted from (which isn't read at
+  all), and nothing once the baton has been passed or the tabs handed over.
+  What is heard comes from wrappers in the page's world: forgeable, so only
+  ever data, redacted and capped. A granted server may accept writes by
+  `fetch`, which no commit gate sees.
