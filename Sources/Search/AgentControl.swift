@@ -1979,6 +1979,8 @@ final class AgentControl: ObservableObject {
                         }
                     }
                 }
+            case .annotate:
+                try annotate(request, session, browser, answer)
             case .scroll:
                 try scroll(request, session, browser, answer)
             case .waitFor:
@@ -2401,6 +2403,44 @@ final class AgentControl: ObservableObject {
             }
         } else {
             touch("set", text) { finish($0) }
+        }
+    }
+
+    /// A note in the margin of a tab of its own (MarginNotes). The tab is
+    /// found as for a click, so a tab of the person's is refused however it
+    /// is named.
+    private func annotate(_ request: [String: Any], _ session: AgentSession, _ browser: Browser, _ answer: @escaping ([String: Any]) -> Void) throws {
+        let tab: Tab
+        var snap: Int?, index: Int?
+        if request["element"] != nil {
+            let (found, _, read, at) = try element(request, session, browser)
+            (tab, snap, index) = (found, read, at)
+        } else {
+            tab = try self.tab(request, session, browser, .drive)
+        }
+        guard tab.marginNotes.count < MarginNotes.most else {
+            throw AgentRefusal(code: "too_many", message: "This tab has \(MarginNotes.most) notes already")
+        }
+        let words = String((request["note"] as? String ?? "").prefix(2000))
+        let where_ = MarginNotes.page(tab.pageAddress)
+        let author = session.shownName
+        guard let draft = MarginNotes.next(after: tab.marginNotes, words: words, quote: "", author: author, page: where_) else {
+            throw AgentRefusal(code: "bad_note", message: "A note needs some words")
+        }
+        let quote = String((request["quote"] as? String ?? "").prefix(MarginNotes.longestQuote))
+        page(tab, session, MarginNotes.anchor(id: draft.id, key: Self.key, snap: snap, index: index, quote: quote)) { [weak self] result in
+            switch result {
+            case .failure(let refusal): answer(refusal.said)
+            case .success(let out):
+                guard let note = MarginNotes.next(after: tab.marginNotes, words: words, quote: out["quote"] as? String ?? "",
+                                                  author: author, page: where_) else {
+                    return answer(AgentRefusal(code: "too_many", message: "This tab has \(MarginNotes.most) notes already").said)
+                }
+                tab.marginNotes.append(note)
+                MarginPainter.shared.watch(tab)
+                self?.work(on: tab, session)
+                answer(["noted": true, "page": session.handle(for: tab), "quote": note.quote, "notes": tab.marginNotes.count])
+            }
         }
     }
 

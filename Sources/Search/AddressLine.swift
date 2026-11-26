@@ -73,6 +73,7 @@ struct AddressLine: View {
                         .lineLimit(1)
                         .truncationMode(.middle)
                     Spacer(minLength: 0)
+                    MarginNotesButton(tab: tab)
                     // The site card (#1240), for a page on the web.
                     if tab.isWeb {
                         button("slider.horizontal.3", help: "Site Settings") {

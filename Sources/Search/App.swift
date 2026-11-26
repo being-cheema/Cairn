@@ -247,6 +247,7 @@ struct SearchApp: App {
                     browser.toggleClaudePanel()
                 }
                 .shortcut("view.claudePanel")
+                MarginNotesMenuItem(browser: browser)
                 // Dark pages, only once they are on (Settings › Appearance).
                 if browser.prefs.darkensPages {
                     Divider()

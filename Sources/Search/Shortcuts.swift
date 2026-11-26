@@ -253,6 +253,11 @@ struct Command: Identifiable {
         Command("view.sitePanel", "Show Side Panel", .view, nil) { $0.toggleSitePanel() },
         // Claude in the side panel.
         Command("view.claudePanel", "Claude Panel", .view, KeyCombo("k", option: true)) { $0.toggleClaudePanel() },
+        // Not ⌥A alone: in a text field that types a letter (å) on many
+        // layouts.
+        Command("view.marginNotes", "Show Margin Notes", .view, KeyCombo("a", option: true)) { _ in
+            MarginPainter.shared.shown.toggle()
+        },
         Command("view.dusk", "Darken This Site", .view, KeyCombo("d", shift: true)) { $0.toggleDusk() },
         Command("view.duskPause", "Pause Darkening", .view, KeyCombo("d", shift: true, option: true)) { $0.pauseDusk() },
         Command("view.summarize", "Summarize Page", .view, nil) { $0.summarizePage() },

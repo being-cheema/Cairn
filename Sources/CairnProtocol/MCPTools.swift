@@ -116,6 +116,13 @@ public enum MCPTools {
             tool("screenshot", .shot, passes: [],
                  "A PNG of a tab of your own as it is laid out, with password and card fields blacked out.",
                  ["page": page, "width": number("Snapshot width in points")], required: ["page"]),
+            tool("annotate_page", .annotate,
+                 "Leave a note in the margin of a tab of your own, beside the part it is about, for the person to read "
+                     + "there: the part is highlighted. The page itself is not changed. Name the part by an element from "
+                     + "the last read_page, or by page and a quote of a few words of its visible text, such as a sentence "
+                     + "of a paragraph. Plain words, short; up to 20 to a tab. Not on the person's own tabs.",
+                 ["element": element, "page": page, "quote": string("Words from the part, instead of element"),
+                  "note": string("Your note, at most 280 characters")], required: ["note"]),
             tool("create_artifact", .createArtifact,
                  "Show a result in Cairn's side panel as a card the person can read and copy: a comparison table "
                      + "(columns and rows), a brief or a checklist (sections). Give source_page (a page handle, such as p1) "

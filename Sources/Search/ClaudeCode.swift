@@ -305,6 +305,7 @@ enum ClaudeCode {
             // It is done with the browser: its tabs stay, as the person's.
             "disconnect": leaving,
             "create_artifact": "Laying out the result",
+            "annotate_page": "Adding a margin note",
             "wait_for_sign_in": "Waiting for you to sign in",
         ]
         if let host = site(input?["url"] as? String) {
