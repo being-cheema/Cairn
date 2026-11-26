@@ -79,3 +79,7 @@ claude mcp add search-bench -- "$PWD/bench-mcp"
 Each session starts this checkout's `build/Cairn.app` hidden, in a test world of its own, and wipes that world when it closes; the browser you use is never in reach. `python3 Tests/bench_mcp.py` checks it. This is not the browsing agent above: that is `cairn-mcp` (in the app), whose rules are in `Sources/Search/AgentControl.swift` and `python3 Tests/agent_control.py` and `Tests/agent_gate.py` check them in a hidden probe. [CLAUDE.md](../CLAUDE.md) has the rules for changing any of it.
 
 `python3 Tests/split_view.py`, after `./build.sh`, checks Split View through the app's own model in a hidden test run with its own settings and files, all removed afterwards. It never makes or shows a window; what can only be seen (dragging onto a page's edge, the divider under the pointer, the motion) is checked by hand on a release candidate.
+
+### Keeping up with Search
+
+Once a day, `.github/workflows/upstream-watch.yml` checks Search. If it has commits `main` doesn't, the job opens or updates one draft pull request from `upstream-latest`. It never merges. Do the merge on a branch of your own: resolve clashes, check what is new against the agent rules in [CLAUDE.md](../CLAUDE.md), run the tests, and keep it a merge commit.

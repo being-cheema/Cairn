@@ -1,0 +1,65 @@
+# Once a day: if the project Cairn came from (Search) has commits that main
+# doesn't, keep one pull request open that shows them. It never merges.
+#
+# A merge needs a person: upstream's changes can clash with Cairn's, and can
+# be fine to git yet wrong for an agent's tab. See the pull request's text.
+name: Upstream watch
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write        # only to move the upstream-latest branch
+  pull-requests: write
+
+concurrency:
+  group: upstream-watch
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Open or update the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git init -q repo
+          cd repo
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git fetch -q --no-tags origin main
+          git fetch -q --no-tags https://github.com/driceroland/Search.git main
+          tip=$(git rev-parse FETCH_HEAD)
+          count=$(git rev-list --count "origin/main..$tip")
+          if [ "$count" -eq 0 ]; then
+            echo "main has everything upstream has"
+            exit 0
+          fi
+
+          # A copy of upstream's main, nothing of ours on it: the one branch
+          # this job may overwrite.
+          git push -q --force origin "$tip:refs/heads/upstream-latest"
+
+          # Their subjects can name people and issue numbers. Copied as they
+          # are, they would notify strangers or point at our own issues.
+          {
+            echo "Search has **$count** commits that \`main\` doesn't. This list is theirs, newest first (up to 100):"
+            echo
+            git log -n 100 --format='- %s' "origin/main..$tip" | tr -d '@#`<>[]'
+            echo
+            echo "## Before merging"
+            echo
+            echo "- Don't press Merge straight away, even with no conflicts."
+            echo "- Merge on a separate branch, resolve clashes, check what is new against the agent rules, run the tests."
+            echo "- Keep it a **merge commit**. Squash or rebase leaves GitHub saying main is still behind."
+          } > ../body.md
+
+          open=$(gh pr list --repo "$GITHUB_REPOSITORY" --base main --head upstream-latest --state open --json number --jq '.[0].number // empty')
+          title="Upstream: $count commits from Search to review"
+          if [ -n "$open" ]; then
+            gh pr edit "$open" --repo "$GITHUB_REPOSITORY" --title "$title" --body-file ../body.md
+          else
+            gh pr create --repo "$GITHUB_REPOSITORY" --base main --head upstream-latest --draft --title "$title" --body-file ../body.md
+          fi
