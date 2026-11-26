@@ -65,6 +65,8 @@ final class ClaudeSession: ObservableObject {
     @Published private(set) var problem: Problem?
     @Published var draft = ""
 
+    /// Whether Task History is on, asked as each record is written.
+    private let keeping: @MainActor () -> Bool
     private let executable: URL?
     private let verify: (URL) -> Bool
     private let tool: URL?
@@ -112,6 +114,7 @@ final class ClaudeSession: ObservableObject {
          options: @escaping () -> ClaudeCode.Options = { ClaudeCode.Options() },
          window: @escaping () -> Browser? = { nil },
          playbooks: @escaping () -> [Playbook] = { Playbooks.all() },
+         keeping: @escaping @MainActor () -> Bool = { true },
          keep: @escaping @MainActor (TaskRecord, Bool) -> Void = { TaskLedger.save($0, amending: $1) }) {
         self.executable = executable
         self.verify = verify
@@ -120,6 +123,7 @@ final class ClaudeSession: ObservableObject {
         self.options = options
         self.window = window
         self.playbooks = playbooks
+        self.keeping = keeping
         self.keep = keep
         // Quitting is Stop too: the run's folder goes with it, rather than
         // being left in the temporary folder for good.
@@ -151,7 +155,7 @@ final class ClaudeSession: ObservableObject {
         var turn = Turn(question: text)
         turn.attached = (called.map { ["Playbook: \($0.book.name)" + ($0.book.builtIn ? "" : " (yours)")] } ?? []) + named.map(\.label)
         turns.append(turn)
-        record = TaskRecord(prompt: AgentRules.scrubbed(text), model: options().model)
+        record = keeping() ? TaskRecord(prompt: AgentRules.scrubbed(text), model: options().model) : nil
         recorded = false
         seenTools = [:]
         streamed = false
@@ -204,7 +208,7 @@ final class ClaudeSession: ObservableObject {
         change(&now)
         guard now != record else { return }
         record = now
-        if recorded { keep(now, true) }
+        if recorded, keeping() { keep(now, true) }
     }
 
     /// A site one of its tabs went to (AgentControl).
@@ -218,6 +222,8 @@ final class ClaudeSession: ObservableObject {
     /// The turn has ended: its record goes to the disk.
     private func conclude(stopped: Bool, failed: Bool) {
         guard !recorded, var now = record else { return }
+        // Switched off while it ran: not kept.
+        guard keeping() else { record = nil; return }
         now.outcome = TaskRecord.outcome(stopped: stopped, failed: failed, approvals: now.approvals)
         record = now
         recorded = true

@@ -22,11 +22,11 @@ enum AgentSetup {
     }
 
     static func command(path: String, world: String? = nil) -> String {
-        (["claude mcp add search --", quoted(path)] + arguments(world: world).map(quoted)).joined(separator: " ")
+        (["claude mcp add cairn --", quoted(path)] + arguments(world: world).map(quoted)).joined(separator: " ")
     }
 
     static func json(path: String, world: String? = nil) -> String {
-        let config: [String: Any] = ["mcpServers": ["search": ["command": path, "args": arguments(world: world)]]]
+        let config: [String: Any] = ["mcpServers": ["cairn": ["command": path, "args": arguments(world: world)]]]
         let data = (try? JSONSerialization.data(withJSONObject: config, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])) ?? Data()
         return String(decoding: data, as: UTF8.self)
     }

@@ -212,4 +212,77 @@ final class TaskLedgerTests: XCTestCase {
         XCTAssertFalse(session.running)
         XCTAssertTrue(session.turns.isEmpty)
     }
+
+    // MARK: - turned off, cleared, and secrets you typed
+
+    func testWithHistoryOffNothingIsKept() async throws {
+        let kept = Kept()
+        let files = try program(good)
+        let session = ClaudeSession(executable: files.claude, verify: { _ in true }, tool: files.tool, world: nil,
+                                    playbooks: { [] }, keeping: { false }, keep: { kept.all.append(($0, $1)) })
+        session.draft = "hello"
+        session.submit()
+        await wait("the turn to end") { !session.running }
+        session.visited("example.com")
+        XCTAssertTrue(kept.all.isEmpty)
+    }
+
+    func testSwitchedOffWhileATaskRunsItIsNotKept() async throws {
+        let kept = Kept()
+        let files = try program("sleep 1\n" + good)
+        var on = true
+        let session = ClaudeSession(executable: files.claude, verify: { _ in true }, tool: files.tool, world: nil,
+                                    playbooks: { [] }, keeping: { on }, keep: { kept.all.append(($0, $1)) })
+        session.draft = "hello"
+        session.submit()
+        on = false
+        await wait("the turn to end") { !session.running }
+        XCTAssertTrue(kept.all.isEmpty)
+    }
+
+    func testClearingAlsoCoversATaskStillRunning() {
+        let running = TaskRecord(prompt: "begun before the clearing", model: nil)
+        TaskLedger.removeAll(in: folder)
+        TaskLedger.save(running, in: folder)
+        XCTAssertTrue(TaskLedger.all(in: folder).isEmpty)
+        var later = TaskRecord(prompt: "begun after it", model: nil)
+        later.time = Date().addingTimeInterval(1)
+        TaskLedger.save(later, in: folder)
+        XCTAssertEqual(TaskLedger.all(in: folder).map(\.prompt), ["begun after it"])
+    }
+
+    /// Made up, and put together here so a scanner has nothing to find.
+    private var madeUpKey: String { "sk" + "-" + String(repeating: "a1B2", count: 8) }
+
+    func testSecretsYouTypedAreNotKept() {
+        let cases: [(typed: String, gone: String)] = [
+            ("pay with 4242 4242 4242 4242 please", "4242 4242"),
+            ("card 4242-4242-4242-4242", "4242-4242"),
+            ("my password is Zebra!42 ok", "Zebra!42"),
+            ("Password: \"two words here\" then go", "two words here"),
+            ("pin=8812", "8812"),
+            ("the verification code is 493021", "493021"),
+            ("cvv 321", "321"),
+            ("use \(madeUpKey) for it", madeUpKey),
+            ("header Bearer " + String(repeating: "Zx9", count: 9), String(repeating: "Zx9", count: 9)),
+        ]
+        for (typed, gone) in cases {
+            let kept = TaskRecord(prompt: typed, model: nil).prompt
+            XCTAssertFalse(kept.contains(gone), "\(typed) -> \(kept)")
+            XCTAssertTrue(kept.contains(TypedSecrets.mark), "\(typed) -> \(kept)")
+        }
+    }
+
+    func testOrdinaryWordsAndNumbersStay() {
+        for typed in ["reset my password for example.com", "find order 1234567890123 from 2026",
+                      "compare the price of 3 laptops under 90000", "what is a good passphrase generator",
+                      "call +91 98765 43210 tomorrow"] {
+            XCTAssertEqual(TaskRecord(prompt: typed, model: nil).prompt, typed)
+        }
+    }
+
+    func testASecretIsHiddenBeforeThePromptIsCut() {
+        let typed = String(repeating: "x ", count: (TaskRecord.longestPrompt / 2) - 4) + "4242 4242 4242 4242"
+        XCTAssertFalse(TaskRecord(prompt: typed, model: nil).prompt.contains("4242 4"))
+    }
 }

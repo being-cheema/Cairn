@@ -970,6 +970,7 @@ struct SettingsPanel: View {
         case "developer.local": Switch(on: $prefs.developerLocal)
         case "bench": Switch(on: $prefs.bench)
         case "agents": Always(text: "Asks first")
+        case "claude.history": Switch(on: $prefs.keepsTaskHistory)
         case "news.updates": OptInSettingsField(betaOnly: false) { _ = browser.open($0, foreground: true) }
         case "news.iphone": OptInSettingsField(betaOnly: true) { _ = browser.open($0, foreground: true) }
         default: EmptyView()

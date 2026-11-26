@@ -180,6 +180,10 @@ final class Preferences: ObservableObject {
     @Published var claudeModel: String? {
         didSet { store.set(claudeModel, forKey: "claude.model") }
     }
+    /// The panel's Task History (TaskLedger). On unless turned off.
+    @Published var keepsTaskHistory: Bool {
+        didSet { store.set(keepsTaskHistory, forKey: "claude.history") }
+    }
     /// Light, dark, or the Mac's own.
     @Published var look: Look {
         didSet {
@@ -1550,6 +1554,7 @@ final class Preferences: ObservableObject {
         keepsVaultUnlocked = store.object(forKey: Vault.Unlock.key) as? Bool ?? true
         suggestsPasswords = store.object(forKey: "passwords.suggest") as? Bool ?? true
         claudeModel = ClaudeCode.model(named: store.string(forKey: "claude.model"))
+        keepsTaskHistory = store.object(forKey: "claude.history") as? Bool ?? true
         let contacts = store.bool(forKey: "contacts.fill")
         fillsContacts = contacts
         FormRelay.contacts = contacts

@@ -587,7 +587,8 @@ final class Browser: NSObject, ObservableObject {
         options: { [weak self] in
             ClaudeCode.Options(acts: true, model: self?.prefs.claudeModel)
         },
-        window: { [weak self] in self })
+        window: { [weak self] in self },
+        keeping: { [weak self] in self?.prefs.keepsTaskHistory ?? true })
 
     /// What Find a setting held in each Settings tab, for the tab to have
     /// it again when it is gone back to (SettingsPanel.tabID). Not

@@ -5,7 +5,7 @@ import Foundation
 // open (CairnProtocol/MCPServer.swift). It is in the app, at
 // Cairn.app/Contents/MacOS/cairn-mcp:
 //
-//     claude mcp add search -- /path/to/Cairn.app/Contents/MacOS/cairn-mcp
+//     claude mcp add cairn -- /path/to/Cairn.app/Contents/MacOS/cairn-mcp
 //
 //     cairn-mcp --world NAME    a test world's Cairn (SEARCH_PROBE=NAME)
 

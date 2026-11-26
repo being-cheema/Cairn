@@ -26,19 +26,19 @@ final class AgentDrawerTests: XCTestCase {
 
     func testTheCommandAndTheJSON() throws {
         let plain = "/Applications/Cairn.app/Contents/MacOS/cairn-mcp"
-        XCTAssertEqual(AgentSetup.command(path: plain), "claude mcp add search -- '\(plain)'")
-        XCTAssertEqual(AgentSetup.command(path: plain, world: "probe"), "claude mcp add search -- '\(plain)' '--world' 'probe'")
+        XCTAssertEqual(AgentSetup.command(path: plain), "claude mcp add cairn -- '\(plain)'")
+        XCTAssertEqual(AgentSetup.command(path: plain, world: "probe"), "claude mcp add cairn -- '\(plain)' '--world' 'probe'")
         let object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(AgentSetup.json(path: awkward).utf8)) as? [String: Any])
         let servers = try XCTUnwrap(object["mcpServers"] as? [String: Any])
-        let search = try XCTUnwrap(servers["search"] as? [String: Any])
-        XCTAssertEqual(search["command"] as? String, awkward)
-        XCTAssertEqual(search["args"] as? [String], [])
-        XCTAssertEqual(Set(search.keys), ["command", "args"], "no environment, so nowhere for a pass")
+        let server = try XCTUnwrap(servers["cairn"] as? [String: Any])
+        XCTAssertEqual(server["command"] as? String, awkward)
+        XCTAssertEqual(server["args"] as? [String], [])
+        XCTAssertEqual(Set(server.keys), ["command", "args"], "no environment, so nowhere for a pass")
     }
 
     func testWhatIsCopiedCarriesNoPass() {
         let copied = AgentSetup.both(path: "/x/cairn-mcp")
-        XCTAssertTrue(copied.contains("claude mcp add search -- '/x/cairn-mcp'"))
+        XCTAssertTrue(copied.contains("claude mcp add cairn -- '/x/cairn-mcp'"))
         XCTAssertTrue(copied.contains("\"mcpServers\""))
         for secret in [ClaudeCode.passVariable, "\"env\"", "--env", "pass"] {
             XCTAssertFalse(copied.lowercased().contains(secret.lowercased()), secret)

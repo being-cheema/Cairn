@@ -28,7 +28,9 @@ struct TaskHistory: View {
                     }
                 }
             }
-            Text("Kept on this Mac: what you asked, the sites, your answers to approvals and the tabs left to you. Not Claude's replies.")
+            Text(session.browser?.prefs.keepsTaskHistory == false
+                 ? "Task History is off (Settings › About), so new tasks aren't kept. Delete All removes what was kept before."
+                 : "Kept on this Mac: what you asked, with recognisable secrets hidden, the sites, your answers to approvals and the tabs left to you. Not Claude's replies.")
                 .font(.system(size: 11))
                 .foregroundStyle(Palette.muted)
                 .fixedSize(horizontal: false, vertical: true)

@@ -2,7 +2,8 @@ import Foundation
 
 // What each of the panel's tasks did, kept on this Mac so you can look back:
 // what you asked, where Claude went, what you were asked to approve and what
-// you said, how it ended and which tabs it left you.
+// you said, how it ended and which tabs it left you. Secrets you typed are
+// taken out (TypedSecrets), and Settings can turn the whole thing off.
 //
 // One small JSON file to a task in the Tasks folder, readable by you alone,
 // and only so many of them. Kept: your own typed words, site names, the
@@ -45,7 +46,8 @@ struct TaskRecord: Codable, Equatable, Identifiable {
     }
 
     init(prompt: String, model: String?) {
-        self.prompt = Self.cut(prompt, Self.longestPrompt)
+        // Hidden before it is cut, or the cut could leave half of one.
+        self.prompt = Self.cut(TypedSecrets.hidden(in: prompt), Self.longestPrompt)
         self.model = model
     }
 
@@ -111,6 +113,8 @@ enum TaskLedger {
     /// `amending`: more about a task already written. A record deleted or
     /// cleared since is not brought back.
     static func save(_ record: TaskRecord, amending: Bool = false, in folder: URL = TaskLedger.folder) {
+        // Cleared since this task began, as it ran: it was cleared too.
+        if let at = cleared[folder.path], record.time <= at { return }
         let files = FileManager.default
         if amending, !files.fileExists(atPath: file(record.id, in: folder).path) { return }
         try? files.createDirectory(at: folder, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
@@ -147,7 +151,13 @@ enum TaskLedger {
         try? FileManager.default.removeItem(at: file(id, in: folder))
     }
 
+    /// When each folder was last cleared, in this run of the app. A task still
+    /// running then writes its record afterwards; nothing running outlives
+    /// the app, so this needn't either.
+    private static var cleared: [String: Date] = [:]
+
     static func removeAll(in folder: URL = TaskLedger.folder) {
+        cleared[folder.path] = Date()
         try? FileManager.default.removeItem(at: folder)
     }
 }
