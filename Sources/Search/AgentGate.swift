@@ -28,6 +28,8 @@ enum AgentGate {
         var inForm = false
         var hasPassword = false
         var hasCard = false
+        /// A password, card or one-time-code field (PageScripts' secret).
+        var secret = false
         var method = ""
         var action = ""
         var href = ""
@@ -48,6 +50,7 @@ enum AgentGate {
             inForm = d["inForm"] as? Bool ?? false
             hasPassword = d["pw"] as? Bool ?? false
             hasCard = d["card"] as? Bool ?? false
+            secret = d["secret"] as? Bool ?? false
             method = d["method"] as? String ?? ""
             action = d["action"] as? String ?? ""
             href = d["href"] as? String ?? ""
@@ -75,6 +78,10 @@ enum AgentGate {
         var site: String?
         /// Of the element it was asked about (Target.fingerprint).
         var fingerprint = ""
+        /// A line more for the question, when the address looks as if it
+        /// carries data out (NavigationPolicyEngine.egressWarning). It is
+        /// only ever more to read: nothing is held or let go because of it.
+        var warning: String?
     }
 
     struct Rules: Equatable {
@@ -145,7 +152,7 @@ enum AgentGate {
            ["http", "https"].contains(url.scheme?.lowercased() ?? ""),
            let there = site(url, registrable: registrable), !sites.isEmpty, !sites.contains(there) {
             return Hold(reason: .leave, summary: "Leave this task's sites: go to \(url.host() ?? there)", site: there,
-                        fingerprint: target.fingerprint)
+                        fingerprint: target.fingerprint, warning: NavigationPolicyEngine.egressWarning(url))
         }
         return nil
     }
@@ -173,6 +180,7 @@ enum AgentGate {
     static func hold(address url: URL, sites: Set<String>, rules: Rules,
                      registrable: (String) -> String = Vault.registrable) -> Hold? {
         guard rules.leaves, !sites.isEmpty, let there = site(url, registrable: registrable), !sites.contains(there) else { return nil }
-        return Hold(reason: .leave, summary: "Leave this task's sites: go to \(url.host() ?? there)", site: there)
+        return Hold(reason: .leave, summary: "Leave this task's sites: go to \(url.host() ?? there)", site: there,
+                    warning: NavigationPolicyEngine.egressWarning(url))
     }
 }

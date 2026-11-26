@@ -32,6 +32,8 @@ final class ClaudeSession: ObservableObject {
         var artifacts: [Artifact] = []
         /// What you attached to your message, as its chips said it.
         var attached: [String] = []
+        /// The pages being read side by side (batch_read), for their pills.
+        var scouts: [ScoutProgress] = []
     }
 
     /// Why it can't start, as the panel says it.
@@ -163,6 +165,7 @@ final class ClaudeSession: ObservableObject {
         needBreak = false
         current = ""
         previous = ""
+        recorder = MacroRecorder()
         running = true
         // This Send is the consent for what the run does to answer it.
         AgentControl.shared.panelArm(pass: pass, true)
@@ -171,7 +174,7 @@ final class ClaudeSession: ObservableObject {
         let mine = generation
         Task { @MainActor [weak self] in
             let tabs = self?.browser?.tabs ?? []
-            let attached = await Mentions.gather(named, among: tabs)
+            let attached = await Mentions.gather(named, among: tabs, words: text)
             guard let self, self.generation == mine, self.running else { return }
             self.write(Mentions.message(words, with: attached))
         }
@@ -229,6 +232,21 @@ final class ClaudeSession: ObservableObject {
         record = now
         recorded = true
         keep(now, false)
+        // In memory only, until you press Save as Fast Macro.
+        if now.outcome == .completed, recorder != MacroRecorder() { MacroStore.draft(now.id, recorder) }
+    }
+
+    /// What this turn has done, towards a Fast Macro (FastMacros).
+    private var recorder = MacroRecorder()
+
+    func took(_ step: MacroStep, on tab: UUID) {
+        guard running, record != nil else { return }
+        recorder.took(step, on: tab)
+    }
+
+    func spoilMacro(_ why: String) {
+        guard running else { return }
+        recorder.spoil(why)
     }
 
     /// A new task seeded from an earlier one: in the box, for you to send.
@@ -263,6 +281,12 @@ final class ClaudeSession: ObservableObject {
 
     func read(_ text: String, at offset: Int, of length: Int, tab: Tab.ID, address: URL?) {
         snapshots.keep(text, at: offset, of: length, tab: tab, page: MarginNotes.page(address))
+    }
+
+    /// Where each page of a batch_read has got to (AgentControl).
+    func scouting(_ pages: [ScoutProgress]) {
+        guard running, let last = turns.indices.last else { return }
+        turns[last].scouts = pages
     }
 
     /// The tabs the turn in hand left to you (AgentControl's hand-over).

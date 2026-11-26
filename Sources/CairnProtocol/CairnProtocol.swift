@@ -19,6 +19,7 @@ public enum AgentVerb: String, CaseIterable, Sendable {
     case shot, bye
     case createArtifact = "create_artifact"
     case annotate = "annotate_page"
+    case batchRead = "batch_read"
 }
 
 public enum AgentWire {

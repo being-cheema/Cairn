@@ -370,8 +370,18 @@ struct SettingsPanel: View {
             }
         case .privacy:
             groups(of: page)
+            GroupBlock(title: "Reading Memory", icon: "book") {
+                ReadingMemorySettings()
+            }
             GroupBlock(title: "Proxy", icon: "network") {
                 ProxySettings()
+            }
+        case .spaces:
+            groups(of: page)
+            if prefs.usesSpaces {
+                GroupBlock(title: "Page Size", icon: "iphone") {
+                    SpacePageSizes(browser: browser)
+                }
             }
         case .extensions:
             ExtensionsPage(browser: browser)

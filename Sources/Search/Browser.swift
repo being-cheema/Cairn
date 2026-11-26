@@ -847,6 +847,8 @@ final class Browser: NSObject, ObservableObject {
     /// The tab it is over.
     weak var snapTab: Tab?
     /// True while the list of what is hidden here is up.
+    /// Tabs › Triage Tabs… (TabTriage).
+    @Published var triaging = false
     @Published var reviewing = false {
         didSet { if !reviewing { stopPeeking() } }
     }
@@ -1804,6 +1806,9 @@ final class Browser: NSObject, ObservableObject {
             // So is where Claude's tasks went (TaskLedger).
             TaskLedger.removeAll()
         }
+        // What was read goes with where you have been. It isn't kept by
+        // space, so clearing one space's history clears all of it.
+        ReadingMemory.shared.clear()
         // Where links went is a list of where you have been, too.
         let choices = LinkChooser.cleared(prefs.linkChoices, spaces: Set(forgotten))
         if choices != prefs.linkChoices { prefs.linkChoices = choices }
@@ -7923,6 +7928,15 @@ final class Browser: NSObject, ObservableObject {
             return
         }
 
+        if siteChip == nil, let remembered = memoryOffers(for: typed) {
+            siteOffer = nil
+            ending = nil
+            picked = nil
+            offers = remembered
+            askEngine()
+            return
+        }
+
         // A site in the field: its search for what is typed after it, what
         // you searched it for before, and your engine's suggestions when the
         // site is your engine (see engineQuestion).
@@ -8073,6 +8087,8 @@ final class Browser: NSObject, ObservableObject {
     /// or words that look like anything but a search.
     func engineQuestion(for typed: String) -> URL? {
         guard prefs.engineSuggests, !summoning, active?.shy != true,
+              // A question for the reading memory is never sent anywhere.
+              memoryOffers(for: typed) == nil,
               EngineSuggest.sendable(typed)
         else { return nil }
         let words = typed.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -8159,6 +8175,8 @@ final class Browser: NSObject, ObservableObject {
     /// the address it would complete to: ⌘L's field and the one in the tab
     /// ask the same question (#534).
     func placeOffers(for typed: String) -> (offers: [Suggestion], ending: String?) {
+        // "? …": what you have read, and nothing else (ReadingMemory).
+        if let remembered = memoryOffers(for: typed) { return (remembered, nil) }
         // Three places and, if it can't be a place, a search. No open pages:
         // ⌘K exists for those, and mixing them in here made the list long
         // enough that reading it cost more than typing the address would have.
@@ -8444,6 +8462,8 @@ final class Browser: NSObject, ObservableObject {
     /// leaves the key to Return.
     @discardableResult
     func submitToShiftEngine() -> Bool {
+        // Not to a search engine, whichever key.
+        guard siteChip != nil || memoryOffers(for: typed) == nil else { return false }
         guard let engine = prefs.shiftEngine else { return false }
         guard let url = Engine.url(for: typed, template: engine.template(custom: prefs.shiftCustom)) else {
             refusals += 1
@@ -8500,6 +8520,18 @@ final class Browser: NSObject, ObservableObject {
                 editing = false
                 return
             }
+        }
+
+        // A question for the reading memory goes to a page it found, or
+        // nowhere: never to a search engine.
+        if siteChip == nil, let remembered = memoryOffers(for: typed) {
+            let row = picked.flatMap { offers.indices.contains($0) ? offers[$0] : nil } ?? remembered.first
+            guard let row else {
+                refusals += 1
+                return
+            }
+            goFromField(to: row.url, fromSwitcher: fromSwitcher, aside: aside, front: front, typedAddress: false)
+            return
         }
 
         // The row the arrow keys chose, or else the top one: a command is

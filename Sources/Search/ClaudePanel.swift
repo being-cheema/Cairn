@@ -260,6 +260,9 @@ struct ClaudePanel: View {
         if let front, Mentions.mayName(front), query.isEmpty || "selected text".hasPrefix(query.lowercased()) {
             out.append(.selection(front))
         }
+        if ReadingMemory.shared.on, "memory".hasPrefix(query.lowercased()), !session.mentions.contains(.memory) {
+            out.append(.memory)
+        }
         out += Mentions.matching(query, among: browser.tabs, front: front).map { .tab($0, front: $0.id == front?.id) }
         return out
     }
@@ -289,6 +292,8 @@ struct ClaudePanel: View {
         session.draft = Mentions.removingQuery(from: session.draft)
         typing = true
         switch choice {
+        case .memory:
+            session.mention(.memory)
         case .tab(let tab, _):
             session.mention(.tab(tab.id, label: Mentions.label(tab)))
         case .selection(let tab):
@@ -322,9 +327,12 @@ struct ClaudePanel: View {
                 }
             }
             // Said before it goes: what leaves this Mac with the message.
-            Text("The visible text goes to Claude with this message, once.")
+            Text(session.mentions.contains(.memory)
+                 ? "The attached text goes to Claude with this message, once. @memory adds saved text from up to \(ReadingMemory.mostAttached) pages that match it."
+                 : "The visible text goes to Claude with this message, once.")
                 .font(.system(size: 10.5))
                 .foregroundStyle(Palette.muted)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.horizontal, 4)
     }
@@ -442,6 +450,10 @@ struct ClaudePanel: View {
                     }
                 }
 
+                if !turn.scouts.isEmpty {
+                    ScoutPills(pages: turn.scouts, working: working)
+                }
+
                 ForEach(turn.artifacts) { artifact in
                     ArtifactCard(artifact: artifact, browser: browser)
                 }
@@ -479,14 +491,50 @@ struct ClaudePanel: View {
     }
 }
 
+/// A pill to each page a batch_read is on: its site, and how far it got. The
+/// site's name only, in a host's letters (ClaudeCode.site).
+private struct ScoutPills: View {
+    let pages: [ScoutProgress]
+    let working: Bool
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(pages) { page in
+                    HStack(spacing: 5) {
+                        Group {
+                            if working, page.state == .waiting || page.state == .loading {
+                                ProgressView().controlSize(.mini)
+                            } else {
+                                Image(systemName: page.state == .read ? "checkmark" : "xmark")
+                                    .font(.system(size: 8.5, weight: .semibold))
+                            }
+                        }
+                        .frame(width: 11, height: 11)
+                        Text(verbatim: page.host).font(.system(size: 11)).lineLimit(1)
+                    }
+                    .foregroundStyle(page.state == .read ? Palette.ink : Palette.muted)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Palette.wash, in: Capsule())
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("\(page.host), \(page.said(working: working))")
+                }
+            }
+        }
+    }
+}
+
 /// One row of the "@" list.
 enum MentionChoice: Identifiable {
     case selection(Tab)
+    case memory
     case tab(Tab, front: Bool)
 
     var id: String {
         switch self {
         case .selection: return "selection"
+        case .memory: return "memory"
         case .tab(let tab, _): return "\(tab.id)"
         }
     }
@@ -503,6 +551,10 @@ private struct MentionList: View {
                 Button { take(choice) } label: {
                     HStack(spacing: 7) {
                         switch choice {
+                        case .memory:
+                            Text("Reading Memory").font(.system(size: 12)).foregroundStyle(Palette.ink)
+                            Spacer(minLength: 0)
+                            Text("@memory").font(.system(size: 10.5)).foregroundStyle(Palette.muted)
                         case .selection:
                             Text("Selected Text").font(.system(size: 12)).foregroundStyle(Palette.ink)
                             Spacer(minLength: 0)
@@ -666,7 +718,8 @@ struct PanelWaiting: View {
         let answer = " Approve or Don't Approve on the card at the foot of the page."
         switch hold.reason {
         case .leave:
-            return "Claude wants to go to \(hold.site ?? "another site"), a site this task hasn't used yet." + answer
+            let careful = hold.warning == nil ? "" : " The card has a warning about the address."
+            return "Claude wants to go to \(hold.site ?? "another site"), a site this task hasn't used yet." + careful + answer
         case .pay: return "Claude wants to pay for something." + answer
         case .send: return "Claude wants to send something." + answer
         case .signIn:

@@ -1,4 +1,5 @@
 import AppKit
+import CoreSpotlight
 
 // Links from elsewhere. A click in Mail, in Slack, in a PDF — macOS hands the
 // address to whichever app owns http, and this is how that app takes it.
@@ -165,6 +166,7 @@ final class Links: NSObject, NSApplicationDelegate {
         Trim.start()
         MainActor.assumeIsolated {
             Store.networkOnFirstInput()
+            ReadingMemory.shared.begin()
             Shared.prefs.followFile()
             // The address field from any app, once asked for (Launcher.swift).
             Launcher.shared.start()
@@ -263,6 +265,13 @@ final class Links: NSObject, NSApplicationDelegate {
                      restorationHandler: @escaping ([any NSUserActivityRestoring]) -> Void) -> Bool {
         guard !Store.testing else { return false }
         if #available(macOS 26.0, *), MainActor.assumeIsolated({ PasskeyImport.receive(userActivity) }) { return true }
+        // A remembered page picked in Spotlight (ReadingMemory).
+        if userActivity.activityType == CSSearchableItemActionType {
+            guard let identifier = userActivity.userInfo?[CSSearchableItemActivityIdentifier] as? String,
+                  let url = MainActor.assumeIsolated({ ReadingMemory.shared.address(fromSpotlight: identifier) }) else { return false }
+            Links.take(url)
+            return true
+        }
         guard let url = Handoff.incoming(userActivity) else { return false }
         Links.take(url)
         return true

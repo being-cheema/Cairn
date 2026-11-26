@@ -148,7 +148,9 @@ enum PageScripts {
       return { tag: tag, type: type, role: role(el), label: name(el), submits: submits, inForm: !!form, pw: pw, card: card,
         method: form ? String(form.method || 'get').toLowerCase() : '',
         action: form ? String(form.action || '').slice(0, 300) : '',
-        href: a ? String(a.href).slice(0, 300) : '',
+        // Longer than the rest: the check on what a link carries out reads it.
+        href: a ? String(a.href).slice(0, 8000) : '',
+        secret: secret(el),
         enter: !!form && (submits || (tag === 'input' && !/^(checkbox|radio|button|file|range|color|reset)$/.test(type))) };
     }
 
@@ -195,7 +197,7 @@ enum PageScripts {
         nodes.push(n);
       }
       globalThis[key] = { snap: snap, els: els };
-      var out = { url: location.href, title: document.title, nodes: nodes, nodesTruncated: cut, snap: snap, same: same,
+      var out = { url: location.href, title: document.title, kind: document.contentType, nodes: nodes, nodesTruncated: cut, snap: snap, same: same,
         nodeOffset: nodeOffset, nextNodeOffset: cut ? nodeOffset + nodes.length : null,
         viewport: { width: vw, height: vh, scrollY: Math.round(scrollY),
           scrollHeight: document.documentElement ? document.documentElement.scrollHeight : 0 } };

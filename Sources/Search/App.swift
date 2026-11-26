@@ -152,6 +152,9 @@ struct SearchApp: App {
                 Button("Copy Clean Link") { browser.copyCleanLink() }
                     .shortcut("edit.copyCleanLink")
                     .disabled(browser.active?.isBlank ?? true)
+                Button("Copy Text from Image/Video") { browser.copyTextFromPage() }
+                    .shortcut("edit.copyImageText")
+                    .disabled(!(browser.active?.isWeb ?? false))
                 Divider()
                 Button("Find on Page…") { browser.openFind() }
                     .shortcut("edit.find")
@@ -348,6 +351,8 @@ struct SearchApp: App {
                     .shortcut("tabs.previous")
                 Button("Search Tabs…") { browser.summon() }
                     .shortcut("tabs.search")
+                Button("Triage Tabs…") { browser.triaging = true }
+                    .shortcut("tabs.triage")
                 Divider()
                 if browser.prefs.splitView {
                     // The same key puts a pair apart: on a pair, the item
@@ -692,6 +697,8 @@ struct ContentView: View {
             // away, the card is the whole window, edge to edge, its corners
             // square; it grows into that and back with the column's slide.
             stage
+                // A space's chosen page size, unless a video has the window.
+                .modifier(PageSizeFrame(size: fullscreenTab == nil ? browser.pageSize?.size : nil))
                 .modifier(DevToolsStage(browser: browser))
                 // The tabs folded away: a line says the page is coming
                 // (Settings, idea 269), clear of the card's round corners.
@@ -1302,6 +1309,9 @@ struct ContentView: View {
             .animation(Motion.settle, value: browser.iphoneAsking)
             .animation(Motion.settle, value: browser.journeying)
             .animation(Motion.settle, value: browser.reviewing)
+            .sheet(isPresented: $browser.triaging) {
+                TabTriageSheet(browser: browser) { browser.triaging = false }
+            }
             .animation(Motion.settle, value: browser.styling)
         .onAppear {
             watchKeys()

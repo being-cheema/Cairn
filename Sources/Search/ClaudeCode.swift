@@ -307,6 +307,7 @@ enum ClaudeCode {
             "create_artifact": "Laying out the result",
             "annotate_page": "Adding a margin note",
             "wait_for_sign_in": "Waiting for you to sign in",
+            "batch_read": "Reading several pages",
         ]
         if let host = site(input?["url"] as? String) {
             switch bare {

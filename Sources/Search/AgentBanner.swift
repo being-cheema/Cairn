@@ -377,6 +377,21 @@ struct AgentApproval: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
+            if let warning = held.hold.warning {
+                HStack(alignment: .firstTextBaseline, spacing: 7) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.orange)
+                    Text(verbatim: "Check before you approve. \(warning) This is a guess from how the address looks.")
+                        .font(.system(size: 11.5, weight: .medium))
+                        .foregroundStyle(Palette.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(9)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(Color.orange.opacity(0.45), lineWidth: 1))
+            }
             if let receipt = session.receipt {
                 FormReceiptTable(receipt: receipt, after: session.receiptIsLate)
             }
@@ -512,7 +527,7 @@ extension AgentApproval {
 /// An AppKit view the size of the control it sits behind, so a click can be
 /// checked to have landed on that control (AgentRules.isClick). It takes no
 /// clicks itself.
-private struct ClickSpot: NSViewRepresentable {
+struct ClickSpot: NSViewRepresentable {
     let made: (NSView) -> Void
 
     final class Spot: NSView {
