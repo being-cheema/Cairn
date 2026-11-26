@@ -97,3 +97,95 @@ final class PlaybookTests: XCTestCase {
         XCTAssertFalse(out.hasPrefix("/"))
     }
 }
+
+/// The three ways of playbooks that were left out: a skill kept in a folder
+/// of its own, $ARGUMENTS, and "/" in the address field.
+@MainActor
+final class PlaybookRestTests: XCTestCase {
+    private var folder: URL!
+    private var browsers: [Browser] = []
+
+    override class func setUp() {
+        super.setUp()
+        TestWorld.enter()
+    }
+
+    override func setUp() async throws {
+        folder = FileManager.default.temporaryDirectory.appendingPathComponent("skills-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    }
+
+    override func tearDown() async throws {
+        for browser in browsers { browser.closeAll() }
+        browsers.removeAll()
+        try? FileManager.default.removeItem(at: folder)
+    }
+
+    private func put(_ path: String, _ text: String) throws {
+        let url = folder.appendingPathComponent(path)
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data(text.utf8).write(to: url)
+    }
+
+    func testASkillInAFolderOfItsOwnIsReadAsClaudeCodeKeepsThem() throws {
+        try put("price-watch/SKILL.md", "---\ndescription: Watch a price\n---\nRead the price.")
+        try put("named/SKILL.md", "---\nname: other-name\n---\nWords.")
+        try put("flat.md", "Flat words.")
+        try put("empty-folder/notes.md", "not a skill")
+        try put("deep/er/SKILL.md", "too deep")
+        XCTAssertEqual(Playbooks.read(folder).map(\.name).sorted(), ["flat", "other-name", "price-watch"])
+    }
+
+    /// A link inside the folder mustn't make some other file of yours a
+    /// playbook's words.
+    func testALinkedFolderOrFileIsPassedOver() throws {
+        let outside = FileManager.default.temporaryDirectory.appendingPathComponent("outside-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: outside) }
+        try Data("private words".utf8).write(to: outside.appendingPathComponent("SKILL.md"))
+        try FileManager.default.createSymbolicLink(at: folder.appendingPathComponent("linked"), withDestinationURL: outside)
+        try FileManager.default.createDirectory(at: folder.appendingPathComponent("half"), withIntermediateDirectories: true)
+        try FileManager.default.createSymbolicLink(at: folder.appendingPathComponent("half/SKILL.md"),
+                                                   withDestinationURL: outside.appendingPathComponent("SKILL.md"))
+        XCTAssertTrue(Playbooks.read(folder).isEmpty)
+    }
+
+    func testArgumentsGoWhereTheSkillSays() throws {
+        let book = try XCTUnwrap(Playbooks.parse("Compare $ARGUMENTS. Again: $ARGUMENTS.", fileName: "c"))
+        let sent = Playbooks.message(book, words: "tea and $ARGUMENTS")
+        XCTAssertTrue(sent.contains("Compare tea and $ARGUMENTS. Again: tea and $ARGUMENTS."), sent)
+        XCTAssertFalse(sent.contains("What I typed after its name"), "said once, where the skill put it")
+        let none = Playbooks.message(book, words: "")
+        XCTAssertTrue(none.contains("Compare . Again: ."), none)
+        XCTAssertTrue(none.contains("I typed nothing after the playbook's name."))
+    }
+
+    private func makeBrowser() -> Browser {
+        _ = NSApplication.shared
+        NSApp.setActivationPolicy(.prohibited)
+        let browser = Browser(record: WindowRecord())
+        browsers.append(browser)
+        return browser
+    }
+
+    func testSlashInTheAddressFieldOffersPlaybooksAndSendsNothing() throws {
+        let browser = makeBrowser()
+        let offers = try XCTUnwrap(browser.playbookOffers(for: "/audit example.com", among: Playbooks.builtIns) ?? browser.playbookOffers(for: "/audit", among: Playbooks.builtIns))
+        guard case .command(let command)? = offers.first?.kind else { return XCTFail("a command row") }
+        XCTAssertTrue(command.title.hasPrefix("Run with Claude: /audit-a11y"), command.title)
+
+        let typed = try XCTUnwrap(browser.playbookOffers(for: "/audit-a11y example.com", among: Playbooks.builtIns))
+        guard case .command(let whole)? = typed.first?.kind else { return XCTFail("a command row") }
+        whole.run(on: browser)
+        XCTAssertEqual(browser.claude.draft, "/audit-a11y example.com")
+        XCTAssertFalse(browser.claude.running, "it waits for your Send")
+        XCTAssertTrue(browser.claude.turns.isEmpty)
+    }
+
+    func testAnOrdinaryAddressOrPathIsNotAPlaybook() {
+        let browser = makeBrowser()
+        for typed in ["/etc/hosts", "/nothing-like-it", "audit", "/", "example.com/compare-tabs", "/compare-tabsx now"] {
+            XCTAssertNil(browser.playbookOffers(for: typed, among: Playbooks.builtIns), typed)
+        }
+    }
+}

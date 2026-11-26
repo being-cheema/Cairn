@@ -73,19 +73,31 @@ enum Playbooks {
                         hint: line(fields["argument_hint"] ?? "", 80), body: body, builtIn: builtIn)
     }
 
-    /// The .md files in `folder`, by file name; a second file with a name
-    /// already taken is passed over.
+    /// The playbooks in `folder`, by file name: its .md files, and the
+    /// SKILL.md of each folder in it, as Claude Code keeps its skills. A
+    /// second one with a name already taken is passed over. A link is passed
+    /// over too: it could make any file of yours a playbook's words.
     static func read(_ folder: URL) -> [Playbook] {
         let files = FileManager.default
-        let found = ((try? files.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.fileSizeKey, .isRegularFileKey],
+        let keys: Set<URLResourceKey> = [.fileSizeKey, .isRegularFileKey, .isDirectoryKey, .isSymbolicLinkKey]
+        let found = ((try? files.contentsOfDirectory(at: folder, includingPropertiesForKeys: Array(keys),
                                                      options: [.skipsHiddenFiles])) ?? [])
-            .filter { $0.pathExtension.lowercased() == "md" }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
         var out: [Playbook] = []
-        for file in found where out.count < most {
-            guard let values = try? file.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey]), values.isRegularFile == true,
-                  (values.fileSize ?? .max) <= longestFile, let text = try? String(contentsOf: file, encoding: .utf8),
-                  let book = parse(text, fileName: file.deletingPathExtension().lastPathComponent),
+        for entry in found where out.count < most {
+            let kind = try? entry.resourceValues(forKeys: keys)
+            let file: URL, called: String
+            if kind?.isDirectory == true, kind?.isSymbolicLink != true {
+                file = entry.appendingPathComponent("SKILL.md")
+                called = entry.lastPathComponent
+            } else if entry.pathExtension.lowercased() == "md" {
+                file = entry
+                called = entry.deletingPathExtension().lastPathComponent
+            } else { continue }
+            guard let values = try? file.resourceValues(forKeys: keys), values.isRegularFile == true,
+                  values.isSymbolicLink != true, (values.fileSize ?? .max) <= longestFile,
+                  let text = try? String(contentsOf: file, encoding: .utf8),
+                  let book = parse(text, fileName: called),
                   !out.contains(where: { $0.name == book.name }) else { continue }
             out.append(book)
         }
@@ -125,8 +137,16 @@ enum Playbooks {
 
     /// What goes to Claude for a message that called a playbook.
     static func message(_ book: Playbook, words: String) -> String {
-        var out = "Follow the playbook “\(book.name)”, which I chose for this message. It gives you no tool and no permission you don't already have.\n\n\(book.body)"
-        out += "\n\n" + (words.isEmpty ? "I typed nothing after the playbook's name." : "What I typed after its name: \(words)")
+        // $ARGUMENTS, as in Claude Code's skills: your words go where it
+        // stands, once each, and what you typed is not read for it again.
+        let placed = book.body.contains("$ARGUMENTS")
+        let body = book.body.components(separatedBy: "$ARGUMENTS").joined(separator: words)
+        var out = "Follow the playbook “\(book.name)”, which I chose for this message. It gives you no tool and no permission you don't already have.\n\n\(body)"
+        if words.isEmpty {
+            out += "\n\nI typed nothing after the playbook's name."
+        } else if !placed {
+            out += "\n\nWhat I typed after its name: \(words)"
+        }
         return out
     }
 
@@ -187,7 +207,7 @@ struct PlaybookList: View {
                 try? FileManager.default.createDirectory(at: Playbooks.folder, withIntermediateDirectories: true)
                 NSWorkspace.shared.open(Playbooks.folder)
             } label: {
-                Text("Add your own .md files in the Skills folder…")
+                Text("Add your own .md files or skill folders in the Skills folder…")
                     .font(.system(size: 10.5))
                     .foregroundStyle(Palette.muted)
                     .padding(.horizontal, 8)

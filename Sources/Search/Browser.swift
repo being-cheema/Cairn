@@ -7942,6 +7942,16 @@ final class Browser: NSObject, ObservableObject {
             return
         }
 
+        // "/name …": a playbook for the Claude panel, on top and chosen, so
+        // Return puts it in the box.
+        if siteChip == nil, let plays = playbookOffers(for: typed) {
+            siteOffer = nil
+            ending = nil
+            picked = nil
+            offers = plays
+            return
+        }
+
         if siteChip == nil, let remembered = memoryOffers(for: typed) {
             siteOffer = nil
             ending = nil
@@ -8190,6 +8200,7 @@ final class Browser: NSObject, ObservableObject {
     /// ask the same question (#534).
     func placeOffers(for typed: String) -> (offers: [Suggestion], ending: String?) {
         // "? …": what you have read, and nothing else (ReadingMemory).
+        if let plays = playbookOffers(for: typed) { return (plays, nil) }
         if let remembered = memoryOffers(for: typed) { return (remembered, nil) }
         // Three places and, if it can't be a place, a search. No open pages:
         // ⌘K exists for those, and mixing them in here made the list long

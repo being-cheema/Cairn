@@ -13,6 +13,23 @@ import Foundation
 // Settings page by its name: under what was typed, so Return still goes
 // where it went, and run through the menu's own action.
 
+extension Browser {
+    /// "/name words" in the address field: the playbooks it could mean, each
+    /// as a row that puts it in the Claude panel's box for you to send. Nil
+    /// for anything else, a path included, and in a private tab.
+    func playbookOffers(for typed: String, among books: [Playbook]? = nil) -> [Suggestion]? {
+        guard typed.first == "/", active?.shy != true else { return nil }
+        let word = typed.dropFirst().prefix { !$0.isWhitespace }
+        guard !word.isEmpty, !word.contains("/") else { return nil }
+        let all = books ?? Playbooks.all(), wanted = word.lowercased()
+        let exact = all.filter { $0.name == wanted }
+        let meant = exact.isEmpty ? all.filter { $0.name.hasPrefix(wanted) } : exact
+        guard !meant.isEmpty else { return nil }
+        let after = typed.dropFirst(word.count + 1).trimmingCharacters(in: .whitespaces)
+        return meant.prefix(6).map { .command(.playbook("/\($0.name)" + (after.isEmpty ? "" : " " + after))) }
+    }
+}
+
 @MainActor
 enum AddressCommand: Equatable {
     case settings
@@ -28,6 +45,8 @@ enum AddressCommand: Equatable {
     case menu(String)
     /// A Settings page, opened on that page.
     case page(SettingsPanel.Page)
+    /// A playbook as you would call it in the Claude panel (playbookOffers).
+    case playbook(String)
 
     /// The words, which run on Return when typed whole.
     static let allCases: [AddressCommand] = [
@@ -48,12 +67,13 @@ enum AddressCommand: Equatable {
         case .toggleSidebar: return ["toggle sidebar", "sidebar"]
         case .menu(let id): return [Command.named(id)?.title ?? id]
         case .page(let page): return ["\(page.title) Settings"]
+        case .playbook(let call): return ["Run with Claude: \(call)"]
         }
     }
 
     var title: String {
         switch self {
-        case .menu, .page: return aliases[0]
+        case .menu, .page, .playbook: return aliases[0]
         default: return aliases[0].localizedCapitalized
         }
     }
@@ -70,7 +90,7 @@ enum AddressCommand: Equatable {
         case .passwords: return "app.passwords"
         case .toggleSidebar: return "view.sidebar"
         case .menu(let id): return id
-        case .newSpace, .page: return nil
+        case .newSpace, .page, .playbook: return nil
         }
     }
 
@@ -102,6 +122,16 @@ enum AddressCommand: Equatable {
         case .page(let page):
             browser.settingsPage = page
             browser.tuning = true
+        case .playbook(let call):
+            // In the box, and no further: your Send is what runs it.
+            let name = String(call.dropFirst().prefix { !$0.isWhitespace })
+            let words = String(call.dropFirst(name.count + 1)).trimmingCharacters(in: .whitespaces)
+            do {
+                try ShortcutActions.prepare(playbook: name, words: words, in: browser.claude, among: Playbooks.all())
+                ShortcutActions.showPanel(browser)
+            } catch {
+                browser.announce("That playbook is no longer there")
+            }
         }
     }
 
