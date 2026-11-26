@@ -95,6 +95,12 @@ extension Browser {
     /// A tab of a space not on screen: out of its row, and the row written.
     /// It isn't offered to ⇧⌘T, which would reopen it in the space on screen
     /// with that space's sign-ins; History still has it.
+    /// A task's tab, closed wherever it is: on screen or parked with its space.
+    func closeTaskTab(_ tab: Tab) {
+        if tabs.contains(where: { $0 === tab }) { return close(tab) }
+        if parkedTabs.contains(where: { $0 === tab }) { closeParked(tab) }
+    }
+
     private func closeParked(_ tab: Tab) {
         guard let space = parked.first(where: { $0.value.tabs.contains { $0 === tab } })?.key,
               var row = parked[space] else { return }

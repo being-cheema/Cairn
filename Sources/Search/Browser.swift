@@ -6689,6 +6689,9 @@ final class Browser: NSObject, ObservableObject {
     /// the site: to the eye, the page went there. The other way round too:
     /// an extension sending a website's tab to one of its own pages.
     func replace(_ tab: Tab, going url: URL) {
+        // An agent's tab stays the one it is: a new one would be in your
+        // space's store, under none of the agent's rules.
+        guard !tab.agent else { return }
         guard let index = tabs.firstIndex(where: { $0.id == tab.id }) else { return }
         let page = Browser.extensionConfiguration(for: url)
         let fresh = Tab(shy: tab.shy, bench: tab.bench, configuration: page ?? websiteConfiguration(for: tab))
@@ -8675,7 +8678,7 @@ extension Browser: WKNavigationDelegate, WKUIDelegate {
     ) {
         // A tab an agent has asks first (AgentControl.vet): a private address
         // or a form on its way out waits or stops here.
-        if let tab = tab(for: webView), tab.agent {
+        if let tab = anyTab(for: webView), tab.agent {
             AgentControl.shared.vet(action, on: tab) { [weak self] allowed in
                 guard allowed, let self else { return decisionHandler(.cancel, preferences) }
                 self.settlePolicy(webView, action, preferences, decisionHandler)
@@ -8720,7 +8723,7 @@ extension Browser: WKNavigationDelegate, WKUIDelegate {
         // A coding agent's tab stays on the web: no file to download, none of
         // Search's own pages, no file:// and no link handed to another app,
         // whoever asked — the agent, the page, or a link it clicked.
-        if tab(for: webView)?.agent == true,
+        if anyTab(for: webView)?.agent == true,
            NavigationPolicyEngine.neverLoads(action.request.url, download: action.shouldPerformDownload) {
             AgentControl.log.notice("a page in an agent's tab was kept from going somewhere")
             decisionHandler(.cancel)
@@ -8809,6 +8812,16 @@ extension Browser: WKNavigationDelegate, WKUIDelegate {
         if action.navigationType == .linkActivated, action.buttonNumber == 4 {
             decisionHandler(.cancel)
             return
+        }
+        // A modified click on an agent's page, which its script can fake: the
+        // ways below would open it with your sign-ins (see openTaskLink).
+        if let from = popupTab(for: webView), from.agent {
+            if action.navigationType == .linkActivated, ["http", "https"].contains(scheme),
+               !action.modifierFlags.intersection([.shift, .command, .option]).isEmpty {
+                decisionHandler(.cancel)
+                DispatchQueue.main.async { [weak self] in self?.openTaskLink(url, from: from) }
+                return
+            }
         }
         // The chosen modified click: a peek at the link, over this
         // page (see Peek.swift). Only from a tab in the row — within a peek,
@@ -9279,11 +9292,27 @@ extension Browser: WKNavigationDelegate, WKUIDelegate {
             }
             return
         }
+        if let source, source.agent { return openTaskLink(url, from: source) }
         // To a site Settings sends to another space: there, in front.
         if sendToSpace(url, from: source) { return }
         // From a small window's page, to the space chosen for it.
         if sendToChosenSpace(url, from: source) { return }
         open(url, foreground: foreground, from: source, mayWait: true, link: true)
+    }
+
+    /// A link an agent's page opens aside by a way of yours (a ⌘-click, the
+    /// middle button, a peek): a tab in the task's own store, marked as the
+    /// agent's, and the task's own while its opener is. Behind, at the row's
+    /// end, as its target="_blank" links open.
+    func openTaskLink(_ url: URL, from source: Tab) {
+        let tab = Tab(bench: true, configuration: Web.configuration(store: source.store, isolated: true))
+        tab.agent = true
+        tab.opener = source.id
+        prepare(tab)
+        tabs.append(tab)
+        // Taken in before it loads, so its first page is asked about too.
+        AgentControl.shared.adopted(tab, from: source)
+        tab.go(to: url)
     }
 
     /// Anything the window can't show is something to keep instead.
@@ -9360,7 +9389,7 @@ extension Browser: WKNavigationDelegate, WKUIDelegate {
         navigationAction: WKNavigationAction,
         didBecome download: WKDownload
     ) {
-        if tab(for: webView)?.agent == true { return refuseAgentDownload(download) }
+        if anyTab(for: webView)?.agent == true { return refuseAgentDownload(download) }
         keep(download, from: webView)
         dropEmpty(webView)
     }
@@ -9370,7 +9399,7 @@ extension Browser: WKNavigationDelegate, WKUIDelegate {
         navigationResponse: WKNavigationResponse,
         didBecome download: WKDownload
     ) {
-        if tab(for: webView)?.agent == true { return refuseAgentDownload(download) }
+        if anyTab(for: webView)?.agent == true { return refuseAgentDownload(download) }
         keep(download, from: webView)
         dropEmpty(webView)
     }
@@ -9573,7 +9602,7 @@ extension Browser: WKNavigationDelegate, WKUIDelegate {
                          decisionHandler: @escaping (WKPermissionDecision) -> Void) {
         // A coding agent's tab never sees or hears you, whatever a site was
         // allowed before: a grant you gave the site was given to you.
-        if tab(for: webView)?.agent == true { return decisionHandler(.deny) }
+        if anyTab(for: webView)?.agent == true { return decisionHandler(.deny) }
         // An extension capturing, however it went about it: the pill says so.
         if #available(macOS 15.4, *) { ExtensionCapture.shared.watchCapture(webView, frame: frame) }
         let asker = frame.securityOrigin
@@ -9643,7 +9672,7 @@ extension Browser: WKNavigationDelegate, WKUIDelegate {
                  completionHandler: @escaping (WKPermissionDecision) -> Void) {
         let kind: CaptureChoices.Kind? = name == "camera" ? .camera : name == "microphone" ? .microphone : nil
         guard let kind, !origin.host.isEmpty, !Browser.extensionScheme(origin.protocol),
-              tab(for: webView)?.agent != true,
+              anyTab(for: webView)?.agent != true,
               webView.configuration.websiteDataStore.isPersistent, !(popupTab(for: webView)?.shy ?? false)
         else { return completionHandler(.prompt) }
         let site = "\(origin.protocol)://\(origin.host)" + (origin.port == 0 ? "" : ":\(origin.port)")
@@ -9674,7 +9703,7 @@ extension Browser: WKNavigationDelegate, WKUIDelegate {
     @objc(_webView:requestDisplayCapturePermissionForOrigin:initiatedByFrame:withSystemAudio:decisionHandler:)
     func askedToShareScreen(_ webView: WKWebView, origin: WKSecurityOrigin, frame: WKFrameInfo,
                             systemAudio: Bool, decisionHandler: @escaping (Int) -> Void) {
-        if tab(for: webView)?.agent == true { return decisionHandler(0) }
+        if anyTab(for: webView)?.agent == true { return decisionHandler(0) }
         let peek = peekTab.flatMap { $0.built === webView ? $0 : nil }
         guard decideDisplay == nil, decide == nil,
               let tab = (tabs + parkedTabs).first(where: { $0.built === webView }) ?? peek
@@ -9727,7 +9756,7 @@ extension Browser: WKNavigationDelegate, WKUIDelegate {
         frame: WKFrameInfo,
         decisionHandler: @escaping (WKPermissionDecision) -> Void
     ) {
-        if tab(for: webView)?.agent == true { return decisionHandler(.deny) }
+        if anyTab(for: webView)?.agent == true { return decisionHandler(.deny) }
         let give: (WKPermissionDecision) -> Void = { decision in
             guard Store.testing else { return decisionHandler(decision) }
             Browser.locationAnswered = decision == .grant ? "granted" : "denied"
@@ -9762,7 +9791,7 @@ extension Browser: WKNavigationDelegate, WKUIDelegate {
     /// tab, or Settings › Privacy's switch off, is refused without a card.
     @objc(_webView:requestNotificationPermissionForSecurityOrigin:decisionHandler:)
     func askedForNotifications(_ webView: WKWebView, origin: WKSecurityOrigin, decisionHandler: @escaping (Bool) -> Void) {
-        if tab(for: webView)?.agent == true { return decisionHandler(false) }
+        if anyTab(for: webView)?.agent == true { return decisionHandler(false) }
         let site = Browser.origin(origin.protocol, origin.host, origin.port)
         guard prefs.siteNotifications, let tab = tab(for: webView), !tab.shy, webView.configuration.websiteDataStore.isPersistent,
               !origin.host.isEmpty,

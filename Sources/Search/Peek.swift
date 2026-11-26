@@ -55,6 +55,8 @@ extension Browser {
 
     /// A modified click on a link, from a tab in the row.
     func peek(_ url: URL, from tab: Tab) {
+        // A peek has your sign-ins; an agent's page gets a tab of the task's.
+        if tab.agent { return openTaskLink(url, from: tab) }
         if peekTab != nil { closePeek() }
         if tab.pin != nil, let host = url.host()?.lowercased() { tab.peeked = (Vault.registrable(host), Date()) }
         // On the window's space, as the other new tabs are, so a peek has the

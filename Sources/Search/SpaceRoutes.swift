@@ -181,7 +181,9 @@ extension Browser {
     /// A link a page opens in a new tab, opened in front in the space a rule
     /// sends it to. False when no rule sends it out of the page's space.
     func sendToSpace(_ url: URL, from source: Tab?) -> Bool {
-        guard !isPopup, let source, !source.shy, let space = SpaceRoutes.space(for: url) else { return false }
+        // Never an agent's page's link: another space has your sign-ins, and
+        // a tab there is under none of the agent's rules.
+        guard !isPopup, let source, !source.shy, !source.agent, let space = SpaceRoutes.space(for: url) else { return false }
         // A small window's page is in the space chosen for it, if one was.
         let here = parked.first { $0.value.tabs.contains { $0 === source } }?.key
             ?? LittleWindow.holding(source.id)?.chosenSpace ?? spaceID
@@ -199,7 +201,7 @@ extension Browser {
     /// instead: a space gone is asked about again, as Open in Search asks
     /// (LittleWindow.keep); with spaces off, nothing opens.
     func sendToChosenSpace(_ url: URL, from source: Tab?) -> Bool {
-        guard let source, let chosen = LittleWindow.holding(source.id)?.chosenSpace else { return false }
+        guard let source, !source.agent, let chosen = LittleWindow.holding(source.id)?.chosenSpace else { return false }
         // Tucked: the browser kept out of sight for another profile's small
         // window, maybe at the chosen space itself (see Browsers.outOfSight).
         guard chosen != spaceID || tucked else { return false }

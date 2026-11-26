@@ -129,6 +129,10 @@ A change to any of these needs its tests (`Agent*Tests.swift`) and a probe run.
 - The panel's `claude` is started with no built-in tools and only this
   browser's MCP server, and only if Anthropic signed it.
 - Each task's tabs share one `nonPersistent()` data store.
+  No extension runs in it. A space rule, a modified click or a peek never
+  takes its page's link out of it (`Browser.openTaskLink`).
+- A task's tabs stay its own while their space is parked: look them up with
+  `anyTab(for:)` or `tabs + parkedTabs`, never `tab(for:)` or `tabs` alone.
 - Commit gates hold paying, sending, signing in, submitting and leaving the
   task's sites (`AgentGate.hold`). A form is also held as it leaves, whatever
   its button said (`AgentControl.vet`). `fetch` and XHR are not navigations

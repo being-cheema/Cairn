@@ -27,7 +27,8 @@ final class AgentWorkspaceCoordinator {
     /// Its tabs are in your hands, to sign in (Pass the Baton).
     private(set) var batonWithYou = false
 
-    private var tabs: [Tab] { Browsers.all.flatMap(\.tabs).filter { own.contains($0.id) } }
+    /// Parked ones too: a space you have left keeps its row running.
+    private var tabs: [Tab] { Browsers.all.flatMap { $0.tabs + $0.parkedTabs }.filter { own.contains($0.id) } }
 
     /// The task's tabs put in your hands, or taken back. All of them: a
     /// sign-in often opens a window of its own.
@@ -65,7 +66,9 @@ final class AgentWorkspaceCoordinator {
     func forget(_ id: Tab.ID) { own.remove(id) }
 
     /// Only those still open are its.
-    func keep(only live: Set<Tab.ID>) { own.formIntersection(live) }
+    func forgetClosed(in browser: Browser) {
+        own.formIntersection((browser.tabs + browser.parkedTabs).map(\.id))
+    }
 
     /// The task finished: its tabs stay, as yours. They leave `own`, so
     /// nothing the agent said can reach them again, and your own network is
@@ -76,7 +79,7 @@ final class AgentWorkspaceCoordinator {
         guard store != nil else { return nil }
         var released: [(browser: Browser, tab: Tab)] = []
         for browser in Browsers.all {
-            for tab in browser.tabs where own.contains(tab.id) {
+            for tab in browser.tabs + browser.parkedTabs where own.contains(tab.id) {
                 tab.agentWorking = false
                 tab.inYourHands = false
                 if let web = tab.built { AgentOverlayView.remove(from: web) }
@@ -96,7 +99,7 @@ final class AgentWorkspaceCoordinator {
     func close() {
         guard store != nil else { return }
         for browser in Browsers.all {
-            for tab in browser.tabs where own.contains(tab.id) { browser.close(tab) }
+            for tab in browser.tabs + browser.parkedTabs where own.contains(tab.id) { browser.closeTaskTab(tab) }
         }
         own = []
         store = nil

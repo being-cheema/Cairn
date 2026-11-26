@@ -110,7 +110,9 @@ enum Web {
         // added after.
         if #available(macOS 15.4, *) {
             MainActor.assumeIsolated {
-                if !shy || Extensions.shared.contexts.values.contains(where: \.hasAccessToPrivateData) { Extensions.attach(config) }
+                // Nor an agent's task: an extension there, a password
+                // manager's above all, could fill what the agent then sends.
+                if !isolated, !shy || Extensions.shared.contexts.values.contains(where: \.hasAccessToPrivateData) { Extensions.attach(config) }
             }
         }
         // Left alone, WKWebView says only "AppleWebKit … (KHTML, like Gecko)" —

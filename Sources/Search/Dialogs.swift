@@ -141,7 +141,7 @@ extension Browser {
         // A coding agent's page asking: answered as dismissed at once, and the
         // agent told what it said, rather than held until you visit that tab
         // while its call waits (AgentControl.dialog).
-        if let tab = tab(for: webView), tab.keptFromYou {
+        if let tab = anyTab(for: webView), tab.keptFromYou {
             AgentControl.shared.dialog(on: tab, kind: "alert", text: message)
             return completionHandler()
         }
@@ -161,7 +161,7 @@ extension Browser {
         initiatedByFrame frame: WKFrameInfo,
         completionHandler: @escaping (Bool) -> Void
     ) {
-        if let tab = tab(for: webView), tab.keptFromYou {
+        if let tab = anyTab(for: webView), tab.keptFromYou {
             AgentControl.shared.dialog(on: tab, kind: "confirm", text: message)
             return completionHandler(false)
         }
@@ -185,7 +185,7 @@ extension Browser {
         initiatedByFrame frame: WKFrameInfo,
         completionHandler: @escaping (String?) -> Void
     ) {
-        if let tab = tab(for: webView), tab.keptFromYou {
+        if let tab = anyTab(for: webView), tab.keptFromYou {
             AgentControl.shared.dialog(on: tab, kind: "prompt", text: prompt)
             return completionHandler(nil)
         }
@@ -218,7 +218,7 @@ extension Browser {
     ) {
         // A coding agent's page never has a file chosen for it: that is
         // yours to do, in a tab of yours.
-        if tab(for: webView)?.agent == true {
+        if anyTab(for: webView)?.agent == true {
             AgentControl.log.notice("a file chooser in an agent's tab was refused")
             return completionHandler(nil)
         }

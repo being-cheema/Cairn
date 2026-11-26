@@ -11,6 +11,14 @@ import Foundation
 // applied with every page's preferences (HTTPSFirst).
 
 enum NavigationPolicyEngine {
+    /// Your Approve's cover for one send from one tab, for a moment.
+    struct SendGrant: Equatable {
+        var tab: UUID
+        var until: TimeInterval
+        /// Nothing for any other tab: its send is a different one.
+        func until(on sending: UUID) -> TimeInterval { sending == tab ? until : 0 }
+    }
+
     /// Why `open` or `go` can't have an address.
     enum Refused: Error, Equatable { case notWeb, privateAddress }
 

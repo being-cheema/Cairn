@@ -622,9 +622,9 @@ final class AgentSession: ObservableObject, Identifiable {
     /// Seconds spent waiting for you to answer held actions, so that a slow
     /// person is not counted as a slow page.
     fileprivate var heldTime: TimeInterval = 0
-    /// Until when (uptime) one form may be sent without asking again: set by
-    /// your Approve, spent by the send it was for (vet).
-    fileprivate var sendGrant: TimeInterval = 0
+    /// Cover for one form to be sent without asking again: set by your
+    /// Approve, for the tab it was about, and spent by that send (vet).
+    fileprivate var sendGrant: NavigationPolicyEngine.SendGrant?
     /// Documents its tabs were kept from loading, to say with the next answer.
     fileprivate var blocked: [String] = []
     /// p1 → the number of its last read.
@@ -1402,8 +1402,8 @@ final class AgentControl: ObservableObject {
     /// Puts `hold` to you in the window and calls `then` once with the
     /// answer: yours, or none within `holdFor`, or the session going. The
     /// agent's call waits for it, and gets the result, or why not.
-    private func ask(_ hold: AgentGate.Hold, _ session: AgentSession, within patience: TimeInterval = AgentControl.holdFor,
-                     then: @escaping (HeldAction.Answer) -> Void) {
+    private func ask(_ hold: AgentGate.Hold, _ session: AgentSession, sending: Tab.ID? = nil,
+                     within patience: TimeInterval = AgentControl.holdFor, then: @escaping (HeldAction.Answer) -> Void) {
         var answered = false
         let began = ProcessInfo.processInfo.systemUptime
         let held = HeldAction(hold: hold, since: began) { [weak session] verdict in
@@ -1419,8 +1419,8 @@ final class AgentControl: ObservableObject {
             }
             // What you approved may be a form, and sending it is asked about
             // again as it leaves (vet): this Approve answers that too.
-            if verdict == .approved, hold.reason != .leave, hold.reason != .signIn {
-                session?.sendGrant = ProcessInfo.processInfo.systemUptime + Self.grantFor
+            if verdict == .approved, hold.reason != .leave, hold.reason != .signIn, let sending {
+                session?.sendGrant = .init(tab: sending, until: ProcessInfo.processInfo.systemUptime + Self.grantFor)
             }
             then(verdict)
         }
@@ -1499,23 +1499,28 @@ final class AgentControl: ObservableObject {
             guard let self, let session else { return then(.declined) }
             // Taken back and sealed before the agent hears anything, and
             // however it ended: a wait that ran out may leave a box typed in.
-            session.workspace.passBaton(toYou: false)
-            guard self.live(session) else { return then(.declined) }
-            let tabs = session.workspace.openTabs
-            if verdict == .approved {
+            if verdict == .approved, self.live(session) {
                 session.usedBaton = true
-                for each in tabs { if let site = AgentGate.site(each.pageAddress) { session.sites.insert(site) } }
+                for each in session.workspace.openTabs { if let site = AgentGate.site(each.pageAddress) { session.sites.insert(site) } }
             }
-            self.seal(tabs, session) { then(verdict) }
+            Self.takeBack(session.workspace) { [weak self, weak session] in
+                guard let self, let session, self.live(session) else { return then(.declined) }
+                then(verdict)
+            }
         }
     }
 
-    private func seal(_ tabs: [Tab], _ session: AgentSession, then: @escaping () -> Void) {
-        guard let tab = tabs.first else { return then() }
-        page(tab, session, PageScripts.seal()) { [weak self, weak session] _ in
-            guard let self, let session else { return then() }
-            self.seal(Array(tabs.dropFirst()), session, then: then)
+    /// The tabs out of your hands, and what is in their boxes sealed from
+    /// agents for good. Needs no session: an agent that has gone mid sign-in
+    /// leaves tabs that another one may later be let read.
+    static func takeBack(_ workspace: AgentWorkspaceCoordinator, then: @escaping () -> Void) {
+        workspace.passBaton(toYou: false)
+        func seal(_ tabs: [Tab]) {
+            guard let tab = tabs.first else { return then() }
+            guard let web = tab.built else { return seal(Array(tabs.dropFirst())) }
+            web.evaluateJavaScript(PageScripts.seal(), in: nil, in: Web.world) { _ in seal(Array(tabs.dropFirst())) }
         }
+        seal(workspace.openTabs)
     }
 
     /// To the tab you are to sign in on, when that takes nothing from under
@@ -1586,11 +1591,12 @@ final class AgentControl: ObservableObject {
         let toMain = action.targetFrame?.isMainFrame ?? true
         let send = {
             switch NavigationPolicyEngine.send(method: method, to: url, fromMainFrame: fromMain, toMainFrame: toMain,
-                                               now: ProcessInfo.processInfo.systemUptime, grantedUntil: session.sendGrant) {
+                                               now: ProcessInfo.processInfo.systemUptime,
+                                               grantedUntil: session.sendGrant?.until(on: tab.id) ?? 0) {
             case .go:
                 done(true)
             case .covered:
-                session.sendGrant = 0
+                session.sendGrant = nil
                 done(true)
             case .ask(let hold):
                 // In your hands, what is sent is what you are sending.
@@ -1599,7 +1605,7 @@ final class AgentControl: ObservableObject {
                 guard session.held == nil else { return done(false) }
                 self.ask(hold, session) { [weak self, weak session] verdict in
                     // The answer is the send's own: nothing left over for another.
-                    session?.sendGrant = 0
+                    session?.sendGrant = nil
                     guard verdict == .approved, let self, let session, self.live(session) else { return done(false) }
                     done(true)
                 }
@@ -1672,7 +1678,7 @@ final class AgentControl: ObservableObject {
         guard let released = session.workspace.handOver() else { return }
         let browser = session.browser.flatMap { browser in Browsers.all.first { $0 === browser } }
         var landing: Tab?
-        var kept = handed.filter { id in Browsers.all.contains { $0.tabs.contains { $0.id == id } } }
+        var kept = handed.filter { id in Browsers.all.contains { ($0.tabs + $0.parkedTabs).contains { $0.id == id } } }
         for (each, tab) in released {
             kept.insert(tab.id)
             // The one it last worked in; else the newest it opened, which
@@ -1685,7 +1691,8 @@ final class AgentControl: ObservableObject {
         session.snaps = [:]
         session.dialogs = [:]
         session.newTabs = []
-        guard let browser, let landing else { return }
+        // Not to one whose space you have left: there is no row here to show it in.
+        guard let browser, let landing, browser.tabs.contains(where: { $0 === landing }) else { return }
         let active = activeForTest ?? (NSApp.isActive && browser.window?.isKeyWindow == true)
         let sinceKey = activeForTest != nil ? .infinity
             : CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .keyDown)
@@ -1896,20 +1903,20 @@ final class AgentControl: ObservableObject {
             case .close:
                 let tab = try self.tab(request, session, browser, .drive)
                 let handle = request["page"] as? String ?? ""
-                browser.close(tab)
+                browser.closeTaskTab(tab)
                 session.workspace.forget(tab.id)
                 session.forget(handle)
                 answer(["closed": handle])
             case .read:
                 try read(request, session, browser, answer)
             case .click:
-                session.sendGrant = 0
+                session.sendGrant = nil
                 try click(request, session, browser, answer)
             case .type:
-                session.sendGrant = 0
+                session.sendGrant = nil
                 try type(request, session, browser, answer)
             case .press:
-                session.sendGrant = 0
+                session.sendGrant = nil
                 let tab = try self.tab(request, session, browser, .drive)
                 guard let key = AgentRules.key(request["key"] as? String ?? "") else {
                     throw AgentRefusal(code: "bad_key", message: "Not a key this can press",
@@ -1942,7 +1949,7 @@ final class AgentControl: ObservableObject {
                     guard let hold = AgentGate.hold(enter: target, on: tab.pageAddress, rules: rules) else { return press() }
                     if self.handsOverSignIn(hold, tab, session, answer) { return }
                     defer { self.spotlight(tab, session, PageScripts.focused()) }
-                    self.ask(hold, session) { verdict in
+                    self.ask(hold, session, sending: tab.id) { verdict in
                         guard verdict == .approved else { return answer(Self.declined(hold, verdict)) }
                         // Still what was asked about.
                         self.page(tab, session, PageScripts.focused()) { again in
@@ -1991,7 +1998,10 @@ final class AgentControl: ObservableObject {
     /// A private tab is never found, and a tab of yours is read at most.
     private func tab(_ request: [String: Any], _ session: AgentSession, _ browser: Browser, _ use: AgentConsent.Use) throws -> Tab {
         let handle = request["page"] as? String ?? ""
-        let found = session.pages[handle].flatMap { id in browser.tabs.first { $0.id == id } }
+        // Its own are looked for among parked rows too: you may have changed space.
+        let found = session.pages[handle].flatMap { id in
+            browser.tabs.first { $0.id == id } ?? (session.own.contains(id) ? browser.parkedTabs.first { $0.id == id } : nil)
+        }
         let refusal = found.map { AgentRules.refusal(for: $0, own: session.own.contains($0.id), consent: session.consent, use: use) }
             ?? "stale_page"
         switch refusal {
@@ -2103,9 +2113,9 @@ final class AgentControl: ObservableObject {
     }
 
     private func tabs(_ session: AgentSession, _ browser: Browser, _ answer: @escaping ([String: Any]) -> Void) {
-        let live = Set(browser.tabs.map(\.id))
+        session.workspace.forgetClosed(in: browser)
+        let live = Set(browser.tabs.map(\.id)).union(session.own)
         for (handle, id) in session.pages where !live.contains(id) { session.forget(handle) }
-        session.workspace.keep(only: live)
         let shown = browser.tabs.filter { tab in
             AgentRules.refusal(for: tab, own: session.own.contains(tab.id), consent: session.consent, use: .read) == nil
         }
@@ -2185,7 +2195,7 @@ final class AgentControl: ObservableObject {
                     return press(seen)
                 }
                 if self.handsOverSignIn(hold, tab, session, answer) { return }
-                self.ask(hold, session) { verdict in
+                self.ask(hold, session, sending: tab.id) { verdict in
                     guard verdict == .approved else { return answer(Self.declined(hold, verdict)) }
                     // Asked about this element: it must still be it, and
                     // where it is now is where the click goes.
@@ -2243,7 +2253,7 @@ final class AgentControl: ObservableObject {
                 target.enter = true
                 guard let hold = AgentGate.hold(enter: target, on: tab.pageAddress, rules: rules) else { return submit() }
                 if self.handsOverSignIn(hold, tab, session, answer) { return }
-                self.ask(hold, session) { verdict in
+                self.ask(hold, session, sending: tab.id) { verdict in
                     guard verdict == .approved else { return answer(Self.declined(hold, verdict)) }
                     touch("probe", nil) { again in
                         guard AgentGate.Target(again["gate"])?.fingerprint == target.fingerprint else {
