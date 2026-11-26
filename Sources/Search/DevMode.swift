@@ -144,6 +144,10 @@ struct DevBar: View {
                     .frame(maxWidth: 420, alignment: .leading)
                     .padding(.trailing, 6)
                 Divider().frame(height: 14)
+                // The Dev Bridge, where this page could have it: a switch of
+                // its own, which Developer Mode never flips.
+                DevBridgeSwitch(browser: browser, tab: tab)
+                    .padding(.horizontal, 3)
                 tool("hammer", "Web Inspector", keys: "view.inspector") { browser.toggleWebInspector() }
                 tool("arrow.clockwise", "Reload Ignoring Cache", keys: "view.reloadOrigin") {
                     tab.reload(fromOrigin: true)

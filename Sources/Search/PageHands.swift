@@ -423,6 +423,125 @@ enum PageScripts {
         """#, [key])
     }
 
+    // MARK: Send Element (ElementPicker)
+
+    /// The element under a point, into any open shadow root.
+    private static let underHelper = #"""
+    function under(x, y) {
+      var el = document.elementFromPoint(x, y);
+      while (el && el.shadowRoot) {
+        var inner = el.shadowRoot.elementFromPoint(x, y);
+        if (!inner || inner === el) break;
+        el = inner;
+      }
+      return el;
+    }
+
+    """#
+
+    static func pointed(x: Double, y: Double) -> String {
+        call(underHelper + #"""
+        (function (x, y) {
+          var el = under(x, y);
+          return JSON.stringify({ box: el ? boxOf(el) : [] });
+        })
+        """#, [x, y])
+    }
+
+    /// The element at a point as Send Element keeps it: where it is, what it
+    /// is, and its tree with only `attributes`. What is typed or chosen in a
+    /// box, a textarea, a list or an editable part is left where it is, and
+    /// so are scripts, styles and comments. The element itself is kept under
+    /// `key` for `cover`.
+    static func picked(x: Double, y: Double, key: String, attributes: [String]) -> String {
+        call(underHelper + #"""
+        (function (x, y, key, allowed) {
+          var el = under(x, y);
+          if (!el) return JSON.stringify({});
+          globalThis[key] = el;
+          var count = 0;
+          function shut(el) {
+            return el.isContentEditable || secret(el) ||
+              /^(input|textarea|select|iframe|frame|svg|canvas|video|audio|object|embed)$/i.test(el.tagName);
+          }
+          function walk(el, depth) {
+            var tag = el.tagName.toLowerCase();
+            if (/^(script|style|noscript|template|link|meta)$/.test(tag)) return null;
+            if (tag === 'input' && (el.type || '').toLowerCase() === 'hidden') return null;
+            if (++count > 120) return null;
+            var attrs = {};
+            allowed.forEach(function (a) { if (el.hasAttribute(a)) attrs[a] = String(el.getAttribute(a)).slice(0, 2000); });
+            var out = { tag: tag, attrs: attrs };
+            if (shut(el)) { out.redacted = true; return out; }
+            if (depth >= 12) return out;
+            var children = [];
+            for (var i = 0; i < el.childNodes.length && count <= 120; i++) {
+              var node = el.childNodes[i];
+              if (node.nodeType === 3) {
+                var text = node.data.replace(/\s+/g, ' ');
+                if (text.trim()) children.push(text.slice(0, 2000));
+              } else if (node.nodeType === 1) {
+                var child = walk(node, depth + 1);
+                if (child) children.push(child);
+              }
+            }
+            out.children = children;
+            return out;
+          }
+          function path(el) {
+            var parts = [];
+            for (var at = el; at && at.nodeType === 1 && parts.length < 6; at = at.parentElement) {
+              var tag = at.tagName.toLowerCase();
+              if (at.id) { parts.unshift(tag + '#' + at.id.slice(0, 60)); break; }
+              var nth = 1, same = false;
+              for (var b = at.previousElementSibling; b; b = b.previousElementSibling) if (b.tagName === at.tagName) { nth++; same = true; }
+              for (var n = at.nextElementSibling; n && !same; n = n.nextElementSibling) if (n.tagName === at.tagName) same = true;
+              parts.unshift(same ? tag + ':nth-of-type(' + nth + ')' : tag);
+            }
+            return parts.join(' > ');
+          }
+          var editing = !!el.parentElement && el.parentElement.isContentEditable;
+          var tree = editing ? { tag: el.tagName.toLowerCase(), attrs: {}, redacted: true } : walk(el, 0);
+          var label = el.getAttribute('aria-label') || el.getAttribute('alt') || el.getAttribute('title') || '';
+          return JSON.stringify({ url: location.href, selector: path(el), role: role(el), label: String(label).slice(0, 300),
+                                  box: boxOf(el), tree: tree || { tag: el.tagName.toLowerCase(), attrs: {} } });
+        })
+        """#, [x, y, key, attributes])
+    }
+
+    /// Before the picture of a picked element: every box someone can type or
+    /// choose in, editable part, and what `masked` covers, made invisible and
+    /// listed to be painted over (put back by `shown`). Also where the
+    /// element under `picked` is now.
+    static func cover(key: String, picked: String) -> String {
+        call(maskedHelper + #"""
+        (function (key, picked) {
+          var els = masked(), roots = [document];
+          while (roots.length) {
+            var root = roots.shift(), all = root.querySelectorAll('*');
+            for (var i = 0; i < all.length; i++) {
+              var el = all[i];
+              if (el.shadowRoot) roots.push(el.shadowRoot);
+              var typed = el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' ||
+                (el.tagName === 'INPUT' && !/^(submit|button|reset|image|hidden)$/i.test(el.type || 'text')) ||
+                (el.isContentEditable && !(el.parentElement && el.parentElement.isContentEditable));
+              if (typed && els.indexOf(el) < 0) els.push(el);
+            }
+          }
+          var painted = boxes(els), kept = [];
+          els.forEach(function (el) {
+            kept.push([el, el.style.getPropertyValue('opacity'), el.style.getPropertyPriority('opacity')]);
+            el.style.setProperty('opacity', '0', 'important');
+          });
+          globalThis[key] = kept;
+          var element = globalThis[picked];
+          globalThis[picked] = null;
+          return JSON.stringify({ boxes: painted, element: element && element.isConnected ? boxOf(element) : [],
+                                  width: innerWidth, height: innerHeight });
+        })
+        """#, [key, picked])
+    }
+
     static func json(_ value: Any) -> String {
         guard let data = try? JSONSerialization.data(withJSONObject: [value], options: [.fragmentsAllowed]),
               let text = String(data: data, encoding: .utf8) else { return "null" }

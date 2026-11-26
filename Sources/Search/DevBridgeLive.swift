@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import WebKit
 
 // The Local Dev Bridge, live: the grants, kept here and nowhere else; the
@@ -62,12 +63,13 @@ final class DevBridge: ObservableObject {
     /// no accessibility press, no menu and nothing an agent sends. True when
     /// the click was taken; the grant follows once the name is checked.
     @discardableResult
-    func enable(_ tab: Tab, event: NSEvent?, on view: NSView?, shownAt: TimeInterval) -> Bool {
+    func enable(_ tab: Tab, event: NSEvent?, on view: NSView?, shownAt: TimeInterval,
+                _ done: @escaping @MainActor (DevOrigin) -> Void = { _ in }) -> Bool {
         guard offer(for: tab) != nil,
               AgentRules.isClick(event, on: view, in: view?.window, after: max(shownAt + 0.5, lastClick)),
               let event else { return false }
         lastClick = event.timestamp
-        begin(tab)
+        begin(tab, done)
         return true
     }
 
@@ -76,13 +78,14 @@ final class DevBridge: ObservableObject {
         if Store.testing { begin(tab) }
     }
 
-    private func begin(_ tab: Tab) {
+    private func begin(_ tab: Tab, _ done: @escaping @MainActor (DevOrigin) -> Void = { _ in }) {
         guard let origin = offer(for: tab) else { return }
         pending[tab.id] = origin
         confirm(origin) { [weak self, weak tab] here in
             guard let self, let tab, self.pending.removeValue(forKey: tab.id) == origin,
                   here, self.offer(for: tab) == origin else { return }
             self.change { self.grants[tab.id] = origin }
+            done(origin)
         }
     }
 
@@ -374,4 +377,56 @@ final class DevClickView: NSView {
     override func mouseDown(with event: NSEvent) {}
     override func mouseUp(with event: NSEvent) { action(event, self, shownAt) }
     override func accessibilityPerformPress() -> Bool { false }
+}
+
+/// The switch's words, in the developer bar and on the site card. Off, only a
+/// real click on them turns it on (DevClickView): they are no button, so no
+/// key and no accessibility press does it. On, they are an ordinary button,
+/// since turning it off only takes away.
+struct DevBridgeSwitch: View {
+    /// What turning it on gives, in plain words.
+    static func promise(_ origin: DevOrigin) -> String {
+        "Your agent's own tabs may open \(origin.short), read its errors and send it requests. "
+            + "A local server may accept changes without a sign-in."
+    }
+
+    let browser: Browser
+    @ObservedObject var tab: Tab
+    @ObservedObject private var bridge = DevBridge.shared
+
+    var body: some View {
+        if let origin = bridge.offer(for: tab) {
+            if bridge.isGranted(origin) {
+                Button { bridge.turnOff(origin) } label: { words("Bridge On", on: true) }
+                    .buttonStyle(.plain)
+                    .help("The Dev Bridge is on for \(origin.short)"
+                          + (bridge.granted(from: tab) == nil ? ", turned on from another tab" : "") + ". Click to turn it off.")
+            } else {
+                words("Turn On Bridge", on: false)
+                    .overlay(Spot { [weak browser] event, view, shownAt in
+                        DevBridge.shared.enable(tab, event: event, on: view, shownAt: shownAt) { [weak browser] origin in
+                            browser?.announce("Dev Bridge on for \(origin.short), until this tab closes or leaves it")
+                        }
+                    })
+                    .help("Dev Bridge: " + Self.promise(origin))
+            }
+        }
+    }
+
+    private func words(_ text: String, on: Bool) -> some View {
+        Text(text)
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(on ? Color.white : Palette.ink)
+            .fixedSize()
+            .padding(.horizontal, 8)
+            .frame(height: 20)
+            .background(on ? Palette.accent : Palette.wash, in: Capsule())
+            .contentShape(Capsule())
+    }
+
+    private struct Spot: NSViewRepresentable {
+        let action: (NSEvent, NSView, TimeInterval) -> Void
+        func makeNSView(context: Context) -> DevClickView { DevClickView(action) }
+        func updateNSView(_ view: DevClickView, context: Context) { view.act(action) }
+    }
 }

@@ -908,6 +908,26 @@ final class Bench {
                     "sites": mode.sites, "address": tab.pageAddress?.absoluteString ?? "",
                     "command": Command.named("view.developerMode") != nil])
 
+        case "devbridge":
+            // The Local Dev Bridge (DevBridgeLive.swift) for a tab, in a test
+            // run: "action" grant (past the click), press (the switch with no
+            // click behind it, which is ignored), off; always what stands.
+            // Yours is turned on by your own click only.
+            guard Store.testing else { answer(["error": "devbridge only works on a --test run"]); return }
+            guard let tab = find(request, in: browser) else { answer(missing(request)); return }
+            let bridge = DevBridge.shared
+            var taken = false
+            switch request["action"] as? String {
+            case "grant": bridge.enableForTest(tab)
+            case "press": taken = bridge.enable(tab, event: NSApp.currentEvent, on: nil, shownAt: 0)
+            case "off": if let origin = bridge.offer(for: tab) { bridge.turnOff(origin) }
+            default: break
+            }
+            let log = bridge.log(of: tab.id)
+            answer(["offer": bridge.offer(for: tab)?.said ?? "", "on": bridge.isOn(tab), "taken": taken,
+                    "from": bridge.granted(from: tab)?.said ?? "", "granted": bridge.origins.map(\.said).sorted(),
+                    "dressed": bridge.isDressed(tab.id), "console": log.console.count, "network": log.network.count])
+
         case "screenshots":
             // Screenshots in Downloads (Screenshots.swift): what is watched,
             // whether it was refused. Test runs only, on a folder of the

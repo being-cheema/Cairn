@@ -319,6 +319,9 @@ struct SearchApp: App {
                 Button("Developer Mode") { browser.toggleDeveloperMode() }
                     .shortcut("view.developerMode")
                     .disabled(DevMode.host(of: browser.active?.pageAddress) == nil)
+                Button("Send Element to Clipboard") { browser.sendElement() }
+                    .shortcut("view.sendElement")
+                    .disabled(DevOrigin(browser.active?.committed) == nil)
                 // Only with a developer tools package installed (Settings ›
                 // About › Developer, see DevToolsPackages.swift).
                 if let package = DevToolsPackages.shared.primary, DevToolsPackages.shared.usable(package.offer.id) {

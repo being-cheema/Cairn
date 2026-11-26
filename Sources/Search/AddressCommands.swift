@@ -171,13 +171,14 @@ enum AddressCommand: Equatable {
     private static let needsPage: Set<String> = [
         "file.share", "file.savePage", "file.exportPDF", "file.print", "edit.copyCleanLink", "edit.copyMarkdown", "view.reader",
         "view.summarize", "view.ask", "tabs.duplicate", "tabs.copyAddress", "tabs.copyMarkdown", "bookmarks.add",
-        "view.style", "view.developerMode",
+        "view.style", "view.developerMode", "view.sendElement",
     ]
     /// More words for a few, the ones other browsers use.
     private static let alsoCalled: [String: String] = [
         "view.reader": "reader view", "tabs.mute": "mute", "view.float": "picture in picture pip",
         "view.inspector": "devtools developer tools", "bookmarks.add": "bookmark", "view.hide": "zapper",
         "view.style": "boost css", "view.developerMode": "dev localhost cache inspector",
+        "view.sendElement": "copy element claude pick html localhost",
     ]
 
     /// A menu command, offered only where the menu has it, and enabled.

@@ -285,6 +285,8 @@ struct Command: Identifiable {
         Command("view.developerMode", "Developer Mode", .view, KeyCombo("i", shift: true, option: true)) {
             $0.toggleDeveloperMode()
         },
+        // An element of a local page, to the clipboard (ElementPicker.swift).
+        Command("view.sendElement", "Send Element to Clipboard", .view, KeyCombo("c", control: true)) { $0.sendElement() },
 
         Command("tabs.back", "Back", .tabs, KeyCombo("[")) { $0.back() },
         Command("tabs.forward", "Forward", .tabs, KeyCombo("]")) { $0.forward() },

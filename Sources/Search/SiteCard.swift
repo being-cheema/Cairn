@@ -428,6 +428,9 @@ struct SiteCard: View {
             if DevMode.host(of: tab.pageAddress) != nil {
                 Developer(tab: tab)
             }
+            if let origin = DevBridge.shared.offer(for: tab) {
+                Bridge(browser: browser, tab: tab, origin: origin)
+            }
             if prefs.keepsSitesAwake, tab.awakeHost != nil {
                 HStack(spacing: 0) {
                     Text("Keep This Site Awake").font(MenuMetrics.font)
@@ -736,6 +739,37 @@ struct SiteCard: View {
             .padding(.trailing, MenuMetrics.trailing)
             .frame(height: MenuMetrics.row)
             .help("The page's whole address and quick tools: Web Inspector, reload ignoring cache, cache off")
+        }
+    }
+
+    /// The Local Dev Bridge for this local site (DevBridgeLive.swift): what it
+    /// gives, said before it is turned on. The words keep their height on or
+    /// off, as the card is sized when it opens.
+    private struct Bridge: View {
+        let browser: Browser
+        @ObservedObject var tab: Tab
+        let origin: DevOrigin
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 0) {
+                    Text("Dev Bridge")
+                        .font(MenuMetrics.font)
+                        .foregroundStyle(Color(nsColor: .labelColor))
+                        .fixedSize()
+                    Spacer(minLength: 24)
+                    DevBridgeSwitch(browser: browser, tab: tab)
+                }
+                .frame(height: MenuMetrics.row)
+                Text(DevBridgeSwitch.promise(origin))
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color(nsColor: .secondaryLabelColor))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(width: 230, alignment: .leading)
+                    .padding(.bottom, 4)
+            }
+            .padding(.leading, MenuMetrics.text)
+            .padding(.trailing, MenuMetrics.trailing)
         }
     }
 
