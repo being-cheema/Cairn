@@ -348,7 +348,9 @@ struct DownloadsPanel: View {
     @ViewBuilder
     private var list: some View {
         if fetches.entries.isEmpty && loot.kept.isEmpty {
-            Card { Nothing("Nothing downloaded yet.", art: "download") }
+            // No picture in the small card: with one, an empty list stood
+            // nearly as tall as one with three downloads in it.
+            Card { Nothing("Nothing downloaded yet.", art: compact ? nil : "download") }
         } else {
             FadingScroll {
                 LazyVStack(alignment: .leading, spacing: 10) {

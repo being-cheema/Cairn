@@ -177,6 +177,11 @@ final class FloatUnseenTests: XCTestCase {
               video.play();
             </script>
             """, baseURL: URL(string: "https://float-unseen.invalid/"))
+        // In Low Power Mode WebKit won't let a page start a video by itself.
+        // A script the browser runs counts as the click it wants, so what
+        // follows doesn't depend on how this Mac is powered.
+        try await waitFor { try await self.inPage(tab, "!!document.querySelector('video').srcObject") as? Bool == true }
+        _ = try await inPage(tab, "document.querySelector('video').play(); true;")
         try await waitFor { try await self.paused(tab) == false }
         // The sound track from here, a script Search runs counting as the
         // click a page needs for sound.
@@ -197,7 +202,7 @@ final class FloatUnseenTests: XCTestCase {
             XCTAssertTrue(tab.noisy, "the video plays with sound")
         }
         let playing = try await paused(tab) == false
-        XCTAssertTrue(playing, "the video plays while its window can be seen")
+        XCTAssertTrue(playing, "the video plays while its window can be seen (Low Power Mode: \(ProcessInfo.processInfo.isLowPowerModeEnabled))")
         XCTAssertEqual(tab.address?.host(), "float-unseen.invalid")
         // macOS's own picture in picture window stays shut: the video's
         // presentation changes as WebKit's would, and nothing more.
