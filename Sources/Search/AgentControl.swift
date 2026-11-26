@@ -386,6 +386,73 @@ enum AgentRules {
     }
 }
 
+// MARK: - how a task ends
+
+/// Why a connection ended, and so what becomes of the tabs it opened.
+/// Plain, so the rule can be tested without a socket or a window.
+///
+/// A task that finished hands its tabs to the person: what it was asked
+/// for (a video playing, a page found) is the point of it, and closing them
+/// threw the result away. The person saying stop, or no, closes them, as
+/// does anything that went wrong: they did not ask to be left with those.
+enum AgentEnd: Equatable {
+    /// The person's Stop: the column's foot, the strip, File › Stop Agent,
+    /// the side panel's Stop while its turn runs.
+    case stopped
+    /// The model's own `bye` (search-mcp's disconnect).
+    case bye
+    /// The program went: finished and exited, or let its socket go.
+    case connectionClosed
+    /// Asked nothing for `letGo`: done, without saying so.
+    case idle
+    /// Cairn stopped listening: quitting, or the bench's `off`.
+    case appStopped
+    case windowClosed, noWindow
+    case silent, tooMuch, notReading, notAllowed
+
+    /// For the log.
+    var why: String {
+        switch self {
+        case .stopped: "stopped from the window"
+        case .bye: "it said goodbye"
+        case .connectionClosed: "the connection closed"
+        case .idle: "idle"
+        case .appStopped: "\(Brand.name) stopped listening"
+        case .windowClosed: "the window closed"
+        case .noWindow: "no window"
+        case .silent: "it said nothing"
+        case .tooMuch: "it sent too much"
+        case .notReading: "it stopped reading"
+        case .notAllowed: "not allowed"
+        }
+    }
+
+    /// Whether its tabs stay open as the person's (true) or close with it.
+    /// `declined`: the person said no to taking it to another site
+    /// (AgentGate's `leave`) during the task, which is as good as stop.
+    func handsOver(declined: Bool) -> Bool {
+        guard !declined else { return false }
+        switch self {
+        case .bye, .connectionClosed, .idle: return true
+        // A window closing takes its tabs anyway; quitting keeps no bench tab
+        // (Browser.kept); a program that misbehaved leaves nothing behind.
+        case .stopped, .appStopped, .windowClosed, .noWindow, .silent, .tooMuch, .notReading, .notAllowed: return false
+        }
+    }
+
+    /// Whether the tab it last worked in is brought forward when its tabs are
+    /// handed over. Only for the side panel's own run, whose result the
+    /// person is waiting for in that window, and only while they are there
+    /// and not typing: a program in a terminal finishing never changes the
+    /// tab under someone's hands.
+    static func landsOnResult(panel: Bool, windowActive: Bool, editingAddress: Bool, sinceKey: TimeInterval) -> Bool {
+        panel && windowActive && !editingAddress && sinceKey >= typingPause
+    }
+
+    /// A key pressed this recently means someone is typing.
+    static let typingPause: TimeInterval = 2
+}
+
 /// How fast an agent's requests are taken: a few at once, then about five
 /// a second — a quick person's speed. Too fast and they wait their turn.
 struct AgentPace {
@@ -488,6 +555,12 @@ final class AgentSession: ObservableObject, Identifiable {
     fileprivate var stirred = Date()
     /// The tab it is working in now, wearing the dot (Tab.agentWorking).
     fileprivate weak var workingOn: Tab?
+    /// The tab it last worked in, kept after the dot goes (idle clears
+    /// `workingOn`): the one brought forward when its tabs are handed over.
+    fileprivate var lastWorked: Tab.ID?
+    /// The person said no to a site change (AgentGate's `leave`): its tabs
+    /// close when it ends, however it ends (AgentEnd.handsOver).
+    fileprivate var declined = false
 
     /// Why "Always allow" isn't offered, or nil when it is.
     var noAlways: String? {
@@ -514,7 +587,10 @@ final class AgentSession: ObservableObject, Identifiable {
     /// The tabs it opened, and the ones those opened.
     fileprivate(set) var own: Set<Tab.ID> = []
     /// The task's own cookie store: made with its first tab, shared by the tabs it
-    /// opens and those they open, and gone with them (AgentControl.end).
+    /// opens and those they open. Non-persistent, so nothing of it is ever on
+    /// disk. The session lets go of it when it ends (AgentControl.end); each
+    /// tab's web view keeps its own reference, so a store whose tabs were
+    /// handed over lives exactly as long as the last of them.
     fileprivate(set) var taskStore: WKWebsiteDataStore?
     /// The sites (registrable domains) this task has been to: what "leaving
     /// the task's sites" is measured from (AgentGate).
@@ -653,7 +729,7 @@ final class AgentControl: ObservableObject {
     }
 
     func stop() {
-        if let session { end(session, "\(Brand.name) stopped listening") }
+        if let session { end(session, .appStopped) }
         guard running else { return }
         accepting?.cancel()
         accepting = nil
@@ -707,7 +783,7 @@ final class AgentControl: ObservableObject {
         // place: hello within a few seconds, or it is let go.
         DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self, weak session] in
             guard let self, let session, self.session === session, !session.greeted else { return }
-            end(session, "it said nothing")
+            end(session, .silent)
         }
         Self.log.notice("connected: \(session.program, privacy: .public)")
     }
@@ -741,7 +817,7 @@ final class AgentControl: ObservableObject {
         var chunk = [UInt8](repeating: 0, count: 65536)
         let count = Darwin.read(session.fd, &chunk, chunk.count)
         if count <= 0 {
-            if count == 0 || errno != EAGAIN { end(session, "the connection closed") }
+            if count == 0 || errno != EAGAIN { end(session, .connectionClosed) }
             return
         }
         session.bytes.append(contentsOf: chunk[0..<count])
@@ -749,7 +825,7 @@ final class AgentControl: ObservableObject {
         // not something a person's pace explains.
         if session.bytes.count > 1_000_000 || session.inbox.count > 32 {
             say(AgentRefusal(code: "too_much", message: "Too much at once").said, to: session)
-            end(session, "it sent too much")
+            end(session, .tooMuch)
             return
         }
         while let newline = session.bytes.firstIndex(of: 0x0A) {
@@ -772,7 +848,7 @@ final class AgentControl: ObservableObject {
         session.outbox.append(out)
         guard session.outbox.count <= Self.most else {
             session.outbox = Data()
-            end(session, "it stopped reading")
+            end(session, .notReading)
             return
         }
         flush(session)
@@ -785,7 +861,7 @@ final class AgentControl: ObservableObject {
             if sent > 0 { session.outbox.removeFirst(sent); continue }
             if sent < 0, errno == EAGAIN { break }
             session.outbox = Data()
-            if self.session === session, session.consent.state != .ended { end(session, "the connection closed") }
+            if self.session === session, session.consent.state != .ended { end(session, .connectionClosed) }
             return
         }
         if session.outbox.isEmpty {
@@ -891,19 +967,20 @@ final class AgentControl: ObservableObject {
 
     /// Stop: the column's foot, the strip, File › Stop Agent.
     func stopSession() {
-        if let session { end(session, "stopped from the window") }
+        if let session { end(session, .stopped) }
     }
 
-    private func end(_ session: AgentSession, _ why: String) {
+    private func end(_ session: AgentSession, _ how: AgentEnd) {
         guard self.session === session else { return }
         let was = session.consent.state
+        let stopped = how == .stopped
         // Stopped, let in without asking or not: never let in again without
         // asking, until you tick "Always allow" for it again in the question.
-        if why.hasPrefix("stopped"), was == .allowed, session.panel {
+        if stopped, was == .allowed, session.panel {
             // The panel's run: not let in again until your next Send.
             if let pass = session.offeredPass { panelArm(pass: pass, false) }
             Self.log.notice("stopped: the panel's Claude is let in again only by your next message")
-        } else if why.hasPrefix("stopped"), was == .allowed {
+        } else if stopped, was == .allowed {
             AgentTrust.shared.suspend(client: session.client, also: session.admittedBy)
             Self.log.notice("stopped: \(session.client, privacy: .public) is asked about again from now on")
         }
@@ -911,7 +988,9 @@ final class AgentControl: ObservableObject {
         session.hello = nil
         // Nothing asked is left waiting on a session that has gone.
         session.held?.resolve(.declined)
-        closeTaskTabs(session)
+        let handsOver = how.handsOver(declined: session.declined)
+        lastEnd = ["how": how.why, "handedOver": handsOver]
+        if handsOver { handOverTaskTabs(session) } else { closeTaskTabs(session) }
         session.consent.end()
         // What was said last goes if the socket takes it now; nothing waits.
         flush(session)
@@ -929,10 +1008,21 @@ final class AgentControl: ObservableObject {
         shownIn = nil
         // A question you said no to, walked away from, or an agent you
         // stopped, doesn't come straight back.
-        if was == .refused || was == .asking || (was == .allowed && why.hasPrefix("stopped")) {
+        if was == .refused || was == .asking || (was == .allowed && stopped) {
             quietUntil = Date().addingTimeInterval(Self.quiet)
         }
-        Self.log.notice("ended: \(why, privacy: .public)")
+        Self.log.notice("ended: \(how.why, privacy: .public), its tabs \(handsOver ? "handed over" : "closed", privacy: .public)")
+    }
+
+    /// How the last session ended, for the bench's `agents`.
+    private(set) var lastEnd: [String: Any] = [:]
+
+    /// The side panel's Stop, pressed while its turn runs (ClaudeSession.stop):
+    /// the person's Stop, so the run's tabs close, rather than the program
+    /// going being taken for a task that finished.
+    func panelStopped(pass: String) {
+        guard let session, session.panel, let offered = session.offeredPass, PanelRun.same(offered, pass) else { return }
+        end(session, .stopped)
     }
 
     /// Whether a session may still act: the one there is, and allowed.
@@ -1056,7 +1146,7 @@ final class AgentControl: ObservableObject {
             hello?(AgentRefusal(code: "not_allowed", message: "You were not allowed to use \(Brand.name)").said)
             // Said, then gone.
             DispatchQueue.main.async { [weak self, weak session] in
-                if let self, let session { self.end(session, "not allowed") }
+                if let self, let session { self.end(session, .notAllowed) }
             }
         }
     }
@@ -1208,7 +1298,7 @@ final class AgentControl: ObservableObject {
             // needs Search, rather than taking it for Stop.
             say(["error": ["code": "idle", "message": "Let go after a while with nothing asked",
                            "hint": "Connect again when you next need \(Brand.name)."]], to: session)
-            end(session, "idle")
+            end(session, .idle)
         }
     }
 
@@ -1216,6 +1306,7 @@ final class AgentControl: ObservableObject {
     private func work(on tab: Tab?, _ session: AgentSession) {
         if let before = session.workingOn, before !== tab { before.agentWorking = false }
         session.workingOn = tab
+        if let tab { session.lastWorked = tab.id }
         if let tab, !tab.agentWorking { tab.agentWorking = true }
     }
 
@@ -1231,11 +1322,25 @@ final class AgentControl: ObservableObject {
         return page.convert(page.bounds, to: nil).intersects(spot)
     }
 
+    /// Each handed-over tab still open: whether it is in front, and whether
+    /// its store is still the task's own (never on disk) rather than yours.
+    private var handedState: [[String: Any]] {
+        Browsers.all.flatMap { browser in
+            browser.tabs.filter { handed.contains($0.id) }.map { tab -> [String: Any] in
+                ["id": Bench.short(tab), "title": tab.title, "active": tab.id == browser.activeID,
+                 "persistent": tab.store.isPersistent, "agent": tab.agent, "working": tab.agentWorking]
+            }
+        }
+    }
+
     /// For the bench's `agents`.
     var state: [String: Any] {
         // Every tab wearing the dot, in every window.
         let marked = Browsers.all.flatMap(\.tabs).filter(\.agentWorking).map { Bench.short($0) }
-        guard let session else { return ["running": running, "connected": false, "pillDrawn": stopButton?.window != nil, "marked": marked] }
+        guard let session else {
+            return ["running": running, "connected": false, "pillDrawn": stopButton?.window != nil, "marked": marked,
+                    "lastEnd": lastEnd, "handed": handedState]
+        }
         let state: String = switch session.consent.state {
         case .connected: "connected"
         case .asking: "asking"
@@ -1246,7 +1351,7 @@ final class AgentControl: ObservableObject {
         return ["running": running, "connected": true, "state": state, "client": session.client,
                 "program": session.program, "seesTabs": session.consent.seesTabs, "wantsTabs": session.wantsTabs,
                 "drawn": allowButton?.window != nil && tabsBox?.window != nil,
-                "own": session.own.count, "held": session.held?.hold.summary ?? "", "heldReason": session.held?.hold.reason.rawValue ?? "",
+                "own": session.own.count, "declined": session.declined, "lastEnd": lastEnd, "handed": handedState, "held": session.held?.hold.summary ?? "", "heldReason": session.held?.hold.reason.rawValue ?? "",
                 "auto": session.auto, "panel": session.panel, "justAdmitted": session.justAdmitted, "admissions": admissions, "wantsAlways": session.wantsAlways,
                 "offersAlways": session.noAlways == nil, "noAlways": session.noAlways ?? "",
                 "alwaysDrawn": alwaysBox?.window != nil, "busy": session.busy,
@@ -1295,12 +1400,21 @@ final class AgentControl: ObservableObject {
         guard let session, let held = session.held,
               AgentRules.isClick(event, on: approve ? approveButton : declineButton, in: session.browser?.window, after: held.since + 0.5)
         else { return }
+        if !approve { heardNo(to: held, in: session) }
         held.resolve(approve && live(session) ? .approved : .declined)
+    }
+
+    /// The person's own Don't Approve to taking it to another site: as good
+    /// as Stop for its tabs, which close when it ends (AgentEnd.handsOver).
+    /// Only theirs: a question left unanswered, or the session going, is not.
+    private func heardNo(to held: HeldAction, in session: AgentSession) {
+        if held.hold.reason == .leave { session.declined = true }
     }
 
     /// For the bench's `agents`, in a test run.
     func answerHeldForTest(approve: Bool) {
-        guard Store.testing, let held = session?.held else { return }
+        guard Store.testing, let session, let held = session.held else { return }
+        if !approve { heardNo(to: held, in: session) }
         held.resolve(approve ? .approved : .declined)
     }
 
@@ -1312,6 +1426,53 @@ final class AgentControl: ObservableObject {
         return AgentRefusal(code: "declined", message: "The person did not approve this: \(hold.summary)",
                             hint: "Don't try it again or another way round. Tell them what you wanted to do and why, and carry on with the rest.").said
     }
+
+    /// Tabs a finished task handed over (handOverTaskTabs): the person's now,
+    /// still in the task's own store. For the row's mark and the bench.
+    @Published private(set) var handed: Set<Tab.ID> = []
+
+    /// The task finished: its tabs stay, as the person's. They leave `own`
+    /// and every handle, so nothing it said can reach them again (a later
+    /// agent sees them as the person's: read at most, if let see tabs, never
+    /// driven). They stay bench tabs in the task's store, so nothing of the
+    /// person's (saved passwords: Browser's `!tab.agent` checks; cookies: the
+    /// store) comes into them, and they are never written into the session
+    /// or ⇧⌘T (Browser.kept, remember). The session lets go of the store;
+    /// the tabs' web views hold it, so it goes with the last of them and,
+    /// being non-persistent, never touched the disk.
+    private func handOverTaskTabs(_ session: AgentSession) {
+        guard session.taskStore != nil else { return }
+        let browser = session.browser.flatMap { browser in Browsers.all.first { $0 === browser } }
+        var landing: Tab?
+        var kept = handed.filter { id in Browsers.all.contains { $0.tabs.contains { $0.id == id } } }
+        for each in Browsers.all {
+            for tab in each.tabs where session.own.contains(tab.id) {
+                tab.agentWorking = false
+                kept.insert(tab.id)
+                // The one it last worked in; else the newest it opened, which
+                // is last in the row (benchOpen appends).
+                if each === browser, landing?.id != session.lastWorked { landing = tab }
+            }
+        }
+        handed = kept
+        session.own = []
+        session.pages = [:]
+        session.snaps = [:]
+        session.dialogs = [:]
+        session.newTabs = []
+        session.taskStore = nil
+        guard let browser, let landing else { return }
+        let active = activeForTest ?? (NSApp.isActive && browser.window?.isKeyWindow == true)
+        let sinceKey = activeForTest != nil ? .infinity
+            : CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .keyDown)
+        if AgentEnd.landsOnResult(panel: session.panel, windowActive: active, editingAddress: browser.editing, sinceKey: sinceKey) {
+            browser.select(landing)
+        }
+    }
+
+    /// The bench's, in a test run: the window taken as in front and nobody
+    /// typing (true) or not (false), for a hidden probe's window.
+    var activeForTest: Bool?
 
     /// The task is over: its tabs close, and the store they shared goes with
     /// them, cookies and all. Only with a task store: without one the tabs
@@ -1393,13 +1554,13 @@ final class AgentControl: ObservableObject {
                 ?? Browsers.all.first { $0.window?.isKeyWindow == true } ?? Browsers.primary
             guard session.browser != nil else {
                 refuse(AgentRefusal(code: "no_window", message: "\(Brand.name) has no window open"))
-                end(session, "no window")
+                end(session, .noWindow)
                 return
             }
             session.closing = NotificationCenter.default.addObserver(
                 forName: NSWindow.willCloseNotification, object: session.browser?.window, queue: .main
             ) { [weak self, weak session] _ in
-                MainActor.assumeIsolated { if let self, let session { self.end(session, "the window closed") } }
+                MainActor.assumeIsolated { if let self, let session { self.end(session, .windowClosed) } }
             }
             // Answered when you answer, or when it is found remembered.
             session.hello = answer
@@ -1420,7 +1581,7 @@ final class AgentControl: ObservableObject {
         }
         guard let browser = session.browser, Browsers.all.contains(where: { $0 === browser }) else {
             refuse(AgentRefusal(code: "stopped", message: "Its window was closed"))
-            end(session, "the window closed")
+            end(session, .windowClosed)
             return
         }
         do {
@@ -1537,7 +1698,7 @@ final class AgentControl: ObservableObject {
                 try shot(request, session, browser, answer)
             case "bye":
                 answer(["bye": true])
-                DispatchQueue.main.async { [weak self] in self?.end(session, "it said goodbye") }
+                DispatchQueue.main.async { [weak self] in self?.end(session, .bye) }
             default:
                 throw AgentRefusal(code: "no_verb", message: "\(Brand.name) doesn't do “\(verb)” for an agent")
             }

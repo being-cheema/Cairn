@@ -105,7 +105,7 @@ private struct AgentStatusFace: View {
         CardButton(title: "Stop", act: { AgentControl.shared.stopSession() }) {
             ClickSpot { AgentControl.shared.stopButton = $0 }
         }
-        .shortcutHelp("Disconnect it. Its tabs stay where they are.", "file.stopAgent")
+        .shortcutHelp("Disconnect it and close its tabs. A task it finishes leaves its tabs to you.", "file.stopAgent")
     }
 
     /// Let in without asking: always said, said out loud for a few seconds.
@@ -145,7 +145,7 @@ private struct AgentStatusFace: View {
         )
         .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
         .onHover { hovering = $0 }
-        .help(AgentWords.short(session) + ". Stop disconnects it; its tabs stay.")
+        .help(AgentWords.short(session) + ". Stop disconnects it and closes its tabs.")
         .animation(Motion.quick, value: hovering)
     }
 
@@ -182,7 +182,7 @@ private struct AgentStatusFace: View {
         .contentShape(Capsule())
         .fixedSize()
         .onHover { hovering = $0 }
-        .help(AgentWords.short(session) + ". Stop disconnects it; its tabs stay.")
+        .help(AgentWords.short(session) + ". Stop disconnects it and closes its tabs.")
         .animation(Motion.quick, value: hovering)
     }
 }
@@ -191,9 +191,13 @@ private struct AgentStatusFace: View {
 /// for it: while the agent works there, a small dot in the accent colour;
 /// otherwise, for as long as the tab is open, a fainter hollow ring, so a
 /// tab an agent opened is always told from yours. Each ringed with the row's
-/// ground so it reads on any icon.
+/// ground so it reads on any icon. The ring stays on a tab a finished task
+/// handed to you (AgentControl.handOverTaskTabs): it is yours now, but still
+/// in the task's own cookie store, signed in as nobody, and that is worth
+/// telling apart from a tab of your own.
 struct AgentMark: View {
     @ObservedObject var tab: Tab
+    @ObservedObject private var agents = AgentControl.shared
 
     var body: some View {
         if tab.agentWorking {
@@ -214,7 +218,9 @@ struct AgentMark: View {
                 .background(Circle().fill(Palette.ground))
                 .offset(x: 3, y: 3)
                 .allowsHitTesting(false)
-                .help("Opened by a coding agent")
+                .help(agents.handed.contains(tab.id)
+                      ? "Opened by a coding agent, now yours: its own cookies, gone when it closes"
+                      : "Opened by a coding agent")
         }
     }
 }

@@ -22,7 +22,7 @@ final class ClaudePanelWordsTests: XCTestCase {
     }
 
     func testDisconnectIsSaidAsWhatItDoes() {
-        XCTAssertEqual(ClaudeCode.describe(tool: "mcp__search__disconnect"), "Closing its tabs")
+        XCTAssertEqual(ClaudeCode.describe(tool: "mcp__search__disconnect"), "Leaving its tabs to you")
     }
 
     func testEarlierStepsAreCountedInGoodEnglish() {

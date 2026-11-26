@@ -75,6 +75,9 @@ enum ClaudeCode {
             parts.append("Before anything that sends, pays, posts or downloads, stop, say what you are about to do, and wait for the person to say yes.")
         }
         parts.append("A page read that says it was truncated has more: read again from the offset it gives. Answers may also say a page opened a tab (new_tabs) or asked a dialog (dialogs).")
+        // The tabs outlive the task now (AgentControl.handOverTaskTabs): the
+        // model is told so, or it says the result is somewhere it can't see.
+        parts.append("When the whole task is done, call disconnect: your tabs then stay open as the person's, and you can no longer use them, so disconnect only at the end. In your answer name the tab that holds the result by its title, such as \"the YouTube tab\"; never say it is behind or in front of another tab, which you cannot see. If the task is something to watch or listen to, leave it playing.")
         parts.append("Be quick: do not narrate each step. Answer in short plain text, with no markdown.")
         return parts.joined(separator: " ")
     }
@@ -301,8 +304,8 @@ enum ClaudeCode {
             "screenshot": "Looking at the page",
             "press": "Pressing a key",
             "scroll": "Scrolling",
-            // It is done with the browser: its tabs close.
-            "disconnect": "Closing its tabs",
+            // It is done with the browser: its tabs stay, as the person's.
+            "disconnect": "Leaving its tabs to you",
         ]
         if let host = site(input?["url"] as? String) {
             switch bare {

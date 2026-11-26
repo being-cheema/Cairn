@@ -654,6 +654,10 @@ final class Bench {
             case "idle":
                 agents.idleForTest = request["after"] as? Double
                 agents.letGoForTest = request["letGo"] as? Double
+            // A hidden probe's window is never in front: taken as in front
+            // and nobody typing (true), as not (false), or as it is (absent),
+            // for whether a finished task's tab is brought forward.
+            case "front": agents.activeForTest = request["on"] as? Bool
             case "deny": agents.answerForTest(allow: false, seesTabs: false)
             // A held action (AgentGate): answered as its buttons would be,
             // or the Approve button pressed with no click behind it, which

@@ -375,6 +375,62 @@ final class AgentControlTests: XCTestCase {
         return try XCTUnwrap(JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any])
     }
 
+    // MARK: - how a task ends
+
+    /// A task that finished leaves its tabs to the person; their Stop, a No
+    /// to another site, quitting, a window going or a program that misbehaved
+    /// closes them.
+    func testAFinishedTaskHandsOverItsTabsAndStopClosesThem() {
+        for how: AgentEnd in [.bye, .connectionClosed, .idle] {
+            XCTAssertTrue(how.handsOver(declined: false), how.why)
+            XCTAssertFalse(how.handsOver(declined: true), "\(how.why), after the person said no to a site change")
+        }
+        for how: AgentEnd in [.stopped, .appStopped, .windowClosed, .noWindow, .silent, .tooMuch, .notReading, .notAllowed] {
+            XCTAssertFalse(how.handsOver(declined: false), how.why)
+            XCTAssertFalse(how.handsOver(declined: true), how.why)
+        }
+        // Stop's own words still begin as before, for the log.
+        XCTAssertTrue(AgentEnd.stopped.why.hasPrefix("stopped"))
+    }
+
+    /// The tab it last worked in comes forward only for the panel's run, in
+    /// a window you are in, with nobody typing or in the address field.
+    func testTheResultIsBroughtForwardOnlyWhenNobodyIsTyping() {
+        XCTAssertTrue(AgentEnd.landsOnResult(panel: true, windowActive: true, editingAddress: false, sinceKey: 10))
+        XCTAssertFalse(AgentEnd.landsOnResult(panel: false, windowActive: true, editingAddress: false, sinceKey: 10), "a program in a terminal")
+        XCTAssertFalse(AgentEnd.landsOnResult(panel: true, windowActive: false, editingAddress: false, sinceKey: 10), "you are elsewhere")
+        XCTAssertFalse(AgentEnd.landsOnResult(panel: true, windowActive: true, editingAddress: true, sinceKey: 10), "typing an address")
+        XCTAssertFalse(AgentEnd.landsOnResult(panel: true, windowActive: true, editingAddress: false, sinceKey: 0.5), "typing into a page")
+    }
+
+    /// The panel's Stop is the person's Stop only for the run it is: another
+    /// pass, or no session at all, ends nothing.
+    func testThePanelsStopIsOnlyForItsOwnRun() {
+        let control = AgentControl.shared
+        XCTAssertNil(control.session)
+        control.panelStopped(pass: PanelRun.newPass())
+        XCTAssertNil(control.session)
+        XCTAssertEqual(control.state["connected"] as? Bool, false)
+    }
+
+    /// The model is told its tabs stay for the person, to name the tab by its
+    /// title and not guess where it is, and to leave a video playing.
+    func testTheModelIsToldItsTabsStay() throws {
+        let brief = ClaudeCode.brief()
+        XCTAssertTrue(brief.contains("call disconnect"))
+        XCTAssertTrue(brief.contains("stay open as the person's"))
+        XCTAssertTrue(brief.contains("by its title"))
+        XCTAssertTrue(brief.contains("never say it is behind"))
+        XCTAssertTrue(brief.contains("leave it playing"))
+        let script = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("search-mcp")
+        let text = try String(contentsOf: script, encoding: .utf8)
+        XCTAssertTrue(text.contains("your tabs then stay"))
+        XCTAssertTrue(text.contains("don't say it is behind"))
+        XCTAssertTrue(text.contains("leave it"))
+        XCTAssertFalse(text.contains("new tab of your own, behind the person's"), "the tab may well be in front by the end")
+    }
+
     func testSecretValuesNeverLeaveThePage() async throws {
         let web = try await page("""
             <!doctype html><title>secrets</title>

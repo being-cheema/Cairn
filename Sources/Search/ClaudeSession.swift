@@ -153,6 +153,10 @@ final class ClaudeSession: ObservableObject {
     /// Ends the run, for Stop, for closing the panel, for a window going.
     func stop() {
         let wasRunning = running
+        // Stopped mid-turn: the person's Stop, said to AgentControl before
+        // the program goes, so its tabs close. Its socket closing alone would
+        // read as a task that finished, whose tabs are handed over.
+        if wasRunning, !pass.isEmpty { AgentControl.shared.panelStopped(pass: pass) }
         generation += 1
         let live = process
         process = nil
