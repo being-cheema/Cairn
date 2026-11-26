@@ -354,6 +354,8 @@ struct SiteCard: View {
     /// One step in: the connection, said in full.
     @State private var deeper: Bool
     @State private var showingPermissions = false
+    /// One step in: Inspect Style (PageStyle).
+    @State private var showingStyle = false
     @ObservedObject private var notifications = SiteNotifications.shared
     /// Whether this Mac trusts the site's certificate. Unknown until it has
     /// been asked, off the main thread: asking can go to the network.
@@ -369,7 +371,9 @@ struct SiteCard: View {
 
     var body: some View {
         Group {
-            if showingPermissions {
+            if showingStyle {
+                SiteStyleCard(tab: tab) { showingStyle = false }
+            } else if showingPermissions {
                 permissions
             } else if deeper, let safety {
                 security(safety)
@@ -414,7 +418,11 @@ struct SiteCard: View {
             if let url = tab.pageAddress, ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
                 Row("Site Permissions", submenu: true) { showingPermissions = true }
             }
+            if tab.built != nil, ["http", "https"].contains(tab.pageAddress?.scheme?.lowercased() ?? "") {
+                Row("Inspect Style", submenu: true) { showingStyle = true }
+            }
             sound
+            agents
             grounded
             darken
             if DevMode.host(of: tab.pageAddress) != nil {
@@ -482,6 +490,25 @@ struct SiteCard: View {
                 Separator()
                 Row("Back") { showingPermissions = false }
             }
+        }
+    }
+
+    /// Whether agents are refused this site (VaultedSites). Not in a private
+    /// tab: agents never see one, and the list would remember where you were.
+    @ViewBuilder private var agents: some View {
+        if !tab.shy, let url = tab.pageAddress, ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
+            HStack(spacing: 0) {
+                Text("Block Agents on This Site").font(MenuMetrics.font).fixedSize()
+                Spacer(minLength: 24)
+                Switch(on: Binding(
+                    get: { VaultedSites.blocks(url, in: prefs.vaultedSites) },
+                    set: { prefs.vaultedSites = VaultedSites.setting($0, for: url, in: prefs.vaultedSites) }
+                ))
+            }
+            .padding(.leading, MenuMetrics.text)
+            .padding(.trailing, MenuMetrics.trailing)
+            .frame(height: MenuMetrics.row)
+            .help("Claude and other agents can't open or read \(VaultedSites.entry(for: url) ?? "this site") or its subdomains")
         }
     }
 

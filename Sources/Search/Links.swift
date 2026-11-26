@@ -143,6 +143,12 @@ final class Links: NSObject, NSApplicationDelegate {
     /// window is asked for here instead; started hidden, it stays hidden
     /// with the app until the app is shown.
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // The pages you asked to be told about, and a click on what they
+        // said. Nothing at all with none.
+        if PageWatches.shared.on, !PageWatches.shared.watches.isEmpty {
+            SiteNotifications.shared.authorize()
+            PageWatches.shared.schedule()
+        }
         // SwiftUI opens its window at launch, a link's launch included, and
         // asks nobody first (applicationShouldOpenUntitledFile isn't
         // consulted). A launch made for a small window came to read it alone,

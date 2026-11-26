@@ -233,6 +233,14 @@
 		A6F600000000000000000003 /* HostBlock.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6F600000000000000010003 /* HostBlock.swift */; };
 		A6F600000000000000000002 /* PagePerception.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6F600000000000000010002 /* PagePerception.swift */; };
 		A6F600000000000000000001 /* Quarantine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6F600000000000000010001 /* Quarantine.swift */; };
+		A50000000000000000000102 /* VaultedSites.swift in Sources */ = {isa = PBXBuildFile; fileRef = A50000000000000000000101 /* VaultedSites.swift */; };
+		A50000000000000000000202 /* PageMarkdown.swift in Sources */ = {isa = PBXBuildFile; fileRef = A50000000000000000000201 /* PageMarkdown.swift */; };
+		A50000000000000000000302 /* PageWords.swift in Sources */ = {isa = PBXBuildFile; fileRef = A50000000000000000000301 /* PageWords.swift */; };
+		A50000000000000000000402 /* PinChanges.swift in Sources */ = {isa = PBXBuildFile; fileRef = A50000000000000000000401 /* PinChanges.swift */; };
+		A50000000000000000000502 /* PageWatch.swift in Sources */ = {isa = PBXBuildFile; fileRef = A50000000000000000000501 /* PageWatch.swift */; };
+		A50000000000000000000602 /* PageStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = A50000000000000000000601 /* PageStyle.swift */; };
+		A50000000000000000000702 /* Narration.swift in Sources */ = {isa = PBXBuildFile; fileRef = A50000000000000000000701 /* Narration.swift */; };
+		A50000000000000000000802 /* CairnIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = A50000000000000000000801 /* CairnIntents.swift */; };
 		B6A0B02B06405B0FBF3CB5E9 /* TypedSecrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6C3B868D0819A0B7AE031C4 /* TypedSecrets.swift */; };
 		9D2C9065DF44CC32FF0077D7 /* DevMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59E3FF9BE7E973360ADB59FB /* DevMode.swift */; };
 		8876C68DDD1C474BF39C5446 /* DownloadFlight.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58A41799D93C0FF273CD2F2B /* DownloadFlight.swift */; };
@@ -442,6 +450,14 @@
 		A6F600000000000000010003 /* HostBlock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HostBlock.swift; path = Sources/Search/HostBlock.swift; sourceTree = SOURCE_ROOT; };
 		A6F600000000000000010002 /* PagePerception.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PagePerception.swift; path = Sources/Search/PagePerception.swift; sourceTree = SOURCE_ROOT; };
 		A6F600000000000000010001 /* Quarantine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Quarantine.swift; path = Sources/Search/Quarantine.swift; sourceTree = SOURCE_ROOT; };
+		A50000000000000000000101 /* VaultedSites.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = VaultedSites.swift; path = Sources/Search/VaultedSites.swift; sourceTree = SOURCE_ROOT; };
+		A50000000000000000000201 /* PageMarkdown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PageMarkdown.swift; path = Sources/Search/PageMarkdown.swift; sourceTree = SOURCE_ROOT; };
+		A50000000000000000000301 /* PageWords.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PageWords.swift; path = Sources/Search/PageWords.swift; sourceTree = SOURCE_ROOT; };
+		A50000000000000000000401 /* PinChanges.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PinChanges.swift; path = Sources/Search/PinChanges.swift; sourceTree = SOURCE_ROOT; };
+		A50000000000000000000501 /* PageWatch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PageWatch.swift; path = Sources/Search/PageWatch.swift; sourceTree = SOURCE_ROOT; };
+		A50000000000000000000601 /* PageStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PageStyle.swift; path = Sources/Search/PageStyle.swift; sourceTree = SOURCE_ROOT; };
+		A50000000000000000000701 /* Narration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Narration.swift; path = Sources/Search/Narration.swift; sourceTree = SOURCE_ROOT; };
+		A50000000000000000000801 /* CairnIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CairnIntents.swift; path = Sources/Search/CairnIntents.swift; sourceTree = SOURCE_ROOT; };
 		F6C3B868D0819A0B7AE031C4 /* TypedSecrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TypedSecrets.swift; path = Sources/Search/TypedSecrets.swift; sourceTree = SOURCE_ROOT; };
 		59E3FF9BE7E973360ADB59FB /* DevMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DevMode.swift; path = Sources/Search/DevMode.swift; sourceTree = SOURCE_ROOT; };
 		58A41799D93C0FF273CD2F2B /* DownloadFlight.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DownloadFlight.swift; path = Sources/Search/DownloadFlight.swift; sourceTree = SOURCE_ROOT; };
@@ -654,6 +670,14 @@
 				A6F600000000000000010003 /* HostBlock.swift */,
 				A6F600000000000000010002 /* PagePerception.swift */,
 				A6F600000000000000010001 /* Quarantine.swift */,
+				A50000000000000000000101 /* VaultedSites.swift */,
+				A50000000000000000000201 /* PageMarkdown.swift */,
+				A50000000000000000000301 /* PageWords.swift */,
+				A50000000000000000000401 /* PinChanges.swift */,
+				A50000000000000000000501 /* PageWatch.swift */,
+				A50000000000000000000601 /* PageStyle.swift */,
+				A50000000000000000000701 /* Narration.swift */,
+				A50000000000000000000801 /* CairnIntents.swift */,
 				F6C3B868D0819A0B7AE031C4 /* TypedSecrets.swift */,
 				59E3FF9BE7E973360ADB59FB /* DevMode.swift */,
 				58A41799D93C0FF273CD2F2B /* DownloadFlight.swift */,
@@ -1028,6 +1052,14 @@
 				A6F600000000000000000003 /* HostBlock.swift in Sources */,
 				A6F600000000000000000002 /* PagePerception.swift in Sources */,
 				A6F600000000000000000001 /* Quarantine.swift in Sources */,
+				A50000000000000000000102 /* VaultedSites.swift in Sources */,
+				A50000000000000000000202 /* PageMarkdown.swift in Sources */,
+				A50000000000000000000302 /* PageWords.swift in Sources */,
+				A50000000000000000000402 /* PinChanges.swift in Sources */,
+				A50000000000000000000502 /* PageWatch.swift in Sources */,
+				A50000000000000000000602 /* PageStyle.swift in Sources */,
+				A50000000000000000000702 /* Narration.swift in Sources */,
+				A50000000000000000000802 /* CairnIntents.swift in Sources */,
 				B6A0B02B06405B0FBF3CB5E9 /* TypedSecrets.swift in Sources */,
 				9D2C9065DF44CC32FF0077D7 /* DevMode.swift in Sources */,
 				8876C68DDD1C474BF39C5446 /* DownloadFlight.swift in Sources */,

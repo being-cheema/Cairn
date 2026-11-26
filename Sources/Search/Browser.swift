@@ -1805,6 +1805,10 @@ final class Browser: NSObject, ObservableObject {
             archive.clear()
             // So is where Claude's tasks went (TaskLedger).
             TaskLedger.removeAll()
+            // And the words kept of pinned pages (PinChanges).
+            PinChanges.shared.forgetAll()
+            // And the watched pages, a list of places you go (PageWatch).
+            PageWatches.shared.removeAll()
         }
         // What was read goes with where you have been. It isn't kept by
         // space, so clearing one space's history clears all of it.
@@ -2279,6 +2283,8 @@ final class Browser: NSObject, ObservableObject {
     /// out among the tabs whole (see unpinDropped), and for this function
     /// on its way through a pair's other members.
     func unpin(_ tab: Tab, keepingSplit: Bool = false) {
+        // What was kept of its page goes with the pin.
+        if let home = tab.home { PinChanges.shared.forget(home) }
         // The row is drawn again whether or not the tab moves. Unpinning the
         // only tab, or the last pin, leaves it where it is; `tabs` didn't
         // change, only the tab did, and the column went on drawing it as a
@@ -10060,6 +10066,8 @@ extension Browser: WKNavigationDelegate, WKUIDelegate {
         guard let tab = anyTab(for: webView), let url = tab.address else { return }
         let typed = typedTo.removeValue(forKey: tab.id)
         tab.uncover()
+        // A pin's words, held against what you last saw, when that is on.
+        PinChanges.shared.loaded(tab)
         // And again once it has all come in, for a page that drew its look
         // late, or never had a first frame to say so.
         duskLook(tab)

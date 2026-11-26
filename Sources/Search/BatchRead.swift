@@ -65,6 +65,8 @@ enum BatchRead {
             case .failure(.notWeb):
                 return .failure(AgentRefusal(code: "refused_address", message: "Address \(index + 1): only http and https addresses",
                                              hint: "Nothing was opened."))
+            case .failure(.blockedByPerson):
+                return .failure(blocked)
             case .failure(.privateAddress):
                 return .failure(AgentRefusal(code: "private_address", message: "Address \(index + 1): not this Mac or a private network",
                                              hint: "Nothing was opened."))

@@ -80,13 +80,19 @@ struct Page: View {
                     .transition(.asymmetric(insertion: .identity, removal: .opacity))
             }
 
-            if tab.reader, Shared.prefs.readerFollowsLook {
-                // One for each tab: the look it shows is the one the tab's
-                // article wears.
-                ReaderLook(tab: tab)
-                    .id(tab.id)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                    .transition(.opacity)
+            if tab.reader {
+                HStack(alignment: .top, spacing: 0) {
+                    // Read aloud (Narration.swift).
+                    ListenControl(tab: tab)
+                        .padding(.top, 14)
+                        .padding(.trailing, Shared.prefs.readerFollowsLook ? 0 : 14)
+                    // One for each tab: the look it shows is the one the
+                    // tab's article wears.
+                    if Shared.prefs.readerFollowsLook { ReaderLook(tab: tab) }
+                }
+                .id(tab.id)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                .transition(.opacity)
             }
 
             if tab.floating {

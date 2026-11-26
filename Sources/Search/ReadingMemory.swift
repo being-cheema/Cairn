@@ -142,6 +142,14 @@ final class ReadingMemory: ObservableObject {
         objectWillChange.send()
     }
 
+    /// A site closed to agents: what was kept of it goes, as its pin
+    /// snapshots and watches do.
+    func forget(sites: Set<String>) {
+        guard !sites.isEmpty else { return }
+        index.remove { VaultedSites.blocks(URL(string: $0), in: sites) }
+        objectWillChange.send()
+    }
+
     /// History let go of one page.
     func forget(historyKey key: String) {
         index.remove { address in URL(string: address).map { History.identity(for: $0) == key } ?? false }

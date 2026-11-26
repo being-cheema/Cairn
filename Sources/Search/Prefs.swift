@@ -180,6 +180,32 @@ final class Preferences: ObservableObject {
     @Published var claudeModel: String? {
         didSet { store.set(claudeModel, forKey: "claude.model") }
     }
+    /// Sites closed to agents, each covering its subdomains (VaultedSites).
+    @Published var vaultedSites: Set<String> {
+        didSet {
+            store.set(Array(vaultedSites).sorted(), forKey: VaultedSites.key)
+            // Nothing already kept of a site stays once it is closed.
+            PinChanges.shared.forget(sites: vaultedSites)
+            PageWatches.shared.forget(sites: vaultedSites)
+            ReadingMemory.shared.forget(sites: vaultedSites)
+        }
+    }
+    /// Pages you pick, looked at again now and then (PageWatch). Off unless
+    /// turned on; turned off, the watches and their words are deleted.
+    @Published var watchesPages: Bool {
+        didSet {
+            store.set(watchesPages, forKey: PageWatches.key)
+            if !watchesPages { PageWatches.shared.removeAll() }
+        }
+    }
+    /// The words of pinned pages kept, to show what changed (PinChanges).
+    /// Off unless turned on; turned off, what was kept is deleted.
+    @Published var watchesPinChanges: Bool {
+        didSet {
+            store.set(watchesPinChanges, forKey: PinChanges.key)
+            if !watchesPinChanges { PinChanges.shared.forgetAll() }
+        }
+    }
     /// The panel's Task History (TaskLedger). On unless turned off.
     @Published var keepsTaskHistory: Bool {
         didSet { store.set(keepsTaskHistory, forKey: "claude.history") }
@@ -1435,6 +1461,9 @@ final class Preferences: ObservableObject {
         popupSites = Set(store.stringArray(forKey: "privacy.popupSites") ?? [])
         sleepsTabs = store.object(forKey: "tabs.sleep") as? Bool ?? true
         dimsSleepingTabs = store.bool(forKey: "tabs.sleep.dim")
+        vaultedSites = Set(store.stringArray(forKey: VaultedSites.key) ?? [])
+        watchesPinChanges = store.bool(forKey: PinChanges.key)
+        watchesPages = store.bool(forKey: PageWatches.key)
         hidesBack = store.bool(forKey: "helm.back.hidden")
         hidesForward = store.bool(forKey: "helm.forward.hidden")
         hidesReload = store.bool(forKey: "helm.reload.hidden")

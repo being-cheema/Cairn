@@ -154,6 +154,8 @@ struct SearchApp: App {
                     .disabled(browser.active?.isBlank ?? true)
                 Button("Copy Text from Image/Video") { browser.copyTextFromPage() }
                     .shortcut("edit.copyImageText")
+                Button("Copy Page as Markdown") { browser.copyPageAsMarkdown() }
+                    .shortcut("edit.copyMarkdown")
                     .disabled(!(browser.active?.isWeb ?? false))
                 Divider()
                 Button("Find on Page…") { browser.openFind() }

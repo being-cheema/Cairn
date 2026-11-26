@@ -139,7 +139,7 @@ enum AddressCommand: Equatable {
     ]
     /// Those the menu greys out without a web page in front.
     private static let needsPage: Set<String> = [
-        "file.share", "file.savePage", "file.exportPDF", "file.print", "edit.copyCleanLink", "view.reader",
+        "file.share", "file.savePage", "file.exportPDF", "file.print", "edit.copyCleanLink", "edit.copyMarkdown", "view.reader",
         "view.summarize", "view.ask", "tabs.duplicate", "tabs.copyAddress", "tabs.copyMarkdown", "bookmarks.add",
         "view.style", "view.developerMode",
     ]

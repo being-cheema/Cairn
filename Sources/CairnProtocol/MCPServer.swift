@@ -285,6 +285,25 @@ public final class MCPServer {
         }
     }
 
+    /// One resource, as a JSON-RPC result or error.
+    private func resource(_ uri: String) -> (key: String, value: Any) {
+        func no(_ code: Int, _ message: String, _ data: [String: Any] = [:]) -> (key: String, value: Any) {
+            var error: [String: Any] = ["code": code, "message": message]
+            if !data.isEmpty { error["data"] = data }
+            return ("error", error)
+        }
+        guard uri == MCPResources.latestArtifact else { return no(-32002, "no resource \(uri)") }
+        do {
+            let answer = try link.ask(["do": AgentVerb.latestArtifact.rawValue])
+            let text = answer["markdown"] as? String ?? ""
+            return ("result", ["contents": [["uri": uri, "mimeType": "text/markdown", "text": text]]])
+        } catch let refusal as MCPRefusal {
+            return no(-32002, refusal.message, refusal.said)
+        } catch {
+            return no(-32603, error.localizedDescription)
+        }
+    }
+
     /// The reply to one line from the client; nil for a notification.
     public func reply(to line: String) -> String? {
         func said(_ id: Any, _ key: String, _ value: Any) -> String {
@@ -305,12 +324,23 @@ public final class MCPServer {
             let asked = params["protocolVersion"] as? String ?? ""
             return said(id, "result", [
                 "protocolVersion": Self.versions.contains(asked) ? asked : Self.versions[Self.versions.count - 1],
-                "capabilities": ["tools": ["listChanged": false]],
+                "capabilities": ["tools": ["listChanged": false],
+                                 "resources": ["listChanged": false, "subscribe": false]],
                 "serverInfo": ["name": "search", "version": "0.2.0"],
                 "instructions": MCPTools.instructions,
             ] as [String: Any])
         case "ping":
             return said(id, "result", [String: Any]())
+        // Listing says what there is without reaching the browser, so nothing
+        // is asked of the person until something is read.
+        case "resources/list":
+            return said(id, "result", ["resources": MCPResources.all])
+        case "resources/templates/list":
+            return said(id, "result", ["resourceTemplates": [Any]()])
+        case "resources/read":
+            let uri = params["uri"] as? String ?? ""
+            let read = resource(uri)
+            return said(id, read.key, read.value)
         case "tools/list":
             return said(id, "result", ["tools": MCPTools.all.map(\.described)])
         case "tools/call":

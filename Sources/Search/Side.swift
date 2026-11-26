@@ -2235,6 +2235,7 @@ private struct PinSquare: View, Equatable {
         // it: from the icon, not the square (UnreadBadge).
         .unreadBadge(prefs.showsPinCounts && peek == nil && !lettering && shortcutNumbers[tab.id] == nil ? tab.unread : nil,
                      icon: scale * 16 / 34, ring: squareGround)
+        .pinChangeDot(tab)
         .frame(width: width, height: height)
         .background {
             Group {
@@ -2423,6 +2424,7 @@ private struct SideRow: View, Equatable {
                             // A coding agent at work here: a dot on the
                             // icon's corner, the row as it was.
                             .overlay(alignment: .bottomTrailing) { AgentMark(tab: tab) }
+                            .pinChangeDot(tab)
                             // A pinned row away from its page: the icon takes
                             // it back (PinIconHome).
                             .modifier(PinIconHome(browser: browser, tab: tab, enabled: interactive))
