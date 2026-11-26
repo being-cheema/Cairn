@@ -32,7 +32,7 @@ final class ClaudeSession: ObservableObject {
     enum Problem: Equatable {
         case notInstalled
         case notSigned
-        case noScript
+        case noServer
     }
 
     @Published private(set) var turns: [Turn] = []
@@ -54,7 +54,7 @@ final class ClaudeSession: ObservableObject {
 
     private let executable: URL?
     private let verify: (URL) -> Bool
-    private let script: URL?
+    private let tool: URL?
     private let world: String?
     private let options: () -> ClaudeCode.Options
     /// The window the panel is in: where the run works.
@@ -91,13 +91,13 @@ final class ClaudeSession: ObservableObject {
 
     init(executable: URL? = nil,
          verify: @escaping (URL) -> Bool = ClaudeCode.signedByAnthropic,
-         script: URL? = nil,
+         tool: URL? = nil,
          world: String? = Store.world,
          options: @escaping () -> ClaudeCode.Options = { ClaudeCode.Options() },
          window: @escaping () -> Browser? = { nil }) {
         self.executable = executable
         self.verify = verify
-        self.script = script
+        self.tool = tool
         self.world = world
         self.options = options
         self.window = window
@@ -195,7 +195,7 @@ final class ClaudeSession: ObservableObject {
         guard let claude = executable ?? ClaudeCode.locate(),
               FileManager.default.isExecutableFile(atPath: claude.path) else { problem = .notInstalled; return false }
         guard verify(claude) else { problem = .notSigned; return false }
-        guard let script = script ?? ClaudeCode.mcpScript() else { problem = .noScript; return false }
+        guard let tool = tool ?? ClaudeCode.mcpTool() else { problem = .noServer; return false }
 
         // A folder for this run alone, to be empty and to go.
         let files = FileManager.default
@@ -203,10 +203,10 @@ final class ClaudeSession: ObservableObject {
         let pass = PanelRun.newPass()
         do {
             try files.createDirectory(at: home, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
-            try ClaudeCode.mcpConfig(script: script, world: world, pass: pass).write(to: home.appendingPathComponent("mcp.json"))
+            try ClaudeCode.mcpConfig(tool: tool, world: world, pass: pass).write(to: home.appendingPathComponent("mcp.json"))
         } catch {
             try? files.removeItem(at: home)
-            problem = .noScript
+            problem = .noServer
             return false
         }
 

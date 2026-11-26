@@ -218,6 +218,11 @@
 		E4C2786B9086A18EA1020E87 /* IPhoneAsk.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FD176F37B4544CCB9EDC841 /* IPhoneAsk.swift */; };
 		E58C224827CC979B5BC5F173 /* FullScreenEscape.swift in Sources */ = {isa = PBXBuildFile; fileRef = 580DA494D5F4E469E98BD657 /* FullScreenEscape.swift */; };
 		E5CF896F2F0E502555C6BE2D /* AgentGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8379674D042E25B77B4480E7 /* AgentGate.swift */; };
+		B1C4896F2F0E502555C6BE2D /* MCPServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C4674D042E25B77B4480E7 /* MCPServer.swift */; };
+		B1C3896F2F0E502555C6BE2D /* MCPTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C3674D042E25B77B4480E7 /* MCPTools.swift */; };
+		B1C2896F2F0E502555C6BE2D /* CairnProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2674D042E25B77B4480E7 /* CairnProtocol.swift */; };
+		B1C1896F2F0E502555C6BE2D /* AgentWorkspaceCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C1674D042E25B77B4480E7 /* AgentWorkspaceCoordinator.swift */; };
+		B1C0896F2F0E502555C6BE2D /* NavigationPolicyEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0674D042E25B77B4480E7 /* NavigationPolicyEngine.swift */; };
 		A6E7896F2F0E502555C6BE2D /* AgentNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6E7674D042E25B77B4480E7 /* AgentNetwork.swift */; };
 		E671C21746C28EE6C4F7241C /* Pins.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F3CF3F2CBC60A521554ABC4 /* Pins.swift */; };
 		E74BD881B458E378ED82507F /* SyncDefault.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15472D7E05F336F040C90A58 /* SyncDefault.swift */; };
@@ -386,6 +391,11 @@
 		82911EA0E31E67F7D9E2AC5D /* SettingsIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SettingsIndex.swift; path = Sources/Search/SettingsIndex.swift; sourceTree = SOURCE_ROOT; };
 		82E59D50C2200C467315D4F9 /* ImageMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ImageMenu.swift; path = Sources/Search/ImageMenu.swift; sourceTree = SOURCE_ROOT; };
 		8379674D042E25B77B4480E7 /* AgentGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AgentGate.swift; path = Sources/Search/AgentGate.swift; sourceTree = SOURCE_ROOT; };
+		B1C4674D042E25B77B4480E7 /* MCPServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MCPServer.swift; path = Sources/CairnProtocol/MCPServer.swift; sourceTree = SOURCE_ROOT; };
+		B1C3674D042E25B77B4480E7 /* MCPTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MCPTools.swift; path = Sources/CairnProtocol/MCPTools.swift; sourceTree = SOURCE_ROOT; };
+		B1C2674D042E25B77B4480E7 /* CairnProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CairnProtocol.swift; path = Sources/CairnProtocol/CairnProtocol.swift; sourceTree = SOURCE_ROOT; };
+		B1C1674D042E25B77B4480E7 /* AgentWorkspaceCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AgentWorkspaceCoordinator.swift; path = Sources/Search/AgentWorkspaceCoordinator.swift; sourceTree = SOURCE_ROOT; };
+		B1C0674D042E25B77B4480E7 /* NavigationPolicyEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NavigationPolicyEngine.swift; path = Sources/Search/NavigationPolicyEngine.swift; sourceTree = SOURCE_ROOT; };
 		A6E7674D042E25B77B4480E7 /* AgentNetwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AgentNetwork.swift; path = Sources/Search/AgentNetwork.swift; sourceTree = SOURCE_ROOT; };
 		865962258517F28FBBBB3A1E /* ExtensionFiles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ExtensionFiles.swift; path = Sources/Search/ExtensionFiles.swift; sourceTree = SOURCE_ROOT; };
 		86B47BFC41F05D2F4CF351D7 /* AddressLine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AddressLine.swift; path = Sources/Search/AddressLine.swift; sourceTree = SOURCE_ROOT; };
@@ -557,6 +567,11 @@
 				BB9127E55C232A51DE422327 /* AgentBanner.swift */,
 				5A3B2EDD8D3157B85CF50D9B /* AgentControl.swift */,
 				8379674D042E25B77B4480E7 /* AgentGate.swift */,
+				B1C4674D042E25B77B4480E7 /* MCPServer.swift */,
+				B1C3674D042E25B77B4480E7 /* MCPTools.swift */,
+				B1C2674D042E25B77B4480E7 /* CairnProtocol.swift */,
+				B1C1674D042E25B77B4480E7 /* AgentWorkspaceCoordinator.swift */,
+				B1C0674D042E25B77B4480E7 /* NavigationPolicyEngine.swift */,
 				A6E7674D042E25B77B4480E7 /* AgentNetwork.swift */,
 				5823D466EE926E70B296D6B3 /* AgentTrust.swift */,
 				BB4E453056A92B43F0721E36 /* App.swift */,
@@ -890,6 +905,11 @@
 				38FA09E06371716F9CE55373 /* AgentBanner.swift in Sources */,
 				01744E61AC11FE472BB499F1 /* AgentControl.swift in Sources */,
 				E5CF896F2F0E502555C6BE2D /* AgentGate.swift in Sources */,
+				B1C4896F2F0E502555C6BE2D /* MCPServer.swift in Sources */,
+				B1C3896F2F0E502555C6BE2D /* MCPTools.swift in Sources */,
+				B1C2896F2F0E502555C6BE2D /* CairnProtocol.swift in Sources */,
+				B1C1896F2F0E502555C6BE2D /* AgentWorkspaceCoordinator.swift in Sources */,
+				B1C0896F2F0E502555C6BE2D /* NavigationPolicyEngine.swift in Sources */,
 				A6E7896F2F0E502555C6BE2D /* AgentNetwork.swift in Sources */,
 				B70BB4AC345B0166DB00BF21 /* AgentTrust.swift in Sources */,
 				9D5E1D0F3C4C7FC99ECD6D57 /* App.swift in Sources */,

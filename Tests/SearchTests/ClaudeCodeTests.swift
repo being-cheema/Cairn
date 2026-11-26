@@ -94,24 +94,24 @@ final class ClaudeCodeTests: XCTestCase {
         XCTAssertEqual(ClaudeCode.events(from: #"{"type":"stream_event","event":{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}}"#), [])
     }
 
-    func testTheMCPConfigNamesTheScriptAndATestWorld() throws {
+    func testTheMCPConfigRunsTheServerAndNamesATestWorld() throws {
         func servers(_ data: Data) throws -> [String: Any] {
             let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
             return try XCTUnwrap(object["mcpServers"] as? [String: Any])
         }
-        let script = URL(fileURLWithPath: "/x/search-mcp")
-        let plain = try servers(ClaudeCode.mcpConfig(script: script, world: nil))
+        let tool = URL(fileURLWithPath: "/x/cairn-mcp")
+        let plain = try servers(ClaudeCode.mcpConfig(tool: tool, world: nil))
         XCTAssertEqual(Set(plain.keys), ["search"])
         let one = try XCTUnwrap(plain["search"] as? [String: Any])
-        XCTAssertEqual(one["command"] as? String, "/usr/bin/python3")
-        XCTAssertEqual(one["args"] as? [String], ["/x/search-mcp"])
-        let test = try servers(ClaudeCode.mcpConfig(script: script, world: "probe"))
-        XCTAssertEqual((test["search"] as? [String: Any])?["args"] as? [String], ["/x/search-mcp", "--world", "probe"])
+        XCTAssertEqual(one["command"] as? String, "/x/cairn-mcp")
+        XCTAssertEqual(one["args"] as? [String], [])
+        let test = try servers(ClaudeCode.mcpConfig(tool: tool, world: "probe"))
+        XCTAssertEqual((test["search"] as? [String: Any])?["args"] as? [String], ["--world", "probe"])
         XCTAssertNil(one["env"], "no pass unless the panel made one")
-        let passed = try servers(ClaudeCode.mcpConfig(script: script, world: nil, pass: "abc"))
+        let passed = try servers(ClaudeCode.mcpConfig(tool: tool, world: nil, pass: "abc"))
         let entry = try XCTUnwrap(passed["search"] as? [String: Any])
         XCTAssertEqual(entry["env"] as? [String: String], [ClaudeCode.passVariable: "abc"], "in its environment")
-        XCTAssertEqual(entry["args"] as? [String], ["/x/search-mcp"], "never in its arguments")
+        XCTAssertEqual(entry["args"] as? [String], [], "never in its arguments")
     }
 
     func testAMessageIsOneLineOfJSON() throws {
@@ -154,17 +154,18 @@ final class ClaudeCodeTests: XCTestCase {
         XCTAssertFalse(ClaudeCode.signedByAnthropic(URL(fileURLWithPath: "/nonexistent/claude")))
     }
 
-    func testTheScriptIsFoundBesideAPackageFromTheBuildFolder() throws {
+    func testTheServerIsTheOneBesideTheApp() throws {
         let files = FileManager.default
         let root = files.temporaryDirectory.appendingPathComponent("mcp-\(UUID().uuidString)", isDirectory: true)
         defer { try? files.removeItem(at: root) }
-        let bin = root.appendingPathComponent(".build/arm64-apple-macosx/debug", isDirectory: true)
-        try files.createDirectory(at: bin, withIntermediateDirectories: true)
-        try Data().write(to: root.appendingPathComponent("Package.swift"))
-        try Data("#!/usr/bin/env python3\n".utf8).write(to: root.appendingPathComponent("search-mcp"))
-        let empty = try XCTUnwrap(Bundle(path: files.temporaryDirectory.path))
-        XCTAssertEqual(ClaudeCode.mcpScript(bundle: empty, executable: bin.appendingPathComponent("Search").path)?.lastPathComponent, "search-mcp")
-        XCTAssertNil(ClaudeCode.mcpScript(bundle: empty, executable: "/usr/bin/true"), "a search-mcp that is not a checkout's is not taken")
+        try files.createDirectory(at: root, withIntermediateDirectories: true)
+        let app = root.appendingPathComponent("Cairn").path
+        XCTAssertNil(ClaudeCode.mcpTool(executable: app), "none there")
+        let tool = root.appendingPathComponent("cairn-mcp")
+        try Data("#!/bin/sh\n".utf8).write(to: tool)
+        XCTAssertNil(ClaudeCode.mcpTool(executable: app), "not a program")
+        try files.setAttributes([.posixPermissions: 0o755], ofItemAtPath: tool.path)
+        XCTAssertEqual(ClaudeCode.mcpTool(executable: app)?.lastPathComponent, "cairn-mcp")
     }
 
     // MARK: - what it says

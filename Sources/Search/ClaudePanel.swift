@@ -176,8 +176,8 @@ struct ClaudePanel: View {
             return "Claude Code isn't on this Mac. Install it, run claude once in Terminal to sign in, and come back."
         case .notSigned:
             return "The claude program on this Mac isn't signed by Anthropic, so it isn't started."
-        case .noScript:
-            return "This copy of \(Brand.name) has no search-mcp to give Claude Code, so there is nothing for it to use."
+        case .noServer:
+            return "This copy of \(Brand.name) has no cairn-mcp to give Claude Code, so there is nothing for it to use."
         }
     }
 

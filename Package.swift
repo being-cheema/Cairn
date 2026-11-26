@@ -36,9 +36,22 @@ let package = Package(
             exclude: ["package.json"],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
+        // What the browser and the agent's MCP server say to each other, and
+        // that server.
+        .target(
+            name: "CairnProtocol",
+            path: "Sources/CairnProtocol",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+        .executableTarget(
+            name: "cairn-mcp",
+            dependencies: ["CairnProtocol"],
+            path: "Sources/cairn-mcp",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
         .executableTarget(
             name: "Search",
-            dependencies: ["SearchPluginAPI"],
+            dependencies: ["SearchPluginAPI", "CairnProtocol"],
             path: "Sources/Search",
             // Same reasoning as the canvas app next door: the whole interface is
             // main-thread by nature, and Swift 6's strict isolation buys nothing
@@ -53,7 +66,8 @@ let package = Package(
         ),
         .testTarget(
             name: "SearchTests",
-            dependencies: ["Search", "NoWindows"],
+            // cairn-mcp so that its tests have it built, to run as an agent would.
+            dependencies: ["Search", "NoWindows", "CairnProtocol", "cairn-mcp"],
             path: "Tests/SearchTests",
             swiftSettings: [.swiftLanguageMode(.v5)]
         )

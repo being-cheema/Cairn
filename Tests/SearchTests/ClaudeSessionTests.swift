@@ -41,7 +41,7 @@ final class ClaudeSessionTests: XCTestCase {
     }
 
     private func session(_ exe: URL?, verify: @escaping (URL) -> Bool = { _ in true }) throws -> ClaudeSession {
-        ClaudeSession(executable: exe, verify: verify, script: try script(), world: nil)
+        ClaudeSession(executable: exe, verify: verify, tool: try script(), world: nil)
     }
 
     private func wait(_ what: String, timeout: TimeInterval = 10, _ done: () -> Bool) async {

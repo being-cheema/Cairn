@@ -239,9 +239,11 @@ mv "$APP/Contents/MacOS/$NAME.sdk" "$APP/Contents/MacOS/$NAME"
 # The AppleScript dictionary (Scripting.swift): read-only, tabs' addresses
 # and titles. The plist below points to it.
 cp Search.sdef "$APP/Contents/Resources/"
-# The client a coding agent runs (the side panel's Claude gives it to the
-# person's own Claude Code): a script, run by the system's Python.
-cp search-mcp "$APP/Contents/Resources/"
+# The MCP server a coding agent runs (the side panel's Claude gives it to the
+# person's own Claude Code), beside the app's own program.
+swift build "${SWIFTFLAGS[@]}" --product cairn-mcp
+cp "$(swift build "${SWIFTFLAGS[@]}" --show-bin-path)/cairn-mcp" "$APP/Contents/MacOS/cairn-mcp"
+[ "$CONFIG" = "release" ] && strip -x "$APP/Contents/MacOS/cairn-mcp"
 # The owner's pictures (Art.swift), when there are any: the app draws a plain
 # circle in each place without them. Never in a DMG (checked above).
 if [ -n "$ART_FILES" ]; then
@@ -487,8 +489,13 @@ if [ -f "Search.provisionprofile" ]; then
   fi
   rm -f "$PROFILE_PLIST"
 fi
+# cairn-mcp is signed by itself first, with no entitlements, and the app is
+# then signed without --deep: that would hand it the app's, and a program with
+# a restricted entitlement and no profile of its own doesn't start.
 if [ -n "$IDENTITY" ]; then
-  codesign --force --deep --timestamp --options runtime \
+  codesign --force --timestamp --options runtime --identifier "$BUNDLE_ID.mcp" \
+    --sign "$IDENTITY" "$APP/Contents/MacOS/cairn-mcp"
+  codesign --force --timestamp --options runtime \
     --entitlements "$ENTITLEMENTS" \
     --sign "$IDENTITY" "$APP"
   echo "signed as: $IDENTITY"
@@ -496,7 +503,8 @@ else
   # A build that cannot sign at all is not a build: `|| true` here let one
   # through as though it had finished, leaving a bundle that would not open.
   # set -e stops it now, with codesign's own words above.
-  codesign --force --deep --sign - "$APP"
+  codesign --force --identifier "$BUNDLE_ID.mcp" --sign - "$APP/Contents/MacOS/cairn-mcp"
+  codesign --force --sign - "$APP"
   [ "$STEP" != "app" ] && echo "no Developer ID certificate found — the DMG will only open on this Mac" >&2
 fi
 

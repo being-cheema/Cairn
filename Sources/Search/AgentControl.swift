@@ -2,6 +2,10 @@ import AppKit
 import OSLog
 import Security
 import WebKit
+#if canImport(CairnProtocol)
+// A module of its own under SwiftPM; the same sources in the app under Xcode.
+import CairnProtocol
+#endif
 
 // A coding agent on this Mac — Claude Code, Codex — using the window you
 // already have open, when you let it.
@@ -9,7 +13,7 @@ import WebKit
 // Always there: Search listens on a Unix socket, Agent/agent.sock in its
 // own folder: the folder 0700 and this user's, the socket 0600, and the other
 // end checked for the same uid before a byte is read. Never on the network.
-// `search-mcp` at the root of the repository is the client an agent runs.
+// `cairn-mcp`, in the app, is the server an agent runs (CairnProtocol).
 // Listening lets nobody in by itself: see the next paragraph.
 //
 // Each connection asks first. Its first line says who it is, and the window
@@ -28,7 +32,7 @@ import WebKit
 //
 // One exception, and only one: the side panel's own Claude (ClaudeSession).
 // Your press of Send there is the consent, so the run it started is let in
-// without a second question — but only that run: its search-mcp shows a pass
+// without a second question — but only that run: its cairn-mcp shows a pass
 // made for that run alone (never written anywhere an agent's tools reach), it
 // must be a child of the very `claude` process the panel started (pid and
 // start time), and only while a message you sent is being answered. Any other
@@ -136,7 +140,7 @@ struct AgentConsent: Equatable {
 /// who it lets in can be tested without a socket.
 ///
 /// Three things, all of them: the pass made for this run (random, 32 bytes,
-/// handed to its search-mcp in its environment, never to the model); the
+/// handed to its cairn-mcp in its environment, never to the model); the
 /// connecting process's parent being the very `claude` the panel started —
 /// its pid and the moment it started, so a pid given to someone else later
 /// doesn't count; and a message of the person's being answered now (armed
@@ -405,7 +409,7 @@ enum AgentEnd: Equatable {
     /// The person's Stop: the column's foot, the strip, File › Stop Agent,
     /// the side panel's Stop while its turn runs.
     case stopped
-    /// The model's own `bye` (search-mcp's disconnect).
+    /// The model's own `bye` (cairn-mcp's disconnect).
     case bye
     /// The program went: finished and exited, or let its socket go.
     case connectionClosed
@@ -593,14 +597,13 @@ final class AgentSession: ObservableObject, Identifiable {
 
     /// p1 → the tab it names. Its own tabs, and yours once listed.
     fileprivate var pages: [String: Tab.ID] = [:]
-    /// The tabs it opened, and the ones those opened.
-    fileprivate(set) var own: Set<Tab.ID> = []
-    /// The task's own cookie store: made with its first tab, shared by the tabs it
-    /// opens and those they open. Non-persistent, so nothing of it is ever on
-    /// disk. The session lets go of it when it ends (AgentControl.end); each
+    /// Its tabs and the store they share (AgentWorkspaceCoordinator). The
+    /// session lets go of the store when it ends (AgentControl.end); each
     /// tab's web view keeps its own reference, so a store whose tabs were
     /// handed over lives exactly as long as the last of them.
-    fileprivate(set) var taskStore: WKWebsiteDataStore?
+    fileprivate let workspace = AgentWorkspaceCoordinator()
+    /// The tabs it opened, and the ones those opened.
+    var own: Set<Tab.ID> { workspace.own }
     /// The sites (registrable domains) this task has been to: what "leaving
     /// the task's sites" is measured from (AgentGate).
     fileprivate var sites = Set<String>()
@@ -1213,7 +1216,7 @@ final class AgentControl: ObservableObject {
     private var panelRuns: [PanelEntry] = []
 
     /// ClaudeSession started `claude` (pid) for the panel in `browser`, and
-    /// gave its search-mcp `pass`.
+    /// gave its cairn-mcp `pass`.
     func panelStarted(pass: String, pid: pid_t, browser: Browser?) {
         guard !pass.isEmpty, pid > 1 else { return }
         panelRuns.removeAll { $0.run.pass == pass }
@@ -1428,31 +1431,36 @@ final class AgentControl: ObservableObject {
     /// Approve just covered it. What a script sends with fetch or XHR is no
     /// navigation, and WebKit asks nothing about it: that stays beyond this.
     func vet(_ action: WKNavigationAction, on tab: Tab, _ done: @escaping @MainActor (Bool) -> Void) {
-        guard let session, session.own.contains(tab.id), let url = action.request.url,
-              ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { return done(true) }
-        guard !PrivateNetwork.refuses(url) else { return done(keptFrom(url, session)) }
+        guard let session, session.own.contains(tab.id), let url = action.request.url else { return done(true) }
+        let screen = NavigationPolicyEngine.screen(url)
+        switch screen {
+        case .notWeb: return done(true)
+        case .privateAddress: return done(keptFrom(url, session))
+        case .lookUp, .clear: break
+        }
         let method = action.request.httpMethod ?? "GET"
-        // A frame's own posts (an advert's, a widget's) are its own affair:
-        // the agent reads and touches no frame. One the page itself sends, or
-        // sends the tab itself, is not.
-        let ours = action.sourceFrame.isMainFrame || (action.targetFrame?.isMainFrame ?? true)
+        let fromMain = action.sourceFrame.isMainFrame
+        let toMain = action.targetFrame?.isMainFrame ?? true
         let send = {
-            guard ours, let hold = AgentGate.hold(sending: method, to: url) else { return done(true) }
-            if ProcessInfo.processInfo.systemUptime < session.sendGrant {
-                session.sendGrant = 0
-                return done(true)
-            }
-            // One question at a time: a second send while one waits is dropped.
-            guard session.held == nil else { return done(false) }
-            self.ask(hold, session) { [weak self, weak session] verdict in
-                // The answer is the send's own: nothing left over for another.
-                session?.sendGrant = 0
-                guard verdict == .approved, let self, let session, self.live(session) else { return done(false) }
+            switch NavigationPolicyEngine.send(method: method, to: url, fromMainFrame: fromMain, toMainFrame: toMain,
+                                               now: ProcessInfo.processInfo.systemUptime, grantedUntil: session.sendGrant) {
+            case .go:
                 done(true)
+            case .covered:
+                session.sendGrant = 0
+                done(true)
+            case .ask(let hold):
+                // One question at a time: a second send while one waits is dropped.
+                guard session.held == nil else { return done(false) }
+                self.ask(hold, session) { [weak self, weak session] verdict in
+                    // The answer is the send's own: nothing left over for another.
+                    session?.sendGrant = 0
+                    guard verdict == .approved, let self, let session, self.live(session) else { return done(false) }
+                    done(true)
+                }
             }
         }
-        let host = url.host(percentEncoded: false) ?? ""
-        guard !PrivateNetwork.allowed.contains(PrivateNetwork.normalised(host)) else { return send() }
+        guard case .lookUp(let host) = screen else { return send() }
         PrivateNetwork.resolvesPrivately(host) { [weak self, weak session] inside in
             guard let self, let session, self.session === session else { return done(false) }
             if inside { return done(self.keptFrom(url, session)) }
@@ -1516,28 +1524,21 @@ final class AgentControl: ObservableObject {
     /// the tabs' web views hold it, so it goes with the last of them and,
     /// being non-persistent, never touched the disk.
     private func handOverTaskTabs(_ session: AgentSession) {
-        guard session.taskStore != nil else { return }
+        guard let released = session.workspace.handOver() else { return }
         let browser = session.browser.flatMap { browser in Browsers.all.first { $0 === browser } }
         var landing: Tab?
         var kept = handed.filter { id in Browsers.all.contains { $0.tabs.contains { $0.id == id } } }
-        for each in Browsers.all {
-            for tab in each.tabs where session.own.contains(tab.id) {
-                tab.agentWorking = false
-                // Yours now: your own network is yours to reach again.
-                PrivateNetworkRules.remove(from: tab)
-                kept.insert(tab.id)
-                // The one it last worked in; else the newest it opened, which
-                // is last in the row (benchOpen appends).
-                if each === browser, landing?.id != session.lastWorked { landing = tab }
-            }
+        for (each, tab) in released {
+            kept.insert(tab.id)
+            // The one it last worked in; else the newest it opened, which
+            // is last in the row (benchOpen appends).
+            if each === browser, landing?.id != session.lastWorked { landing = tab }
         }
         handed = kept
-        session.own = []
         session.pages = [:]
         session.snaps = [:]
         session.dialogs = [:]
         session.newTabs = []
-        session.taskStore = nil
         guard let browser, let landing else { return }
         let active = activeForTest ?? (NSApp.isActive && browser.window?.isKeyWindow == true)
         let sinceKey = activeForTest != nil ? .infinity
@@ -1555,12 +1556,7 @@ final class AgentControl: ObservableObject {
     /// them, cookies and all. Only with a task store: without one the tabs
     /// are left as they always were.
     private func closeTaskTabs(_ session: AgentSession) {
-        guard session.taskStore != nil else { return }
-        for browser in Browsers.all {
-            for tab in browser.tabs where session.own.contains(tab.id) { browser.close(tab) }
-        }
-        session.own = []
-        session.taskStore = nil
+        session.workspace.close()
     }
 
     /// A page in an agent's tab asked with alert, confirm or prompt: it has
@@ -1603,9 +1599,7 @@ final class AgentControl: ObservableObject {
 
     /// A tab an agent's tab opened (Browser's createWebViewWith): its own too.
     func adopted(_ tab: Tab, from opener: Tab) {
-        guard let session, session.own.contains(opener.id) else { return }
-        session.own.insert(tab.id)
-        PrivateNetworkRules.add(to: tab)
+        guard let session, session.workspace.adopt(tab, from: opener) else { return }
         if session.newTabs.count < 20 { session.newTabs.append(tab.id) }
     }
 
@@ -1614,10 +1608,7 @@ final class AgentControl: ObservableObject {
     /// Every verb an agent may ask for, and nothing else. No `sign_in`, and
     /// no other way to have a saved password, passkey or code filled: an
     /// agent never signs in with what the person saved.
-    static let verbs: Set<String> = [
-        "hello", "status", "tabs", "open", "go", "back", "forward", "close", "read", "click", "type",
-        "press", "scroll", "wait_for", "shot", "bye",
-    ]
+    static let verbs: Set<String> = Set(AgentVerb.allCases.map(\.rawValue))
 
     /// Why a verb is refused before anything is looked at: one not in `verbs`.
     static func unknown(_ verb: String) -> AgentRefusal? {
@@ -1668,12 +1659,19 @@ final class AgentControl: ObservableObject {
             return
         }
         do {
-            switch verb {
-            case "status":
+            guard let known = AgentVerb(rawValue: verb) else {
+                throw AgentRefusal(code: "no_verb", message: "\(Brand.name) doesn't do “\(AgentGate.quoted(verb))” for an agent")
+            }
+            // Every verb there is (CairnProtocol): no default, so one added
+            // there has to be answered here.
+            switch known {
+            case .hello:
+                throw AgentRefusal(code: "said_hello", message: "Already said")
+            case .status:
                 answer(["allowed": true, "seesTabs": session.consent.seesTabs, "client": session.client])
-            case "tabs":
+            case .tabs:
                 tabs(session, browser, answer)
-            case "open":
+            case .open:
                 let url = try Self.destination(request)
                 func open() {
                     // The rules go on with the tab, so they are ready first.
@@ -1683,10 +1681,7 @@ final class AgentControl: ObservableObject {
                         guard list != nil else {
                             return answer(AgentRefusal(code: "internal", message: "Couldn't set up the network rules: nothing was opened").said)
                         }
-                        if session.taskStore == nil { session.taskStore = .nonPersistent() }
-                        let tab = browser.benchOpen(url, agent: true, store: session.taskStore)
-                        session.own.insert(tab.id)
-                        PrivateNetworkRules.add(to: tab)
+                        let tab = session.workspace.open(url, in: browser)
                         if let site = AgentGate.site(url) { session.sites.insert(site) }
                         self.work(on: tab, session)
                         PageRoom.shared.house(tab)
@@ -1700,7 +1695,7 @@ final class AgentControl: ObservableObject {
                 } else {
                     open()
                 }
-            case "go":
+            case .go:
                 let tab = try self.tab(request, session, browser, .drive)
                 let url = try Self.destination(request)
                 func go() {
@@ -1718,29 +1713,29 @@ final class AgentControl: ObservableObject {
                 } else {
                     go()
                 }
-            case "back", "forward":
+            case .back, .forward:
                 let tab = try self.tab(request, session, browser, .drive)
                 PageRoom.shared.house(tab)
                 if verb == "back" { tab.web.goBack() } else { tab.web.goForward() }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
                     self?.settle(tab, session, timeout: request["timeout"] as? Double ?? 20, answer)
                 }
-            case "close":
+            case .close:
                 let tab = try self.tab(request, session, browser, .drive)
                 let handle = request["page"] as? String ?? ""
                 browser.close(tab)
-                session.own.remove(tab.id)
+                session.workspace.forget(tab.id)
                 session.forget(handle)
                 answer(["closed": handle])
-            case "read":
+            case .read:
                 try read(request, session, browser, answer)
-            case "click":
+            case .click:
                 session.sendGrant = 0
                 try click(request, session, browser, answer)
-            case "type":
+            case .type:
                 session.sendGrant = 0
                 try type(request, session, browser, answer)
-            case "press":
+            case .press:
                 session.sendGrant = 0
                 let tab = try self.tab(request, session, browser, .drive)
                 guard let key = AgentRules.key(request["key"] as? String ?? "") else {
@@ -1784,17 +1779,15 @@ final class AgentControl: ObservableObject {
                         }
                     }
                 }
-            case "scroll":
+            case .scroll:
                 try scroll(request, session, browser, answer)
-            case "wait_for":
+            case .waitFor:
                 try waitFor(request, session, browser, answer)
-            case "shot":
+            case .shot:
                 try shot(request, session, browser, answer)
-            case "bye":
+            case .bye:
                 answer(["bye": true])
                 DispatchQueue.main.async { [weak self] in self?.end(session, .bye) }
-            default:
-                throw AgentRefusal(code: "no_verb", message: "\(Brand.name) doesn't do “\(verb)” for an agent")
             }
         } catch let refusal as AgentRefusal {
             refuse(refusal)
@@ -1805,12 +1798,13 @@ final class AgentControl: ObservableObject {
 
     /// The address an `open` or `go` names, or why it isn't one.
     private static func destination(_ request: [String: Any]) throws -> URL {
-        guard let url = AgentRules.webAddress(request["url"] as? String ?? "") else { throw badAddress }
-        guard !PrivateNetwork.refuses(url) else {
+        switch NavigationPolicyEngine.destination(request["url"] as? String ?? "") {
+        case .success(let url): return url
+        case .failure(.notWeb): throw badAddress
+        case .failure(.privateAddress):
             throw AgentRefusal(code: "private_address", message: "Not this Mac or a private network",
                                hint: "Agents reach the public web only. Ask the person to open it themselves.")
         }
-        return url
     }
 
     private static let badAddress = AgentRefusal(
@@ -1936,7 +1930,7 @@ final class AgentControl: ObservableObject {
     private func tabs(_ session: AgentSession, _ browser: Browser, _ answer: @escaping ([String: Any]) -> Void) {
         let live = Set(browser.tabs.map(\.id))
         for (handle, id) in session.pages where !live.contains(id) { session.forget(handle) }
-        session.own.formIntersection(live)
+        session.workspace.keep(only: live)
         let shown = browser.tabs.filter { tab in
             AgentRules.refusal(for: tab, own: session.own.contains(tab.id), consent: session.consent, use: .read) == nil
         }

@@ -1,6 +1,7 @@
 import AppKit
 import WebKit
 import XCTest
+import CairnProtocol
 @testable import Search
 
 /// Coding agents (AgentControl): the question's rules, what may be read and
@@ -252,15 +253,15 @@ final class AgentControlTests: XCTestCase {
         for verb in ["hello", "open", "read", "click", "type", "press", "bye"] { XCTAssertNil(AgentControl.unknown(verb), verb) }
     }
 
-    /// search-mcp, as an agent sees it: no sign_in in its tools, a call to
+    /// cairn-mcp, as an agent sees it: no sign_in in its tools, a call to
     /// one answered as no such tool, and its words say signing in is the
     /// person's. Run as an agent runs it, with nothing connected to Search.
-    func testSearchMCPOffersNoSignIn() throws {
-        let script = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().appendingPathComponent("search-mcp")
+    func testTheMCPServerOffersNoSignIn() throws {
+        // Built beside the tests (Package.swift names it as theirs).
+        let built = Bundle(for: Self.self).bundleURL.deletingLastPathComponent().appendingPathComponent("cairn-mcp")
         let run = Process()
-        run.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
-        run.arguments = [script.path, "--world", "agent-tests-no-socket"]
+        run.executableURL = built
+        run.arguments = ["--world", "agent-tests-no-socket"]
         let input = Pipe(), output = Pipe()
         run.standardInput = input
         run.standardOutput = output
@@ -423,9 +424,7 @@ final class AgentControlTests: XCTestCase {
         XCTAssertTrue(brief.contains("by its title"))
         XCTAssertTrue(brief.contains("never say it is behind"))
         XCTAssertTrue(brief.contains("leave it playing"))
-        let script = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().appendingPathComponent("search-mcp")
-        let text = try String(contentsOf: script, encoding: .utf8)
+        let text = MCPTools.instructions
         XCTAssertTrue(text.contains("your tabs then stay"))
         XCTAssertTrue(text.contains("don't say it is behind"))
         XCTAssertTrue(text.contains("leave it"))

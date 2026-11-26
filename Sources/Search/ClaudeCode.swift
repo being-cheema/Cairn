@@ -1,5 +1,9 @@
 import Foundation
 import Security
+#if canImport(CairnProtocol)
+// A module of its own under SwiftPM; the same sources in the app under Xcode.
+import CairnProtocol
+#endif
 
 // Claude Code, run headless for the side panel: the pure parts.
 //
@@ -9,7 +13,7 @@ import Security
 // give it more than the browser's own tools:
 //
 //   - it is started with no built-in tools at all (no shell, no files, no web
-//     fetch), one MCP server (`search-mcp`, which speaks to the agent socket
+//     fetch), one MCP server (`cairn-mcp`, which speaks to the agent socket
 //     and so to AgentControl's rules and its Allow question), and none of the
 //     person's settings, hooks, plugins or memory files;
 //   - from an empty folder made for the run, with nothing saved to disk, and
@@ -20,10 +24,10 @@ import Security
 // This file builds the command and reads the answer. ClaudeSession runs it.
 
 enum ClaudeCode {
-    /// Where search-mcp finds the panel's pass (PanelRun).
-    static let passVariable = "CAIRN_PANEL_PASS"
+    /// Where cairn-mcp finds the panel's pass (PanelRun).
+    static let passVariable = AgentWire.passVariable
 
-    /// The name `search-mcp` is given, which makes its tools `mcp__search__…`.
+    /// The name `cairn-mcp` is given, which makes its tools `mcp__search__…`.
     static let server = "search"
 
     /// Everything Claude Code can do by itself, named so that a version that
@@ -125,35 +129,24 @@ enum ClaudeCode {
         return SecStaticCodeCheckValidity(code, [], requirement) == errSecSuccess
     }
 
-    /// `search-mcp`, the client an agent runs: in the app's own Resources
-    /// (build.sh puts it there), or, for a run out of the build folder, at the
-    /// root of the checkout it was built from.
-    static func mcpScript(bundle: Bundle = .main, executable: String? = Bundle.main.executablePath) -> URL? {
-        let files = FileManager.default
-        if let inside = bundle.url(forResource: "search-mcp", withExtension: nil), files.isReadableFile(atPath: inside.path) {
-            return inside
-        }
-        guard var folder = executable.map({ URL(fileURLWithPath: $0).deletingLastPathComponent() }) else { return nil }
-        for _ in 0..<8 {
-            let beside = folder.appendingPathComponent("search-mcp")
-            if files.isReadableFile(atPath: beside.path),
-               files.fileExists(atPath: folder.appendingPathComponent("Package.swift").path) { return beside }
-            folder = folder.deletingLastPathComponent()
-        }
-        return nil
+    /// `cairn-mcp`, the MCP server an agent runs: beside the browser's own
+    /// program, in the app (build.sh puts it there) and in SwiftPM's build
+    /// folder alike.
+    static func mcpTool(executable: String? = Bundle.main.executablePath) -> URL? {
+        guard let executable else { return nil }
+        let beside = URL(fileURLWithPath: executable).deletingLastPathComponent().appendingPathComponent("cairn-mcp")
+        return FileManager.default.isExecutableFile(atPath: beside.path) ? beside : nil
     }
 
     // MARK: - the command
 
-    /// The one MCP server: Python from the system, the script, and for a test
-    /// run its own world, so a test never reaches the browser somebody uses.
-    /// `pass` is the run's own (PanelRun), in the server's environment rather
-    /// than its arguments, which any program can list: shown to the browser
-    /// at hello, and never to the model.
-    static func mcpConfig(script: URL, world: String?, pass: String? = nil) -> Data {
-        var args = [script.path]
-        if let world { args += ["--world", world] }
-        var entry: [String: Any] = ["command": "/usr/bin/python3", "args": args]
+    /// The one MCP server, cairn-mcp, and for a test run its own world, so a
+    /// test never reaches the browser somebody uses. `pass` is the run's own
+    /// (PanelRun), in the server's environment rather than its arguments,
+    /// which any program can list: shown to the browser at hello, and never
+    /// to the model.
+    static func mcpConfig(tool: URL, world: String?, pass: String? = nil) -> Data {
+        var entry: [String: Any] = ["command": tool.path, "args": world.map { ["--world", $0] } ?? []]
         if let pass, !pass.isEmpty { entry["env"] = [passVariable: pass] }
         let config: [String: Any] = [
             "mcpServers": [server: entry],

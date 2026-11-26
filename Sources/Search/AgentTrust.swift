@@ -6,7 +6,7 @@ import Security
 //
 // What is remembered is never the name a client gives itself, which is its
 // own word. It is the program that started the client — Claude Code's
-// `claude`, which runs ./search-mcp under Python — as its code signature
+// `claude`, which runs cairn-mcp — as its code signature
 // says: the designated requirement macOS checks it against (for `claude`,
 // its identifier and Anthropic's Developer ID team), with the name the
 // client gave beside it. Python itself is never enough: anything can run it.

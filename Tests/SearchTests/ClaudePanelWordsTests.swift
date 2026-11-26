@@ -73,7 +73,7 @@ final class ClaudePanelWordsTests: XCTestCase {
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: file.path)
         let script = root.appendingPathComponent("search-mcp")
         try Data("#!/usr/bin/env python3\n".utf8).write(to: script)
-        return ClaudeSession(executable: file, verify: { _ in true }, script: script, world: nil)
+        return ClaudeSession(executable: file, verify: { _ in true }, tool: script, world: nil)
     }
 
     private func wait(_ what: String, _ done: () -> Bool) async {

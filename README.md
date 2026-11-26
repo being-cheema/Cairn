@@ -28,11 +28,11 @@ signed. It gets no tools but this browser's: no shell, no files, no web search.
 Cairn has no Claude sign-in of its own; it uses whatever your Claude Code is
 signed in to. Nothing to switch on: pressing Send is the go-ahead.
 
-**Your own agent.** Register the server that is in the repository (and inside
-the app):
+**Your own agent.** Register the MCP server that is inside the app (run this
+from the repository, after building):
 
 ```bash
-claude mcp add search -- "$PWD/search-mcp"
+claude mcp add search -- "$PWD/build/Cairn.app/Contents/MacOS/cairn-mcp"
 ```
 
 Cairn asks you in the window when it connects. "Always allow" is offered only
@@ -198,7 +198,7 @@ For working on the browser itself, `./bench-mcp` is an MCP server over the same 
 claude mcp add search-bench -- "$PWD/bench-mcp"
 ```
 
-Each session starts this checkout's `build/Cairn.app` hidden, in a test world of its own, and wipes that world when it closes; the browser you use is never in reach. `python3 Tests/bench_mcp.py` checks it. This is not the browsing agent above: that is `search-mcp`, whose rules are in `Sources/Search/AgentControl.swift` and `python3 Tests/agent_control.py` and `Tests/agent_gate.py` check them in a hidden probe. [CLAUDE.md](CLAUDE.md) has the rules for changing any of it.
+Each session starts this checkout's `build/Cairn.app` hidden, in a test world of its own, and wipes that world when it closes; the browser you use is never in reach. `python3 Tests/bench_mcp.py` checks it. This is not the browsing agent above: that is `cairn-mcp` (in the app), whose rules are in `Sources/Search/AgentControl.swift` and `python3 Tests/agent_control.py` and `Tests/agent_gate.py` check them in a hidden probe. [CLAUDE.md](CLAUDE.md) has the rules for changing any of it.
 
 `python3 Tests/split_view.py`, after `./build.sh`, checks Split View through the app's own model in a hidden test run with its own settings and files, all removed afterwards. It never makes or shows a window; what can only be seen (dragging onto a page's edge, the divider under the pointer, the motion) is checked by hand on a release candidate.
 

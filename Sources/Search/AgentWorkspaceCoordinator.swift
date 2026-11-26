@@ -1,0 +1,86 @@
+import Foundation
+import WebKit
+
+// One agent task's tabs, and the store they share.
+//
+// Three kinds of website data, and only one of them an agent's:
+//
+//   - yours: your own persistent store, and each space's. Nothing here ever
+//     hands one to an agent's tab; the most an agent does with a tab of
+//     yours is read it, if you let it (AgentRules.refusal).
+//   - a task's: this one, made when the task opens its first tab. It is
+//     non-persistent, so it starts signed in to nothing and never reaches
+//     the disk. It goes with the last tab that holds it.
+//   - a private tab's, which no agent sees at all.
+//
+// Every tab an agent drives is made or taken in here, so "which tabs are
+// the agent's" and "which store are they in" are answered in one place.
+// What the agent may do with them is AgentControl's.
+
+@MainActor
+final class AgentWorkspaceCoordinator {
+    /// The tabs it may drive: those opened for it, and those their pages
+    /// opened. Empty again once they are handed over or closed.
+    private(set) var own: Set<Tab.ID> = []
+    /// The task's store; nil before the first tab and after the task ends.
+    private(set) var store: WKWebsiteDataStore?
+
+    /// A new tab of the task's, in its store, kept to the public web
+    /// (PrivateNetworkRules, which must be ready first).
+    func open(_ url: URL, in browser: Browser) -> Tab {
+        let store = self.store ?? .nonPersistent()
+        self.store = store
+        let tab = browser.benchOpen(url, agent: true, store: store)
+        own.insert(tab.id)
+        PrivateNetworkRules.add(to: tab)
+        return tab
+    }
+
+    /// A tab one of its pages opened (Browser's createWebViewWith, which
+    /// makes it from the opener's own configuration, and so in its store).
+    /// False when the opener isn't the task's.
+    func adopt(_ tab: Tab, from opener: Tab) -> Bool {
+        guard own.contains(opener.id) else { return false }
+        own.insert(tab.id)
+        PrivateNetworkRules.add(to: tab)
+        return true
+    }
+
+    /// A tab the agent closed.
+    func forget(_ id: Tab.ID) { own.remove(id) }
+
+    /// Only those still open are its.
+    func keep(only live: Set<Tab.ID>) { own.formIntersection(live) }
+
+    /// The task finished: its tabs stay, as yours. They leave `own`, so
+    /// nothing the agent said can reach them again, and your own network is
+    /// yours to reach from them. They keep the task's store: nothing of
+    /// yours comes into them. Returns them, each with the window it is in.
+    /// Nil when there was no task store, and so nothing to hand over.
+    func handOver() -> [(browser: Browser, tab: Tab)]? {
+        guard store != nil else { return nil }
+        var released: [(browser: Browser, tab: Tab)] = []
+        for browser in Browsers.all {
+            for tab in browser.tabs where own.contains(tab.id) {
+                tab.agentWorking = false
+                PrivateNetworkRules.remove(from: tab)
+                released.append((browser, tab))
+            }
+        }
+        own = []
+        store = nil
+        return released
+    }
+
+    /// The task is over without them: its tabs close, and the store goes
+    /// with them, cookies and all. Only with a task store: without one the
+    /// tabs are left as they always were.
+    func close() {
+        guard store != nil else { return }
+        for browser in Browsers.all {
+            for tab in browser.tabs where own.contains(tab.id) { browser.close(tab) }
+        }
+        own = []
+        store = nil
+    }
+}

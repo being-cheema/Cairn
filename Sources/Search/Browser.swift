@@ -8423,7 +8423,7 @@ extension Browser: WKNavigationDelegate, WKUIDelegate {
         // Search's own pages, no file:// and no link handed to another app,
         // whoever asked — the agent, the page, or a link it clicked.
         if tab(for: webView)?.agent == true,
-           action.shouldPerformDownload || !(action.request.url.map(AgentRules.mayLoad) ?? true) {
+           NavigationPolicyEngine.neverLoads(action.request.url, download: action.shouldPerformDownload) {
             AgentControl.log.notice("a page in an agent's tab was kept from going somewhere")
             decisionHandler(.cancel)
             return

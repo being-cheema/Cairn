@@ -346,7 +346,7 @@ private struct AgentQuestion: View {
 
     /// The name is the program's own word for itself; this is macOS's.
     private var detail: String {
-        let from = session.program.isEmpty ? "" : "Started by \(session.program) on this Mac. "
+        let from = session.program.isEmpty ? "" : "Program on this Mac: \(session.program). "
         return from + "It works in tabs of its own while you watch, until you press Stop. "
             + "It never sees passwords, card numbers, private tabs or Settings."
     }
