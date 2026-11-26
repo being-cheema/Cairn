@@ -972,6 +972,16 @@ struct SettingsPanel: View {
         case "agents": Always(text: "Asks first")
         case "claude.history": Switch(on: $prefs.keepsTaskHistory)
         case "pins.changes": Switch(on: $prefs.watchesPinChanges)
+        case "pages.watch": Switch(on: $prefs.watchesPages)
+        case "pages.forgetText":
+            Pill("Delete") {
+                Ask.sure("Delete the saved page text?",
+                         detail: "What was kept of pinned pages goes, and every watched page stops being watched.",
+                         confirm: "Delete", returnCancels: true) {
+                    PinChanges.shared.forgetAll()
+                    PageWatches.shared.removeAll()
+                }
+            }
         // The list is under the row (after).
         case "agents.vaulted": EmptyView()
         case "news.updates": OptInSettingsField(betaOnly: false) { _ = browser.open($0, foreground: true) }
@@ -1017,6 +1027,8 @@ struct SettingsPanel: View {
             }
         case "agents.vaulted":
             if !searched { VaultedSiteList(prefs: prefs).under() }
+        case "pages.watch":
+            if !searched, prefs.watchesPages { PageWatchList().under() }
         case "passkeys":
             if !searched, !Vault.never.isEmpty {
                 Rule()

@@ -186,6 +186,15 @@ final class Preferences: ObservableObject {
             store.set(Array(vaultedSites).sorted(), forKey: VaultedSites.key)
             // Nothing already kept of a site stays once it is closed.
             PinChanges.shared.forget(sites: vaultedSites)
+            PageWatches.shared.forget(sites: vaultedSites)
+        }
+    }
+    /// Pages you pick, looked at again now and then (PageWatch). Off unless
+    /// turned on; turned off, the watches and their words are deleted.
+    @Published var watchesPages: Bool {
+        didSet {
+            store.set(watchesPages, forKey: PageWatches.key)
+            if !watchesPages { PageWatches.shared.removeAll() }
         }
     }
     /// The words of pinned pages kept, to show what changed (PinChanges).
@@ -1453,6 +1462,7 @@ final class Preferences: ObservableObject {
         dimsSleepingTabs = store.bool(forKey: "tabs.sleep.dim")
         vaultedSites = Set(store.stringArray(forKey: VaultedSites.key) ?? [])
         watchesPinChanges = store.bool(forKey: PinChanges.key)
+        watchesPages = store.bool(forKey: PageWatches.key)
         hidesBack = store.bool(forKey: "helm.back.hidden")
         hidesForward = store.bool(forKey: "helm.forward.hidden")
         hidesReload = store.bool(forKey: "helm.reload.hidden")

@@ -1803,6 +1803,8 @@ final class Browser: NSObject, ObservableObject {
             TaskLedger.removeAll()
             // And the words kept of pinned pages (PinChanges).
             PinChanges.shared.forgetAll()
+            // And the watched pages, a list of places you go (PageWatch).
+            PageWatches.shared.removeAll()
         }
         // Where links went is a list of where you have been, too.
         let choices = LinkChooser.cleared(prefs.linkChoices, spaces: Set(forgotten))

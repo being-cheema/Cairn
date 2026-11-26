@@ -183,6 +183,10 @@ final class SiteNotifications: NSObject {
 
     /// Clicked: the site's tab in front, and the click to its worker.
     func clicked(_ info: [AnyHashable: Any]) {
+        // A page you asked to be told about (PageWatch).
+        if let id = (info[PageWatches.infoKey] as? String).flatMap(UUID.init(uuidString:)) {
+            return PageWatches.shared.open(id)
+        }
         let key = info["search.key"] as? String
         let from = key.flatMap { stores.removeValue(forKey: $0) }
         bringForward(info, from: from)

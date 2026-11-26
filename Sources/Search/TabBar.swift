@@ -2153,6 +2153,7 @@ struct TabMenu: View {
         if PinChanges.shared.hasChanges(tab) {
             Button("See Changes") { browser.seeChanges(tab) }
         }
+        PageWatchMenu(tab: tab)
         Button("Copy Address") {
             browser.select(tab)
             browser.copyAddress()
