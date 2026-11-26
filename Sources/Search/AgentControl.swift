@@ -627,6 +627,8 @@ final class AgentSession: ObservableObject, Identifiable {
     fileprivate var sendGrant: TimeInterval = 0
     /// Documents its tabs were kept from loading, to say with the next answer.
     fileprivate var blocked: [String] = []
+    /// A page of its tab's was refused a site you blocked: for the answer in hand.
+    fileprivate var vaultRefused: String?
     /// p1 → the number of its last read.
     fileprivate var snaps: [String: Int] = [:]
     private var counter = 0
@@ -1512,7 +1514,9 @@ final class AgentControl: ObservableObject {
 
     private func seal(_ tabs: [Tab], _ session: AgentSession, then: @escaping () -> Void) {
         guard let tab = tabs.first else { return then() }
-        page(tab, session, PageScripts.seal()) { [weak self, weak session] _ in
+        // Sealing hides what you typed and gives nothing back to the agent,
+        // so it runs wherever you left the tab.
+        page(tab, session, PageScripts.seal(), evenVaulted: true) { [weak self, weak session] _ in
             guard let self, let session else { return then() }
             self.seal(Array(tabs.dropFirst()), session, then: then)
         }
@@ -1575,9 +1579,12 @@ final class AgentControl: ObservableObject {
                let host = url.host() { session.browser?.claude.visited(host) }
             allow(allowed)
         }
-        let screen = NavigationPolicyEngine.screen(url)
+        // With the tab in your hands to sign in, where it goes is your own
+        // business; the agent still can't read a blocked site afterwards.
+        let screen = NavigationPolicyEngine.screen(url, vaulted: session.workspace.batonWithYou ? [] : nil)
         switch screen {
         case .notWeb: return done(true)
+        case .blockedByPerson: return done(keptByPerson(url, session, mainFrame: toTab))
         case .privateAddress: return done(keptFrom(url, session))
         case .lookUp, .clear: break
         }
@@ -1611,6 +1618,27 @@ final class AgentControl: ObservableObject {
             if inside { return done(self.keptFrom(url, session)) }
             send()
         }
+    }
+
+    /// Notes a document refused because you closed its site to agents;
+    /// always false. A frame's is dropped quietly: the page around it is
+    /// still the agent's to read.
+    private func keptByPerson(_ url: URL, _ session: AgentSession, mainFrame: Bool) -> Bool {
+        Self.log.notice("an agent's tab was kept from a site the person blocked")
+        if mainFrame { session.vaultRefused = VaultedSites.host(of: url) ?? "that site" }
+        return false
+    }
+
+    static func blockedByPerson(_ host: String? = nil) -> AgentRefusal {
+        AgentRefusal(code: "blocked_by_user_policy",
+                     message: "The person blocked agents on \(host ?? "this site")",
+                     hint: "Don't try another address or way round. Say in your reply that you couldn't use this site.")
+    }
+
+    /// Whether a tab is on, or going to, a site you closed to agents. All
+    /// of its addresses are asked: mid-load they disagree.
+    static func isVaulted(_ tab: Tab, in sites: Set<String> = VaultedSites.current) -> Bool {
+        [tab.pageAddress, tab.address, tab.built?.url].contains { VaultedSites.blocks($0, in: sites) }
     }
 
     /// Notes a refused document for the agent's next answer; always false.
@@ -1710,7 +1738,8 @@ final class AgentControl: ObservableObject {
     /// and the agent hears what it said with its next answer. The words are
     /// the page's: data, with addresses scrubbed as everything else is.
     func dialog(on tab: Tab, kind: String, text: String) {
-        guard let session, session.own.contains(tab.id), session.dialogs[tab.id, default: []].count < 5 else { return }
+        guard let session, session.own.contains(tab.id), !Self.isVaulted(tab),
+              session.dialogs[tab.id, default: []].count < 5 else { return }
         session.dialogs[tab.id, default: []].append([
             "kind": kind, "text": AgentRules.scrubbed(String(text.prefix(300))),
             "answered": kind == "alert" ? "closed" : kind == "confirm" ? "no" : "cancelled",
@@ -1724,6 +1753,19 @@ final class AgentControl: ObservableObject {
         let waited = session.heldTime - heldBefore
         out["ms"] = Int((ProcessInfo.processInfo.systemUptime - started - waited) * 1000)
         if waited > 0.05 { out["waited_ms"] = Int(waited * 1000) }
+        if let host = session.vaultRefused {
+            session.vaultRefused = nil
+            let refusal = Self.blockedByPerson(host).said
+            // What was asked was to go or act: that is what was refused.
+            // Anything else keeps its own answer and is told as well.
+            let acts: Set<AgentVerb> = [.open, .go, .back, .forward, .click, .type, .press, .waitFor]
+            if let verb = (request["do"] as? String).flatMap(AgentVerb.init(rawValue:)), acts.contains(verb) {
+                let kept = out.filter { ["n", "ms", "waited_ms"].contains($0.key) }
+                out = kept.merging(refusal) { _, new in new }
+            } else {
+                out["blocked_by_user_policy"] = refusal["error"]
+            }
+        }
         let handle = (request["page"] as? String) ?? (request["element"] as? String)?.split(separator: ".").first.map(String.init) ?? ""
         if let id = session.pages[handle], let said = session.dialogs.removeValue(forKey: id), !said.isEmpty {
             out["dialogs"] = said
@@ -1735,7 +1777,7 @@ final class AgentControl: ObservableObject {
             session.blocked = []
         }
         if !session.newTabs.isEmpty, let browser = session.browser {
-            let opened = session.newTabs.compactMap { id in browser.tabs.first { $0.id == id } }
+            let opened = session.newTabs.compactMap { id in browser.tabs.first { $0.id == id && !Self.isVaulted($0) } }
             session.newTabs = []
             if !opened.isEmpty {
                 out["new_tabs"] = opened.map { ["page": session.handle(for: $0), "url": AgentRules.url($0.pageAddress?.absoluteString ?? "")] }
@@ -1832,7 +1874,8 @@ final class AgentControl: ObservableObject {
                 }
                 let made = Artifact.parse(request) { handle in
                     guard let id = session.pages[handle], session.own.contains(id),
-                          let tab = browser.tabs.first(where: { $0.id == id }), let url = tab.pageAddress else { return nil }
+                          let tab = browser.tabs.first(where: { $0.id == id }), !Self.isVaulted(tab),
+                          let url = tab.pageAddress else { return nil }
                     return Artifact.Source(tab: id, site: url.host() ?? "page", address: AgentRules.url(url.absoluteString))
                 }
                 switch made {
@@ -1894,7 +1937,7 @@ final class AgentControl: ObservableObject {
                     self?.settle(tab, session, timeout: request["timeout"] as? Double ?? 20, answer)
                 }
             case .close:
-                let tab = try self.tab(request, session, browser, .drive)
+                let tab = try self.tab(request, session, browser, .drive, closing: true)
                 let handle = request["page"] as? String ?? ""
                 browser.close(tab)
                 session.workspace.forget(tab.id)
@@ -1939,6 +1982,9 @@ final class AgentControl: ObservableObject {
                     var target = AgentGate.Target(seen["gate"]) ?? AgentGate.Target()
                     // Space only acts on a button.
                     if key.characters == " " { target.enter = target.submits }
+                    if let url = VaultedSites.reached(by: target, in: VaultedSites.current) {
+                        return answer(Self.blockedByPerson(VaultedSites.host(of: url)).said)
+                    }
                     guard let hold = AgentGate.hold(enter: target, on: tab.pageAddress, rules: rules) else { return press() }
                     if self.handsOverSignIn(hold, tab, session, answer) { return }
                     defer { self.spotlight(tab, session, PageScripts.focused()) }
@@ -1976,6 +2022,8 @@ final class AgentControl: ObservableObject {
         switch NavigationPolicyEngine.destination(request["url"] as? String ?? "") {
         case .success(let url): return url
         case .failure(.notWeb): throw badAddress
+        case .failure(.blockedByPerson):
+            throw blockedByPerson(AgentRules.webAddress(request["url"] as? String ?? "").flatMap(VaultedSites.host(of:)))
         case .failure(.privateAddress):
             throw AgentRefusal(code: "private_address", message: "Not this Mac or a private network",
                                hint: "Agents reach the public web only. Ask the person to open it themselves.")
@@ -1989,13 +2037,18 @@ final class AgentControl: ObservableObject {
 
     /// The tab a request's page handle names, if it may be used that way.
     /// A private tab is never found, and a tab of yours is read at most.
-    private func tab(_ request: [String: Any], _ session: AgentSession, _ browser: Browser, _ use: AgentConsent.Use) throws -> Tab {
+    private func tab(_ request: [String: Any], _ session: AgentSession, _ browser: Browser, _ use: AgentConsent.Use,
+                     closing: Bool = false) throws -> Tab {
         let handle = request["page"] as? String ?? ""
         let found = session.pages[handle].flatMap { id in browser.tabs.first { $0.id == id } }
         let refusal = found.map { AgentRules.refusal(for: $0, own: session.own.contains($0.id), consent: session.consent, use: use) }
             ?? "stale_page"
         switch refusal {
         case nil:
+            // One already open, or handed over, on a site you closed since or
+            // before: nothing of it is read or touched. Closing one of its
+            // own is still allowed.
+            if !closing, let found, Self.isVaulted(found) { throw Self.blockedByPerson() }
             work(on: found, session)
             return found!
         case "not_yours":
@@ -2025,7 +2078,7 @@ final class AgentControl: ObservableObject {
     /// A script of Search's, in Search's world, on the tab's page: its own
     /// tab housed off screen first; one of yours read as it is, and never
     /// woken for it.
-    private func page(_ tab: Tab, _ session: AgentSession, _ script: String,
+    private func page(_ tab: Tab, _ session: AgentSession, _ script: String, evenVaulted: Bool = false,
                       _ done: @escaping (Result<[String: Any], AgentRefusal>) -> Void) {
         guard live(session) else {
             done(.failure(AgentRefusal(code: "stopped", message: "Stopped in \(Brand.name)")))
@@ -2041,11 +2094,15 @@ final class AgentControl: ObservableObject {
             done(.failure(AgentRefusal(code: "asleep", message: "That tab is asleep, and isn't woken for an agent")))
             return
         }
+        // Asked again here and when the answer comes: the page may have moved
+        // since the tab was looked up.
+        guard evenVaulted || !Self.isVaulted(tab) else { return done(.failure(Self.blockedByPerson())) }
         web.evaluateJavaScript(script, in: nil, in: Web.world) { [weak self] result in
             guard let self, live(session) else {
                 done(.failure(AgentRefusal(code: "stopped", message: "Stopped in \(Brand.name)")))
                 return
             }
+            guard evenVaulted || !Self.isVaulted(tab) else { return done(.failure(Self.blockedByPerson())) }
             switch result {
             case .failure(let error):
                 done(.failure(AgentRefusal(code: "page", message: error.localizedDescription)))
@@ -2067,6 +2124,11 @@ final class AgentControl: ObservableObject {
     }
 
     private func describe(_ tab: Tab, _ session: AgentSession) -> [String: Any] {
+        if Self.isVaulted(tab) {
+            var out = Self.blockedByPerson().said
+            out["page"] = session.handle(for: tab)
+            return out
+        }
         var out: [String: Any] = ["page": session.handle(for: tab), "url": AgentRules.url(tab.address?.absoluteString ?? ""),
                                   "title": tab.title, "loading": tab.loading]
         if let failure = tab.failure { out["failure"] = AgentRules.scrubbed(failure) }
@@ -2083,6 +2145,8 @@ final class AgentControl: ObservableObject {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { look() }
                 return
             }
+            // Refused on the way: nothing to wait for (decorate says why).
+            if session.vaultRefused != nil { return answer(["page": session.handle(for: tab)]) }
             if !tab.loading, tab.address != nil {
                 // A beat for the document's own scripts to settle.
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
@@ -2106,7 +2170,11 @@ final class AgentControl: ObservableObject {
         let live = Set(browser.tabs.map(\.id))
         for (handle, id) in session.pages where !live.contains(id) { session.forget(handle) }
         session.workspace.keep(only: live)
+        // A tab on a blocked site isn't listed: its address and title are the
+        // site's, and yours.
+        let vaulted = VaultedSites.current
         let shown = browser.tabs.filter { tab in
+            !Self.isVaulted(tab, in: vaulted) &&
             AgentRules.refusal(for: tab, own: session.own.contains(tab.id), consent: session.consent, use: .read) == nil
         }
         answer(["tabs": shown.map { tab -> [String: Any] in
@@ -2181,6 +2249,10 @@ final class AgentControl: ObservableObject {
                 // The page it is on is one of the task's sites.
                 if let here = AgentGate.site(tab.pageAddress) { session.sites.insert(here) }
                 let target = AgentGate.Target(seen["gate"]) ?? AgentGate.Target()
+                // A blocked site is refused, never put to you as a question.
+                if let url = VaultedSites.reached(by: target, in: VaultedSites.current) {
+                    return answer(Self.blockedByPerson(VaultedSites.host(of: url)).said)
+                }
                 guard let hold = AgentGate.hold(click: target, on: tab.pageAddress, sites: session.sites, rules: self.rules(browser)) else {
                     return press(seen)
                 }
@@ -2241,6 +2313,9 @@ final class AgentControl: ObservableObject {
             touch("probe", nil) { probed in
                 var target = AgentGate.Target(probed["gate"]) ?? AgentGate.Target()
                 target.enter = true
+                if let url = VaultedSites.reached(by: target, in: VaultedSites.current) {
+                    return answer(Self.blockedByPerson(VaultedSites.host(of: url)).said)
+                }
                 guard let hold = AgentGate.hold(enter: target, on: tab.pageAddress, rules: rules) else { return submit() }
                 if self.handsOverSignIn(hold, tab, session, answer) { return }
                 self.ask(hold, session) { verdict in
@@ -2323,6 +2398,9 @@ final class AgentControl: ObservableObject {
             let asked: (@escaping (Result<[String: Any], AgentRefusal>) -> Void) -> Void = condition.page.isEmpty
                 ? { done in done(.success(["met": true, "url": tab.address?.absoluteString ?? "", "title": tab.title])) }
                 : { done in self.page(tab, session, PageScripts.check(condition.page), done) }
+            // Your tab's address and title are read without the page: a site
+            // closed to agents isn't waited on either.
+            guard !Self.isVaulted(tab) else { return answer(Self.blockedByPerson().said) }
             asked { result in
                 if case .success(let out) = result,
                    condition.met(page: out["met"] as? Bool == true, url: out["url"] as? String ?? "", title: out["title"] as? String ?? "") {
@@ -2330,7 +2408,7 @@ final class AgentControl: ObservableObject {
                             "title": out["title"] ?? "", "waitedMs": Int(Date().timeIntervalSince(began) * 1000)])
                     return
                 }
-                if case .failure(let refusal) = result, ["bad_condition", "stopped"].contains(refusal.code) {
+                if case .failure(let refusal) = result, ["bad_condition", "stopped", "blocked_by_user_policy"].contains(refusal.code) {
                     answer(refusal.said)
                     return
                 }
@@ -2370,6 +2448,7 @@ final class AgentControl: ObservableObject {
             }
             PageHands.snapshot(tab.web, width: width) { taken in
                 putBack()
+                guard !Self.isVaulted(tab) else { return answer(Self.blockedByPerson().said) }
                 switch taken {
                 case .failure(let error):
                     answer(AgentRefusal(code: "no_picture", message: error.localizedDescription).said)

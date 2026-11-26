@@ -53,9 +53,10 @@ enum Mentions {
         return String(draft[..<at])
     }
 
-    /// Whether a tab may be named at all: a web page, not private.
+    /// Whether a tab may be named at all: a web page, not private, and not on
+    /// a site you closed to agents (VaultedSites).
     @MainActor static func mayName(_ tab: Tab) -> Bool {
-        guard !tab.shy, tab.store.isPersistent || tab.agent,
+        guard !tab.shy, !AgentControl.isVaulted(tab), tab.store.isPersistent || tab.agent,
               let scheme = tab.pageAddress?.scheme?.lowercased() else { return false }
         return scheme == "https" || scheme == "http"
     }
@@ -107,7 +108,9 @@ enum Mentions {
                 out.append(Attached(title: "Selected text from \(from)", address: "", text: text,
                                     addressed: AIPage.addressesAI(text)))
             case .tab(let id, _):
-                guard let tab = tabs.first(where: { $0.id == id }), mayName(tab), let read = await AIPage.read(tab) else { continue }
+                guard let tab = tabs.first(where: { $0.id == id }), mayName(tab), let read = await AIPage.read(tab),
+                      // It may have moved while it was read.
+                      mayName(tab), !VaultedSites.blocks(read.url, in: VaultedSites.current) else { continue }
                 var address = ""
                 if let url = read.url, var parts = URLComponents(url: url, resolvingAgainstBaseURL: false) {
                     parts.query = nil

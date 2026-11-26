@@ -971,6 +971,8 @@ struct SettingsPanel: View {
         case "bench": Switch(on: $prefs.bench)
         case "agents": Always(text: "Asks first")
         case "claude.history": Switch(on: $prefs.keepsTaskHistory)
+        // The list is under the row (after).
+        case "agents.vaulted": EmptyView()
         case "news.updates": OptInSettingsField(betaOnly: false) { _ = browser.open($0, foreground: true) }
         case "news.iphone": OptInSettingsField(betaOnly: true) { _ = browser.open($0, foreground: true) }
         default: EmptyView()
@@ -1012,6 +1014,8 @@ struct SettingsPanel: View {
                 }
                 .under()
             }
+        case "agents.vaulted":
+            if !searched { VaultedSiteList(prefs: prefs).under() }
         case "passkeys":
             if !searched, !Vault.never.isEmpty {
                 Rule()

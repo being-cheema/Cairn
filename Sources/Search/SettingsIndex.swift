@@ -92,6 +92,7 @@ enum SettingsIndex {
 
         .init(id: "blocking", page: .privacy, title: "Blocking", icon: "shield"),
         .init(id: "permissions", page: .privacy, title: "Site permissions", icon: "checkmark.shield"),
+        .init(id: "agentsites", page: .privacy, title: "Coding agents", icon: "cursorarrow.rays"),
         .init(id: "clear", page: .privacy, title: "Clear", icon: "trash"),
 
         .init(id: "mouse", page: .keyboard, title: "Mouse and trackpad", icon: "computermouse"),
@@ -759,6 +760,10 @@ enum SettingsIndex {
               more: "Nothing to turn on. The side panel's Claude starts when you send it a message: that is your go-ahead. Any other program that connects is asked about in the window first, unless you ticked “Always allow” for it — offered only for Claude Code's own `claude`, signed by Anthropic; kept 30 days at most and 7 after its last use, never with your tabs, and asked again after you press Stop; revoke it here. Nothing is drawn over the page: the tab it works in wears a small dot, and Stop is on the column's foot (or the tab strip) and in File › Stop Agent (⌃⌥⌘.) until it goes. It works in tabs of its own; your tabs it can read only if you tick “Let it read my open tabs, except private ones”, and never uses. It never sees passwords, card numbers, one-time codes, private tabs, cookies or Settings, is never given a saved password, passkey or code to sign in with, and can't download or choose files. It connects through a file on this Mac only, never the network: claude mcp add cairn -- /path/to/\(Brand.name).app/Contents/MacOS/cairn-mcp.",
               words: ["agent", "claude code", "codex", "mcp", "always allow", "forget agent", "revoke", "trusted", "copy mcp config", "developer"]),
 
+        .init(id: "agents.vaulted", group: "agentsites", icon: "hand.raised.slash",
+              title: "Sites agents can't use", detail: "Claude and other agents are refused these sites and their subdomains",
+              more: "An agent can't open, go to, be redirected to, read or act on a site here, and you aren't asked: it is refused. Add one here or with Block Agents on This Site on the site's card. It goes by a page's address: another site's page can still fetch from one with its own scripts, and the same company's other domains are other sites. In a tab you were handed to sign in, you can still go there; the agent can't read it.",
+              keys: ["agents.vaultedSites"], words: ["agent", "block", "vault", "bank", "claude", "mcp", "privacy", "domain"]),
         .init(id: "claude.history", group: "developer", icon: "clock",
               title: "Keep Task History", detail: "What you asked Claude in the side panel, where it went and what you approved",
               more: "Kept on this Mac only, with card numbers, labelled passwords and codes and common kinds of key hidden from what you typed; a secret written another way is kept as typed. Claude's replies aren't kept. Turning this off keeps nothing new; the clock in the panel has Delete All for what is already there.",

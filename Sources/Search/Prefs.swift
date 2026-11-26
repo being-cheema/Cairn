@@ -180,6 +180,10 @@ final class Preferences: ObservableObject {
     @Published var claudeModel: String? {
         didSet { store.set(claudeModel, forKey: "claude.model") }
     }
+    /// Sites closed to agents, each covering its subdomains (VaultedSites).
+    @Published var vaultedSites: Set<String> {
+        didSet { store.set(Array(vaultedSites).sorted(), forKey: VaultedSites.key) }
+    }
     /// The panel's Task History (TaskLedger). On unless turned off.
     @Published var keepsTaskHistory: Bool {
         didSet { store.set(keepsTaskHistory, forKey: "claude.history") }
@@ -1435,6 +1439,7 @@ final class Preferences: ObservableObject {
         popupSites = Set(store.stringArray(forKey: "privacy.popupSites") ?? [])
         sleepsTabs = store.object(forKey: "tabs.sleep") as? Bool ?? true
         dimsSleepingTabs = store.bool(forKey: "tabs.sleep.dim")
+        vaultedSites = Set(store.stringArray(forKey: VaultedSites.key) ?? [])
         hidesBack = store.bool(forKey: "helm.back.hidden")
         hidesForward = store.bool(forKey: "helm.forward.hidden")
         hidesReload = store.bool(forKey: "helm.reload.hidden")

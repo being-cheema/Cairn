@@ -12,12 +12,15 @@ import Foundation
 
 enum NavigationPolicyEngine {
     /// Why `open` or `go` can't have an address.
-    enum Refused: Error, Equatable { case notWeb, privateAddress }
+    enum Refused: Error, Equatable { case notWeb, privateAddress, blockedByPerson }
 
     /// The address an agent's `open` or `go` names.
     @MainActor
-    static func destination(_ text: String, allowed: Set<String>? = nil) -> Result<URL, Refused> {
+    static func destination(_ text: String, allowed: Set<String>? = nil, vaulted: Set<String>? = nil) -> Result<URL, Refused> {
         guard let url = AgentRules.webAddress(text) else { return .failure(.notWeb) }
+        // A site you closed to agents is refused here, before any gate could
+        // ask you about going there.
+        if VaultedSites.blocks(url, in: vaulted ?? VaultedSites.current) { return .failure(.blockedByPerson) }
         return PrivateNetwork.refuses(url, allowed: allowed) ? .failure(.privateAddress) : .success(url)
     }
 
@@ -32,6 +35,8 @@ enum NavigationPolicyEngine {
     enum Screen: Equatable {
         /// Not fetched from anywhere (about:, data:, blob:): nothing to ask.
         case notWeb
+        /// A site you closed to agents (VaultedSites), or under one.
+        case blockedByPerson
         /// This Mac or a private network, as written.
         case privateAddress
         /// A name to look up before it is let through.
@@ -41,7 +46,9 @@ enum NavigationPolicyEngine {
     }
 
     @MainActor
-    static func screen(_ url: URL, allowed: Set<String>? = nil) -> Screen {
+    static func screen(_ url: URL, allowed: Set<String>? = nil, vaulted: Set<String>? = nil) -> Screen {
+        // First, so a blob: of a blocked site's isn't waved through below.
+        if VaultedSites.blocks(url, in: vaulted ?? VaultedSites.current) { return .blockedByPerson }
         guard ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { return .notWeb }
         let allowed = allowed ?? PrivateNetwork.allowed
         guard !PrivateNetwork.refuses(url, allowed: allowed) else { return .privateAddress }
