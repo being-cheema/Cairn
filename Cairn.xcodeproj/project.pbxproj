@@ -257,6 +257,8 @@
 		AA12896F2F0E502555C6BE2D /* TaskHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA12674D042E25B77B4480E7 /* TaskHistory.swift */; };
 		AA11896F2F0E502555C6BE2D /* TaskLedger.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11674D042E25B77B4480E7 /* TaskLedger.swift */; };
 		AA10896F2F0E502555C6BE2D /* Playbooks.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10674D042E25B77B4480E7 /* Playbooks.swift */; };
+		AA1079CC3127F30BEB4B6C50 /* HomeTiles.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10277B92F383F026131BD3 /* HomeTiles.swift */; };
+		AA105C81AFC866E50D452B01 /* DNSRetry.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10DFA92DB64E3C90A5F772 /* DNSRetry.swift */; };
 		C4D0896F2F0E502555C6BE2D /* AgentDrawer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4D0674D042E25B77B4480E7 /* AgentDrawer.swift */; };
 		B3C0896F2F0E502555C6BE2D /* Artifact.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3C0674D042E25B77B4480E7 /* Artifact.swift */; };
 		B3B0896F2F0E502555C6BE2D /* Mentions.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3B0674D042E25B77B4480E7 /* Mentions.swift */; };
@@ -474,6 +476,8 @@
 		AA12674D042E25B77B4480E7 /* TaskHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TaskHistory.swift; path = Sources/Search/TaskHistory.swift; sourceTree = SOURCE_ROOT; };
 		AA11674D042E25B77B4480E7 /* TaskLedger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TaskLedger.swift; path = Sources/Search/TaskLedger.swift; sourceTree = SOURCE_ROOT; };
 		AA10674D042E25B77B4480E7 /* Playbooks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Playbooks.swift; path = Sources/Search/Playbooks.swift; sourceTree = SOURCE_ROOT; };
+		AA10277B92F383F026131BD3 /* HomeTiles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HomeTiles.swift; path = Sources/Search/HomeTiles.swift; sourceTree = SOURCE_ROOT; };
+		AA10DFA92DB64E3C90A5F772 /* DNSRetry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DNSRetry.swift; path = Sources/Search/DNSRetry.swift; sourceTree = SOURCE_ROOT; };
 		C4D0674D042E25B77B4480E7 /* AgentDrawer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AgentDrawer.swift; path = Sources/Search/AgentDrawer.swift; sourceTree = SOURCE_ROOT; };
 		B3C0674D042E25B77B4480E7 /* Artifact.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Artifact.swift; path = Sources/Search/Artifact.swift; sourceTree = SOURCE_ROOT; };
 		B3B0674D042E25B77B4480E7 /* Mentions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Mentions.swift; path = Sources/Search/Mentions.swift; sourceTree = SOURCE_ROOT; };
@@ -694,6 +698,8 @@
 				AA12674D042E25B77B4480E7 /* TaskHistory.swift */,
 				AA11674D042E25B77B4480E7 /* TaskLedger.swift */,
 				AA10674D042E25B77B4480E7 /* Playbooks.swift */,
+				AA10277B92F383F026131BD3 /* HomeTiles.swift */,
+				AA10DFA92DB64E3C90A5F772 /* DNSRetry.swift */,
 				C4D0674D042E25B77B4480E7 /* AgentDrawer.swift */,
 				B3C0674D042E25B77B4480E7 /* Artifact.swift */,
 				B3B0674D042E25B77B4480E7 /* Mentions.swift */,
@@ -1076,6 +1082,8 @@
 				AA12896F2F0E502555C6BE2D /* TaskHistory.swift in Sources */,
 				AA11896F2F0E502555C6BE2D /* TaskLedger.swift in Sources */,
 				AA10896F2F0E502555C6BE2D /* Playbooks.swift in Sources */,
+				AA1079CC3127F30BEB4B6C50 /* HomeTiles.swift in Sources */,
+				AA105C81AFC866E50D452B01 /* DNSRetry.swift in Sources */,
 				C4D0896F2F0E502555C6BE2D /* AgentDrawer.swift in Sources */,
 				B3C0896F2F0E502555C6BE2D /* Artifact.swift in Sources */,
 				B3B0896F2F0E502555C6BE2D /* Mentions.swift in Sources */,

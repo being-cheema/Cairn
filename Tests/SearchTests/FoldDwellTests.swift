@@ -7,6 +7,13 @@ import XCTest
 /// (idea 1253). Both wait the same now; the strip's edge, which is also the
 /// way to the menu bar, starts its wait again while the pointer still rises.
 final class FoldDwellTests: XCTestCase {
+    func testOnlyTheColumnInFrontTrustsThePointersPosition() {
+        XCTAssertTrue(Fold.frontColumn(sidebar: true, key: true, main: false))
+        XCTAssertTrue(Fold.frontColumn(sidebar: true, key: false, main: true))
+        XCTAssertFalse(Fold.frontColumn(sidebar: true, key: false, main: false))
+        XCTAssertFalse(Fold.frontColumn(sidebar: false, key: true, main: true))
+    }
+
     func testTheStripWaitsNoLongerThanTheColumn() {
         XCTAssertEqual(Fold.dwell, 0.05, accuracy: 0.0001)
     }
@@ -24,5 +31,17 @@ final class FoldDwellTests: XCTestCase {
         XCTAssertFalse(Fold.rising(from: NSPoint(x: 400, y: 799), to: NSPoint(x: 400, y: 797)))
         // The first sample has nothing before it.
         XCTAssertFalse(Fold.rising(from: nil, to: NSPoint(x: 400, y: 799)))
+    }
+
+    /// The edge is watched on drags too: a drag in the page that reached it
+    /// (a selection, Airtable's own sidebar edge 6 points in) brought the
+    /// column out over the page mid-drag. Not with the left button held.
+    func testTheEdgeWaitsForTheButtonToBeLetGo() {
+        XCTAssertTrue(Fold.edgeBrings(pressed: 0))
+        XCTAssertFalse(Fold.edgeBrings(pressed: 1))
+        XCTAssertFalse(Fold.edgeBrings(pressed: 1 | 4))
+        // The right or middle button alone is no drag in the page.
+        XCTAssertTrue(Fold.edgeBrings(pressed: 2))
+        XCTAssertTrue(Fold.edgeBrings(pressed: 4))
     }
 }

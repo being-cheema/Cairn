@@ -445,6 +445,11 @@ struct SearchApp: App {
                 Button(browser.pageKept ? "Edit Bookmark\u{2026}" : "Add This Page") { browser.bookmarkCurrent() }
                     .shortcut("bookmarks.add")
                     .disabled(!(browser.active?.isWeb ?? false))
+                if browser.prefs.homeTiles {
+                    // Settings › Site tiles on a new tab (HomeTiles.swift).
+                    Button("Add This Page to New Tabs") { browser.active.map { browser.addTile(from: $0) } }
+                        .disabled(!(browser.active.map(browser.offersTile) ?? false))
+                }
                 Button("Show Bookmarks…") { browser.bookmarking = true }
                     .shortcut("bookmarks.show")
                 Toggle("Show Bookmarks Bar", isOn: Binding(
@@ -702,10 +707,14 @@ struct ContentView: View {
                 // A space's chosen page size, unless a video has the window.
                 .modifier(PageSizeFrame(size: fullscreenTab == nil ? browser.pageSize?.size : nil))
                 .modifier(DevToolsStage(browser: browser))
-                // The tabs folded away: a line says the page is coming
-                // (Settings, idea 269), clear of the card's round corners.
+                // A line along the page's top says the page is coming, as
+                // Arc's (idea 269), clear of the card's round corners: with
+                // the tabs folded away, where nothing else said it, and with
+                // them in sight too, where it is in the line of sight and
+                // says how far along the page is (#1650, idea 1281). For
+                // everyone, no switch.
                 .overlay(alignment: .top) {
-                    if browser.folded, browser.prefs.showsLoadingLine, fullscreenTab == nil, let tab = browser.active {
+                    if fullscreenTab == nil, let tab = browser.active {
                         TabLoadingLine(tab: tab)
                             .padding(.horizontal, cardCorner)
                     }
@@ -742,9 +751,11 @@ struct ContentView: View {
             // The bookmarks bar, under the strip or beside the column's top —
             // there on the window's ground above the page's card, and no wider.
             if barShown {
+                // The pointer reaching an auto-hidden sidebar's edge brings it over the bar.
+                let side = chrome.width + (browser.folded && browser.prefs.sideHides ? Fold.hiddenEdge : 0)
                 BookmarksBar(browser: browser, bookmarks: browser.bookmarks, onFrame: cards)
-                    .padding(.leading, sideOnRight ? farGap : chrome.width)
-                    .padding(.trailing, sideOnRight ? chrome.width : farGap)
+                    .padding(.leading, sideOnRight ? farGap : side)
+                    .padding(.trailing, sideOnRight ? side : farGap)
                     .padding(.top, band)
                     .transition(.opacity)
             }
@@ -928,11 +939,10 @@ struct ContentView: View {
             .transition(.opacity)
     }
 
-    /// The bookmarks bar is up: asked for, there are bookmarks, the tabs
-    /// aren't folded away or under a video filling the screen, and it isn't
-    /// in the column instead (SideBookmarks).
+    /// The top bar is up when the tab and fold allow it, there are bookmarks,
+    /// and the page isn't filling the screen.
     private var barShown: Bool {
-        browser.bookmarksBarForTab && !browser.prefs.sideBookmarks && !browser.bookmarks.isEmpty && !browser.folded
+        browser.bookmarksBarForTab && !browser.prefs.sideBookmarks && !browser.bookmarks.isEmpty
             && fullscreenTab == nil
     }
 
@@ -1350,7 +1360,7 @@ struct ContentView: View {
 
     // MARK: - the window
 
-    /// A line that rises from the bottom, says one thing, and leaves.
+    /// A line at the bottom that comes into focus, says one thing, and goes.
     @ViewBuilder
     private var announcement: some View {
         if let text = browser.announcement {
@@ -1373,8 +1383,12 @@ struct ContentView: View {
                 .background(Palette.ground, in: Capsule())
                 .overlay(Capsule().strokeBorder(Palette.hairline, lineWidth: 1))
                 .shadow(color: .black.opacity(0.10), radius: 18, y: 6)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-                .animation(Motion.settle, value: browser.announcement)
+                // Comes into focus where it stands, and goes out of it: no
+                // travel, so it doesn't rise from or sink into the edge. With
+                // Reduce Motion, a plain fade.
+                .transition(Motion.reduced ? .opacity
+                            : .modifier(active: Focus(blur: 8, scale: 0.9, opacity: 0),
+                                        identity: Focus(blur: 0, scale: 1, opacity: 1)))
         }
     }
 
@@ -2486,5 +2500,17 @@ private struct ImportProgress: View {
             .buttonStyle(.plain)
             .disabled(job.cancelling)
         }
+    }
+}
+
+/// Out of focus, smaller and clear, or none of those: the Saved line's way
+/// in and out.
+private struct Focus: ViewModifier {
+    let blur: CGFloat
+    let scale: CGFloat
+    let opacity: Double
+
+    func body(content: Content) -> some View {
+        content.blur(radius: blur).scaleEffect(scale).opacity(opacity)
     }
 }

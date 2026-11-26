@@ -414,6 +414,14 @@ struct Fold: View {
     /// grazing it on the way up doesn't bring it out.
     static let dwell: TimeInterval = 0.05
 
+    /// Whether the edge brings the column (or the strip) out with these
+    /// mouse buttons down: not while the left one is held. The edge is
+    /// watched on drags too, and a drag in the page that reached it — a
+    /// text selection, cells, a row, or a page's own sidebar along the same
+    /// edge pulled open (Airtable's lies 6 points in) — had the column slide
+    /// out over it on the way.
+    static func edgeBrings(pressed buttons: Int) -> Bool { buttons & 1 == 0 }
+
     /// Whether the pointer, from `last` to `point` in the window's own
     /// coordinates, is still going up: on its way past the strip's edge to
     /// the menu bar rather than come to rest on it. Against the screen's
@@ -709,14 +717,15 @@ struct Fold: View {
         // while it is still beside the window on that side.
         let flingHeld = prefs.sidebar && now < pointer.flungUntil && past > 0
             && point.y >= 0 && point.y < size.height
+        let frontColumn = Fold.frontColumn(sidebar: prefs.sidebar, key: window.isKeyWindow, main: window.isMainWindow)
         if browser.peeking {
             pass()
-            // Only this window counts, not another app's window over it. One
-            // of this app's own windows, such as a popover opened from the
-            // column, counts as the column.
+            // Where the pointer is decides for the column in front, as at
+            // its edge below. Still ask what's under it: a popover opened
+            // from the column holds it out even past its width.
             let top = NSWindow.windowNumber(at: screen, belowWindowWithWindowNumber: 0)
-            let onWindow = top == window.windowNumber
-            let onOwnPanel = !onWindow && NSApp.windows.contains { $0.windowNumber == top }
+            let onWindow = frontColumn || top == window.windowNumber
+            let onOwnPanel = top != window.windowNumber && NSApp.windows.contains { $0.windowNumber == top }
             // Floating, the column stands a gap in from the edge, and its
             // edge to pull reaches half its width past it.
             let reach = prefs.sidebar ? prefs.columnWidth + (floating ? Metrics.cardGap + 5 : 0) : Metrics.strip
@@ -732,13 +741,20 @@ struct Fold: View {
             if over != inside { inside = over }
             peek(over)
         } else if inWindow, distance < (prefs.sidebar && prefs.sideHides ? Fold.hiddenEdge : Fold.edge),
+                  // Not with the button held: a drag in the page, a text
+                  // selection or Airtable's own sidebar edge pulled, came
+                  // to the edge and the column slid out over it mid-drag.
+                  Fold.edgeBrings(pressed: NSEvent.pressedMouseButtons),
                   // In full screen, not from the corner where macOS brings
                   // the window's buttons down with the menu bar: the column
                   // came out over them there, on the way to the red one (#241).
                   !(prefs.sidebar && window.styleMask.contains(.fullScreen) && size.height - point.y < Fold.fullScreenCorner) {
-            // Which window is under the pointer is asked only here, at the
-            // edge: another app's window over it doesn't bring the column out.
-            guard NSWindow.windowNumber(at: screen, belowWindowWithWindowNumber: 0) == window.windowNumber
+            // Ask what's under the pointer only when the column's window
+            // isn't in front: another app's window over it shouldn't bring
+            // it out. In front, a window manager's floating panel can
+            // cover the screen's outermost points without covering the column,
+            // so position decides, even with picture in picture over the edge.
+            guard frontColumn || NSWindow.windowNumber(at: screen, belowWindowWithWindowNumber: 0) == window.windowNumber
             else { return pass() }
             if !prefs.sidebar, Fold.rising(from: last, to: point) { pass() }
             if arriving == nil { arrive() }
@@ -769,6 +785,10 @@ struct Fold: View {
         } else {
             pass()
         }
+    }
+
+    static func frontColumn(sidebar: Bool, key: Bool, main: Bool) -> Bool {
+        sidebar && (key || main)
     }
 
     /// Whether a move of the pointer from `last` to `point`, both in the
@@ -812,6 +832,8 @@ struct Fold: View {
         pass()
         let coming = DispatchWorkItem {
             arriving = nil
+            // Pressed during the wait: the hand is at work in the page.
+            guard resting || Fold.edgeBrings(pressed: NSEvent.pressedMouseButtons) else { return }
             peek(true)
         }
         arriving = coming

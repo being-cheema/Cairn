@@ -212,10 +212,6 @@ enum SettingsIndex {
               more: "Off, ⌘S hides the column and the page takes the whole window.",
               keys: ["sidebar.foldIcons"], words: ["collapse", "collapsed", "compact", "narrow", "hide sidebar", "icons only", "favicons"],
               parent: "tabs.layout"),
-        .init(id: "fold.loadingLine", group: "window", icon: "slider.horizontal.below.rectangle",
-              title: "A loading line with the tabs hidden", detail: "Folded away with ⌘S, a thin line along the page's top while it loads",
-              more: "With the tabs in sight, the ring on the tab says a page is loading; hidden, nothing did. The line runs as far as the page has come and goes once it is there.",
-              keys: ["fold.loadingLine"], words: ["loading", "progress", "bar", "spinner", "indicator", "hidden sidebar", "folded", "arc"]),
         .init(id: "layout.cards", group: "window", icon: "rectangle.inset.filled",
               title: "The page as a card", detail: "A little room around the page, with rounded corners",
               more: "Off, the page reaches the window's edges and the column is white with its hairline.",
@@ -317,7 +313,7 @@ enum SettingsIndex {
               parent: "bookmarks.bar"),
         .init(id: "bookmarks.newTabOnly", group: "tablook", icon: "plus.square",
               title: "Show the bookmarks bar only on new tabs", detail: "Hidden while a page is open, as Chrome and Edge can",
-              more: "The bar comes back as soon as the tab on screen is a new one.",
+              more: "The bar comes back as soon as the tab on screen is a new one, also with the column folded away.",
               keys: ["bookmarks.newTabOnly"], words: ["favorites bar", "bookmarks toolbar", "new tab", "only", "hide", "chrome", "edge"],
               parent: "bookmarks.bar"),
         .init(id: "motion.light", group: "motion", icon: "leaf",
@@ -361,6 +357,10 @@ enum SettingsIndex {
               title: "Show the Home bookmarks on a new tab", detail: "The sites of your bookmark folder called Home, under the address field",
               more: "Make a folder called Home in Bookmarks and put sites in it: a blank tab shows up to 16 of them as tiles with their names, in the order you keep them.",
               keys: ["home.grid"], words: ["home", "home page", "start page", "new tab", "speed dial", "favorites"]),
+        .init(id: "home.tiles", group: "newtabs", icon: "square.grid.3x2",
+              title: "Site tiles on a new tab", detail: "Small chips of your sites under the address field; add, edit and move them there",
+              more: "Click + to add a site, or right-click a tab and choose Add to New Tabs. Right-click a chip to edit or remove it, or click the × that shows on hover; drag chips to reorder them, or select one with Tab and press ⌘ with an arrow. Up to 12. They\u{2019}re kept in your bookmark folder called Home, so each profile has its own and they sync with your bookmarks. Private tabs show them but don\u{2019}t change them, and a new tab never fetches anything for them.",
+              keys: ["home.tiles"], words: ["shortcuts", "tiles", "speed dial", "top sites", "most visited", "favorites", "new tab", "start page", "home"]),
         .init(id: "tabs.undoReopens", group: "closing", icon: "arrow.uturn.backward.circle",
               title: "⌘Z reopens a closed tab", detail: "Right after closing it, as ⇧⌘T would; tabs just moved into a folder or group go back too",
               more: "Only while closing or moving them is the last thing you did: type or click anything else and ⌘Z undoes as before. A page that uses ⌘Z itself, such as a document or a drawing, keeps it. Several tabs moved together go back together.",
@@ -878,7 +878,8 @@ enum SettingsIndex {
     /// section hides it otherwise; the find field shows it dimmed.
     @MainActor static func applies(_ item: SettingsItem, _ prefs: Preferences) -> Bool {
         switch item.id {
-        case "pages.dusk": return prefs.look != .light
+        // Shown while on whatever the look, so it can always be turned off.
+        case "pages.dusk": return prefs.look != .light || prefs.darkensPages
         case "inspector.dark": return prefs.look != .dark
         case "sidebar.roomy", "sidebar.player", "sidebar.doorsUp", "sidebar.foldButton", "sidebar.narrowIcons": return prefs.sidebar && !prefs.sideIcons
         case "sidebar.hides", "sidebar.slides", "layout.cards", "pins.list": return prefs.sidebar

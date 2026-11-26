@@ -115,8 +115,12 @@ struct SettingsPanel: View {
             if asTab { tabbed } else { card }
         }
         .onChange(of: browser.settingsFind) { _, _ in finding = true }
+        // Find a setting takes the keys as Settings opens, as System
+        // Settings' search does: type a setting's name at once (#1611).
+        // A turn later, once the tab has taken the window's keys.
         .onAppear {
             if let found { query = found } else if let tabID, let kept = browser.settingsQueries[tabID] { query = kept }
+            DispatchQueue.main.async { finding = true }
         }
         .onChange(of: query) { _, words in
             if let tabID { browser.settingsQueries[tabID] = words.isEmpty ? nil : words }
@@ -211,7 +215,7 @@ struct SettingsPanel: View {
     }
 
     /// Find a setting: the wash, the glass, ⌘F beside it until something
-    /// is typed. Escape empties it.
+    /// is typed. Escape empties it, and then lets go.
     private struct FindField: View {
         @Binding var text: String
         var focus: FocusState<Bool>.Binding
@@ -229,7 +233,9 @@ struct SettingsPanel: View {
                         .textFieldStyle(.plain)
                         .foregroundStyle(Palette.ink)
                         .focused(focus)
-                        .onExitCommand { text = "" }
+                        // Escape empties it; empty, it lets go of the keys,
+                        // for Tab and the arrows to move around Settings.
+                        .onExitCommand { if text.isEmpty { focus.wrappedValue = false } else { text = "" } }
                         .accessibilityLabel("Find a setting")
                 }
                 .font(.system(size: 12.5))
@@ -710,7 +716,6 @@ struct SettingsPanel: View {
         case "tabs.highContrast": Switch(on: $prefs.highContrastText)
         case "tabs.reading": Switch(on: $prefs.showsReading)
         case "tabs.pinCounts": Switch(on: $prefs.showsPinCounts)
-        case "fold.loadingLine": Switch(on: $prefs.showsLoadingLine)
         case "tabs.give": Switch(on: $prefs.tabsGive)
         case "bookmarks.bar": Switch(on: $prefs.bookmarksBar)
         case "bookmarks.iconsOnly": Switch(on: $prefs.bookmarksIconsOnly)
@@ -744,6 +749,7 @@ struct SettingsPanel: View {
         case "tabs.keepWindow": Switch(on: $prefs.keepWindowAfterLast)
         case "tabs.closeGoesBack": Switch(on: $prefs.closeGoesBack)
         case "home.grid": Switch(on: $prefs.homeGrid)
+        case "home.tiles": Switch(on: $prefs.homeTiles)
         case "tabs.undoReopens": Switch(on: $prefs.undoReopensTab)
         case "tabs.switcherBehindFirst": Switch(on: $prefs.switcherBehindFirst)
         case "tabs.switcherLeavesOutPins": Switch(on: $prefs.switcherLeavesOutPins)
