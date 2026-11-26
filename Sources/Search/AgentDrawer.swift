@@ -88,9 +88,19 @@ enum AgentEntryWords {
 
 /// The drawer: shut until opened.
 struct RememberedAgents: View {
-    @ObservedObject private var trust = AgentTrust.shared
-    @State private var open = false
+    @ObservedObject private var trust: AgentTrust
+    @State private var open: Bool
     @State private var copied = false
+
+    private let tool: URL?
+
+    /// The app's own list and this copy's cairn-mcp, shut. A test hands in
+    /// its own.
+    init(trust: AgentTrust? = nil, open: Bool = false, tool: URL? = ClaudeCode.mcpTool()) {
+        self.tool = tool
+        _trust = ObservedObject(wrappedValue: trust ?? .shared)
+        _open = State(initialValue: open)
+    }
 
     var body: some View {
         Rule()
@@ -120,7 +130,7 @@ struct RememberedAgents: View {
     @ViewBuilder
     private var setup: some View {
         Rule()
-        if let tool = ClaudeCode.mcpTool() {
+        if let tool {
             SettingRow(icon: "doc.on.clipboard", title: "Set up an agent",
                        detail: AgentSetup.passing(tool.path)
                            ? "\(Brand.name) is running from a temporary copy: move it to Applications first, or this path will stop working."
@@ -156,7 +166,7 @@ struct RememberedAgents: View {
         Ask.sure("Revoke “\(entry.client)”?",
                  detail: "It will be asked about the next time it connects. A task it is running now isn't stopped: press Stop for that.",
                  confirm: "Revoke", returnCancels: true) {
-            AgentTrust.shared.forget(entry.id)
+            trust.forget(entry.id)
         }
     }
 
