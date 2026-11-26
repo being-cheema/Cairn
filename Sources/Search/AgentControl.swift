@@ -1866,6 +1866,21 @@ final class AgentControl: ObservableObject {
                                         message: verdict == .timedOut ? "The person didn't hand the tab back in time" : "The person didn't sign in",
                                         hint: "Say so in your reply. Don't ask again unless they tell you to.").said)
                 }
+            case .latestArtifact:
+                let cards = Browsers.all.flatMap { $0.claude.turns.flatMap(\.artifacts) }
+                switch Artifact.shared(cards, panel: session.panel, seesTabs: session.consent.seesTabs,
+                                       vaulted: VaultedSites.current) {
+                case .success(let markdown):
+                    answer(["markdown": markdown])
+                case .failure(.tabs):
+                    throw AgentRefusal(code: "not_yours", message: "A card can hold what is in the person's own tabs",
+                                       hint: "It is read only if they tick “Let it see my open tabs” when they allow you.")
+                case .failure(.none):
+                    throw AgentRefusal(code: "no_artifact", message: "There is no card yet",
+                                       hint: "The side panel's Claude makes one when the person asks it to.")
+                case .failure(.blocked):
+                    throw Self.blockedByPerson()
+                }
             case .createArtifact:
                 // Shown in the panel, which only its own run has.
                 guard session.panel, let panel = session.browser?.claude else {
