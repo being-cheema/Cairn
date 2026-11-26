@@ -2279,6 +2279,8 @@ final class AgentControl: ObservableObject {
                 try waitFor(request, session, browser, answer)
             case .shot:
                 try shot(request, session, browser, answer)
+            case .readConsole, .readNetworkErrors, .assertLayout, .devConsole, .devNetworkErrors:
+                throw AgentRefusal(code: "bridge_off", message: "The Dev Bridge is off")
             case .bye:
                 answer(["bye": true])
                 DispatchQueue.main.async { [weak self] in self?.end(session, .bye) }

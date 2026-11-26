@@ -308,6 +308,9 @@ enum ClaudeCode {
             "annotate_page": "Adding a margin note",
             "wait_for_sign_in": "Waiting for you to sign in",
             "batch_read": "Reading several pages",
+            "read_console": "Reading the local site's console",
+            "read_network_errors": "Reading the local site's failed requests",
+            "assert_layout": "Checking the local site's layout",
         ]
         if let host = site(input?["url"] as? String) {
             switch bare {

@@ -16,7 +16,7 @@ final class MCPResourceTests: XCTestCase {
         return try XCTUnwrap(JSONSerialization.jsonObject(with: Data(out.utf8)) as? [String: Any])
     }
 
-    func testTheServerOffersOneResource() throws {
+    func testTheServerOffersItsResources() throws {
         let server = MCPServer(socket: "/tmp/cairn-no-such-\(UUID().uuidString.prefix(6)).sock", pass: "")
         let started = try answer(server, #"{"id":1,"method":"initialize","params":{}}"#)
         let capabilities = (started["result"] as? [String: Any])?["capabilities"] as? [String: Any]
@@ -24,14 +24,15 @@ final class MCPResourceTests: XCTestCase {
         // Listed with no browser there: nobody is asked anything.
         let listed = try answer(server, #"{"id":2,"method":"resources/list"}"#)
         let resources = (listed["result"] as? [String: Any])?["resources"] as? [[String: Any]]
-        XCTAssertEqual(resources?.compactMap { $0["uri"] as? String }, ["cairn://artifacts/latest"])
+        XCTAssertEqual(resources?.compactMap { $0["uri"] as? String },
+                       ["cairn://artifacts/latest", "cairn://dev/console", "cairn://dev/network-errors"])
         let templates = try answer(server, #"{"id":3,"method":"resources/templates/list"}"#)
         XCTAssertNotNil(templates["result"])
     }
 
     func testReadingNeedsTheBrowserAndAKnownName() throws {
         let server = MCPServer(socket: "/tmp/cairn-no-such-\(UUID().uuidString.prefix(6)).sock", pass: "")
-        let unknown = try answer(server, #"{"id":1,"method":"resources/read","params":{"uri":"cairn://dev/console"}}"#)
+        let unknown = try answer(server, #"{"id":1,"method":"resources/read","params":{"uri":"cairn://dev/nothing"}}"#)
         XCTAssertEqual((unknown["error"] as? [String: Any])?["code"] as? Int, -32002)
         let closed = try answer(server, #"{"id":2,"method":"resources/read","params":{"uri":"cairn://artifacts/latest"}}"#)
         XCTAssertTrue(String(describing: closed["error"] ?? "").contains("not_listening"))

@@ -33,11 +33,14 @@ enum NavigationPolicyEngine {
 
     /// The address an agent's `open` or `go` names.
     @MainActor
-    static func destination(_ text: String, allowed: Set<String>? = nil, vaulted: Set<String>? = nil) -> Result<URL, Refused> {
+    static func destination(_ text: String, allowed: Set<String>? = nil, vaulted: Set<String>? = nil,
+                            bridged: (DevOrigin) -> Bool = { _ in false }) -> Result<URL, Refused> {
         guard let url = AgentRules.webAddress(text) else { return .failure(.notWeb) }
         // A site you closed to agents is refused here, before any gate could
         // ask you about going there.
         if VaultedSites.blocks(url, in: vaulted ?? VaultedSites.current) { return .failure(.blockedByPerson) }
+        // The one origin on this Mac you turned the Dev Bridge on for.
+        if let local = DevOrigin(url), bridged(local) { return .success(url) }
         return PrivateNetwork.refuses(url, allowed: allowed) ? .failure(.privateAddress) : .success(url)
     }
 
@@ -63,10 +66,12 @@ enum NavigationPolicyEngine {
     }
 
     @MainActor
-    static func screen(_ url: URL, allowed: Set<String>? = nil, vaulted: Set<String>? = nil) -> Screen {
+    static func screen(_ url: URL, allowed: Set<String>? = nil, vaulted: Set<String>? = nil, bridged: Bool = false) -> Screen {
         // First, so a blob: of a blocked site's isn't waved through below.
         if VaultedSites.blocks(url, in: vaulted ?? VaultedSites.current) { return .blockedByPerson }
         guard ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { return .notWeb }
+        // Into the Dev Bridge's origin the way it allows (DevChain).
+        if bridged { return .clear }
         let allowed = allowed ?? PrivateNetwork.allowed
         guard !PrivateNetwork.refuses(url, allowed: allowed) else { return .privateAddress }
         let host = url.host(percentEncoded: false) ?? ""

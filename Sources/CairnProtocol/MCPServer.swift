@@ -292,11 +292,12 @@ public final class MCPServer {
             if !data.isEmpty { error["data"] = data }
             return ("error", error)
         }
-        guard uri == MCPResources.latestArtifact else { return no(-32002, "no resource \(uri)") }
+        guard let verb = MCPResources.verb(for: uri) else { return no(-32002, "no resource \(uri)") }
         do {
-            let answer = try link.ask(["do": AgentVerb.latestArtifact.rawValue])
-            let text = answer["markdown"] as? String ?? ""
-            return ("result", ["contents": [["uri": uri, "mimeType": "text/markdown", "text": text]]])
+            let answer = try link.ask(["do": verb.rawValue])
+            let card = verb == .latestArtifact
+            let text = card ? answer["markdown"] as? String ?? "" : Self.text(answer)
+            return ("result", ["contents": [["uri": uri, "mimeType": card ? "text/markdown" : "application/json", "text": text]]])
         } catch let refusal as MCPRefusal {
             return no(-32002, refusal.message, refusal.said)
         } catch {
