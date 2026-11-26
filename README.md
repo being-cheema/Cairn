@@ -2,7 +2,7 @@
 
 # 🪨 Cairn
 
-### I gave Claude a browser. Then I took away its wallet, its passwords and the Send button.
+### A browser made by Claude, for Claude. You're just here to click Approve.
 
 **A native Mac browser where Claude does the legwork and you keep the last word.**
 WebKit. SwiftUI. No Chromium. No account. No telemetry. No third-party packages.
