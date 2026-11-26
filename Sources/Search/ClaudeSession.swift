@@ -81,6 +81,7 @@ final class ClaudeSession: ObservableObject {
     private let playbooks: () -> [Playbook]
     /// Writes a task's record; true when it adds to one already written.
     private let keep: @MainActor (TaskRecord, Bool) -> Void
+    private let drop: @MainActor (UUID) -> Void
     /// What lets this run, and only this one, in without a question
     /// (PanelRun); new with each run.
     private var pass = ""
@@ -119,7 +120,8 @@ final class ClaudeSession: ObservableObject {
          window: @escaping () -> Browser? = { nil },
          playbooks: @escaping () -> [Playbook] = { Playbooks.all() },
          keeping: @escaping @MainActor () -> Bool = { true },
-         keep: @escaping @MainActor (TaskRecord, Bool) -> Void = { TaskLedger.save($0, amending: $1) }) {
+         keep: @escaping @MainActor (TaskRecord, Bool) -> Void = { TaskLedger.save($0, amending: $1) },
+         drop: @escaping @MainActor (UUID) -> Void = { TaskLedger.remove($0) }) {
         self.executable = executable
         self.verify = verify
         self.tool = tool
@@ -129,6 +131,7 @@ final class ClaudeSession: ObservableObject {
         self.playbooks = playbooks
         self.keeping = keeping
         self.keep = keep
+        self.drop = drop
         // Quitting is Stop too: the run's folder goes with it, rather than
         // being left in the temporary folder for good.
         quitting = NotificationCenter.default.addObserver(
@@ -161,6 +164,8 @@ final class ClaudeSession: ObservableObject {
         turns.append(turn)
         record = keeping() ? TaskRecord(prompt: AgentRules.scrubbed(text), model: options().model) : nil
         recorded = false
+        // Written now, so a crash part way through doesn't lose the task.
+        if let record { keep(record, false) }
         seenTools = [:]
         streamed = false
         writing = false
@@ -187,6 +192,8 @@ final class ClaudeSession: ObservableObject {
     /// attached, for you to send again.
     private func takeBack(_ text: String, _ named: [Mention], without missing: [Mention]) {
         if !turns.isEmpty { turns.removeLast() }
+        // It was never asked: nothing to keep.
+        if let record { drop(record.id) }
         record = nil
         running = false
         disarm()
@@ -217,8 +224,9 @@ final class ClaudeSession: ObservableObject {
 
     // MARK: - the ledger
 
-    /// What the turn in hand has done (TaskLedger). Written when it ends, and
-    /// again for what arrives after: its tabs may be handed over later.
+    /// What the turn in hand has done (TaskLedger). Written as it begins and
+    /// amended as things happen, as it ends and for what arrives after: its
+    /// tabs may be handed over later.
     private var record: TaskRecord?
     private var recorded = false
 
@@ -227,7 +235,7 @@ final class ClaudeSession: ObservableObject {
         change(&now)
         guard now != record else { return }
         record = now
-        if recorded, keeping() { keep(now, true) }
+        if keeping() { keep(now, true) }
     }
 
     /// A site one of its tabs went to (AgentControl).
@@ -242,11 +250,11 @@ final class ClaudeSession: ObservableObject {
     private func conclude(stopped: Bool, failed: Bool) {
         guard !recorded, var now = record else { return }
         // Switched off while it ran: not kept.
-        guard keeping() else { record = nil; return }
+        guard keeping() else { drop(now.id); record = nil; return }
         now.outcome = TaskRecord.outcome(stopped: stopped, failed: failed, approvals: now.approvals)
         record = now
         recorded = true
-        keep(now, false)
+        keep(now, true)
         // In memory only, until you press Save as Fast Macro.
         if now.outcome == .completed, recorder != MacroRecorder() { MacroStore.draft(now.id, recorder) }
     }

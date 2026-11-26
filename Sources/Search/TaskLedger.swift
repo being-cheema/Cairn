@@ -13,7 +13,8 @@ import Foundation
 // from a tab of yours. Clearing all history removes the lot.
 
 struct TaskRecord: Codable, Equatable, Identifiable {
-    enum Outcome: String, Codable { case completed, stopped, denied, failed }
+    /// `unfinished`: still running, or the app ended before the task did.
+    enum Outcome: String, Codable { case completed, stopped, denied, failed, unfinished }
 
     struct Receipt: Codable, Equatable {
         let time: Date
@@ -36,7 +37,7 @@ struct TaskRecord: Codable, Equatable, Identifiable {
     var model: String?
     var hosts: [String] = []
     var approvals: [Receipt] = []
-    var outcome: Outcome = .completed
+    var outcome: Outcome = .unfinished
     var tabs: [Page] = []
 
     static let longestPrompt = 2_000, mostHosts = 50, mostReceipts = 50, mostTabs = 20

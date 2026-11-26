@@ -247,6 +247,7 @@ struct TaskHistory: View {
         case .stopped: outcome = "Stopped"
         case .denied: outcome = "You said no"
         case .failed: outcome = "Failed"
+        case .unfinished: outcome = "Not finished"
         }
         return "\(when.string(from: record.time)) · \(outcome)"
     }

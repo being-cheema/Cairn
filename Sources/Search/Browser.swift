@@ -594,6 +594,10 @@ final class Browser: NSObject, ObservableObject {
         keep: { [weak self] in
             guard let self else { return }
             TaskLedger.save($0, amending: $1, in: TaskLedger.folder(for: self.profileID))
+        },
+        drop: { [weak self] in
+            guard let self else { return }
+            TaskLedger.remove($0, in: TaskLedger.folder(for: self.profileID))
         })
 
     /// What Find a setting held in each Settings tab, for the tab to have

@@ -136,6 +136,21 @@ final class TaskLedgerTests: XCTestCase {
         return (session, files.heard)
     }
 
+    /// A crash or a power cut part way through must not lose that you asked.
+    func testATaskIsWrittenAsItBeginsNotOnlyAsItEnds() throws {
+        let kept = Kept()
+        let (session, _) = try session("sleep 30", into: kept)
+        session.draft = "wait"; session.submit()
+        XCTAssertEqual(kept.all.map(\.amending), [false])
+        XCTAssertEqual(kept.all.first?.record.outcome, .unfinished)
+        XCTAssertEqual(kept.all.first?.record.prompt, "wait")
+        // What happens on the way is written as it happens.
+        session.visited("example.com")
+        XCTAssertEqual(kept.all.last?.record.hosts, ["example.com"])
+        XCTAssertEqual(kept.all.last?.amending, true)
+        session.stop()
+    }
+
     private func wait(_ what: String, _ done: () -> Bool) async {
         let end = Date().addingTimeInterval(10)
         while !done(), Date() < end { try? await Task.sleep(for: .milliseconds(25)) }
@@ -153,8 +168,9 @@ final class TaskLedgerTests: XCTestCase {
         session.draft = "look at https://example.com/?password=hunter2"
         session.submit()
         await wait("the turn to end") { !session.running }
-        XCTAssertEqual(kept.all.count, 1)
-        let record = try XCTUnwrap(kept.all.first).record
+        // Written as it began, and amended as it ended.
+        XCTAssertEqual(kept.all.map(\.amending), [false, true])
+        let record = try XCTUnwrap(kept.all.last).record
         XCTAssertEqual(record.outcome, .completed)
         XCTAssertEqual(record.prompt, "look at https://example.com/?password=redacted")
         let written = String(decoding: try JSONEncoder().encode(record), as: UTF8.self)
@@ -165,7 +181,7 @@ final class TaskLedgerTests: XCTestCase {
         // More about the same task is an amendment, and Stop afterwards no new one.
         session.visited("example.com")
         session.stop()
-        XCTAssertEqual(kept.all.map(\.amending), [false, true])
+        XCTAssertEqual(kept.all.map(\.amending), [false, true, true])
         XCTAssertEqual(Set(kept.all.map(\.record.id)).count, 1)
     }
 
@@ -176,7 +192,7 @@ final class TaskLedgerTests: XCTestCase {
         await wait("the turn to end") { !session.running }
         session.newChat()
         session.visited("example.com")
-        XCTAssertEqual(kept.all.count, 1)
+        XCTAssertEqual(kept.all.count, 2)
     }
 
     func testStopIsSaidAsStopped() async throws {
@@ -185,7 +201,8 @@ final class TaskLedgerTests: XCTestCase {
         session.draft = "wait"; session.submit()
         session.asked(reason: "send", what: "Send it", answer: "ended")
         session.stop()
-        XCTAssertEqual(kept.all.map(\.record.outcome), [.stopped])
+        // As it began, as the question was answered, and as you stopped it.
+        XCTAssertEqual(kept.all.map(\.record.outcome), [.unfinished, .unfinished, .stopped])
     }
 
     func testAPlaybookGoesInYourOwnSendAndAnOrdinarySlashStaysYourWords() async throws {
@@ -201,7 +218,7 @@ final class TaskLedgerTests: XCTestCase {
         XCTAssertTrue(lines[1].contains("My message: "))
         XCTAssertEqual(session.turns[0].question, "/audit-a11y example.com")
         XCTAssertEqual(session.turns[0].attached, ["Playbook: audit-a11y"])
-        XCTAssertEqual(kept.all.map(\.record.prompt), ["/audit-a11y example.com", "/compact now"])
+        XCTAssertEqual(kept.all.filter { !$0.amending }.map(\.record.prompt), ["/audit-a11y example.com", "/compact now"])
         session.stop()
     }
 
@@ -231,13 +248,17 @@ final class TaskLedgerTests: XCTestCase {
         let kept = Kept()
         let files = try program("sleep 1\n" + good)
         var on = true
+        var dropped: [UUID] = []
         let session = ClaudeSession(executable: files.claude, verify: { _ in true }, tool: files.tool, world: nil,
-                                    playbooks: { [] }, keeping: { on }, keep: { kept.all.append(($0, $1)) })
+                                    playbooks: { [] }, keeping: { on }, keep: { kept.all.append(($0, $1)) },
+                                    drop: { dropped.append($0) })
         session.draft = "hello"
         session.submit()
         on = false
         await wait("the turn to end") { !session.running }
-        XCTAssertTrue(kept.all.isEmpty)
+        // What was written as it began is taken away again, and no more is.
+        XCTAssertEqual(kept.all.map(\.amending), [false])
+        XCTAssertEqual(dropped, kept.all.map(\.record.id))
     }
 
     func testClearingAlsoCoversATaskStillRunning() {
