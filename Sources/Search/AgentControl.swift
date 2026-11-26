@@ -1712,7 +1712,7 @@ final class AgentControl: ObservableObject {
     func dialog(on tab: Tab, kind: String, text: String) {
         guard let session, session.own.contains(tab.id), session.dialogs[tab.id, default: []].count < 5 else { return }
         session.dialogs[tab.id, default: []].append([
-            "kind": kind, "text": AgentRules.scrubbed(String(text.prefix(300))),
+            "kind": kind, "text": Quarantine.label(AgentRules.scrubbed(String(text.prefix(300)))),
             "answered": kind == "alert" ? "closed" : kind == "confirm" ? "no" : "cancelled",
         ])
     }
@@ -2143,6 +2143,7 @@ final class AgentControl: ObservableObject {
                     if node["role"] as? String == "iframe", let named = node["name"] as? String { node["name"] = AgentRules.scrubbed(named) }
                     return node
                 }
+                out = Quarantine.read(out)
                 out["page"] = handle
                 out["url"] = AgentRules.url(out["url"] as? String ?? "")
                 // Said with every read, beside the words themselves, not only

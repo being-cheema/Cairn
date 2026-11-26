@@ -666,7 +666,8 @@ struct PanelWaiting: View {
         let answer = " Approve or Don't Approve on the card at the foot of the page."
         switch hold.reason {
         case .leave:
-            return "Claude wants to go to \(hold.site ?? "another site"), a site this task hasn't used yet." + answer
+            let careful = hold.warning == nil ? "" : " The card has a warning about the address."
+            return "Claude wants to go to \(hold.site ?? "another site"), a site this task hasn't used yet." + careful + answer
         case .pay: return "Claude wants to pay for something." + answer
         case .send: return "Claude wants to send something." + answer
         case .signIn:
