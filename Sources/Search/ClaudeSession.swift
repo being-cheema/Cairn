@@ -191,6 +191,7 @@ final class ClaudeSession: ObservableObject {
         stop()
         record = nil
         turns = []
+        snapshots = SourceSnapshots()
         problem = nil
         draft = ""
         mentions = []
@@ -236,11 +237,32 @@ final class ClaudeSession: ObservableObject {
         draft = earlier.followUp
     }
 
+    /// What came of a step, in the browser's words (PageDiff.summary), on
+    /// the list of what the turn did.
+    func consequence(_ words: String) {
+        guard running, let last = turns.indices.last, turns[last].steps.last != words else { return }
+        turns[last].steps.append(words)
+    }
+
     /// A card for the turn in hand; false when there is no room or no turn.
     func add(_ artifact: Artifact) -> Bool {
         guard let last = turns.indices.last, turns[last].artifacts.count < 6 else { return false }
-        turns[last].artifacts.append(artifact)
+        var card = artifact
+        // As read by now: what the page says later is not what it was made from.
+        for source in card.sources {
+            let key = SourceSnapshots.Key(tab: source.tab, page: source.page)
+            card.evidence[key] = snapshots.pages[key]
+        }
+        turns[last].artifacts.append(card)
         return true
+    }
+
+    /// The text its run has read from its own tabs, for checking its cards
+    /// against (ClaimCheck). In memory only; New Chat forgets it.
+    private(set) var snapshots = SourceSnapshots()
+
+    func read(_ text: String, at offset: Int, of length: Int, tab: Tab.ID, address: URL?) {
+        snapshots.keep(text, at: offset, of: length, tab: tab, page: MarginNotes.page(address))
     }
 
     /// The tabs the turn in hand left to you (AgentControl's hand-over).

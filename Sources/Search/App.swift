@@ -247,6 +247,9 @@ struct SearchApp: App {
                     browser.toggleClaudePanel()
                 }
                 .shortcut("view.claudePanel")
+                MarginNotesMenuItem(browser: browser)
+                Button("Tab Journey…") { browser.journeying.toggle() }
+                    .shortcut("view.journey")
                 // Dark pages, only once they are on (Settings › Appearance).
                 if browser.prefs.darkensPages {
                     Divider()
@@ -1079,6 +1082,11 @@ struct ContentView: View {
                 })
             } close: { browser.newsShowing = false }
         }
+        if browser.journeying {
+            sheet {
+                JourneyCard(browser: browser)
+            } close: { browser.journeying = false }
+        }
         // Help › Search for iPhone… (see IPhoneAsk.swift).
         if browser.iphoneAsking {
             sheet {
@@ -1292,6 +1300,7 @@ struct ContentView: View {
             .animation(Motion.settle, value: browser.welcoming)
             .animation(Motion.settle, value: browser.newsShowing)
             .animation(Motion.settle, value: browser.iphoneAsking)
+            .animation(Motion.settle, value: browser.journeying)
             .animation(Motion.settle, value: browser.reviewing)
             .animation(Motion.settle, value: browser.styling)
         .onAppear {
@@ -1849,7 +1858,7 @@ struct ContentView: View {
         guard let window, event.window === window else { return false }
         // Settings, History and the rest are tabs, and ⌃Tab goes to and
         // from them like any other.
-        return !browser.welcoming &&
+        return !browser.welcoming && !browser.journeying &&
             !browser.reviewing && browser.styling == nil && !browser.bookmarksOpen &&
             !browser.veiling && !browser.summoning && !browser.makingSpace &&
             !browser.peekInFront && browser.editingTab == nil &&
@@ -1976,6 +1985,10 @@ struct ContentView: View {
             }
             if browser.snapping {
                 browser.stopSnapping()
+                return true
+            }
+            if browser.journeying {
+                browser.journeying = false
                 return true
             }
             if browser.reviewing {

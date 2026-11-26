@@ -230,6 +230,8 @@ final class Browser: NSObject, ObservableObject {
     @Published var newsShowing = false
     /// Help › Search for iPhone… (see IPhoneAsk.swift).
     @Published var iphoneAsking = false
+    /// View › Tab Journey (Journey.swift).
+    @Published var journeying = false
 
     // MARK: - bookmarks
 
@@ -6667,6 +6669,7 @@ final class Browser: NSObject, ObservableObject {
         tabs.insert(tab, at: into.map { endOfGroup(tabGroups[$0].id, in: tabs) }
                     ?? (atEnd ? tabs.count : link ? placeForLink(from: source) : apart ? placeForFront() : placeForNew()))
         if link, !atEnd, !foreground || frontLinksBeside { noteLink(tab, from: source) }
+        if link, let source { JourneyLog.shared.opened(tab, from: source) }
         if mayWait, !foreground, prefs.lazyTabs, page == nil {
             tab.restore(url: url, title: "")
         } else {
@@ -6699,6 +6702,7 @@ final class Browser: NSObject, ObservableObject {
         // and, since a website can now start the swap, what you made of the
         // tab: a pinned one stays pinned, a named one keeps its name.
         fresh.opener = tab.opener
+        JourneyLog.shared.replaced(tab.id, with: fresh.id)
         fresh.popup = tab.popup
         fresh.pin = tab.pin
         fresh.listed = tab.listed
@@ -9158,6 +9162,7 @@ extension Browser: WKNavigationDelegate, WKUIDelegate {
             let tab = Tab(bench: true, configuration: configuration)
             tab.agent = true
             tab.opener = from
+            JourneyLog.shared.opened(tab, from: opener)
             if clicked { opener.popupGesture.opened(tab.id) }
             prepare(tab)
             tabs.append(tab)
@@ -9184,6 +9189,7 @@ extension Browser: WKNavigationDelegate, WKUIDelegate {
         let tab = Tab(shy: opener.shy, configuration: configuration)
         tab.popup = popup
         tab.opener = from
+        JourneyLog.shared.opened(tab, from: opener)
         if clicked { opener.popupGesture.opened(tab.id) }
         // A small window's page opening another (X's links out, by way of
         // t.co): a small window of its own, a step down from this one, not a

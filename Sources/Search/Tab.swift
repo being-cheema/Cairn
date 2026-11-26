@@ -710,6 +710,9 @@ final class Tab: ObservableObject, Identifiable {
     /// A coding agent is working in this tab now (AgentControl): a dot on
     /// its icon's corner, gone once it moves on, goes idle or disconnects.
     @Published var agentWorking = false
+    /// What an agent noted in this tab's margin (MarginNotes). In memory,
+    /// gone with the tab.
+    @Published var marginNotes: [MarginNote] = []
 
     /// Not `web`: a tab asleep is muted without being woken, and hears of
     /// it when its page is built again.

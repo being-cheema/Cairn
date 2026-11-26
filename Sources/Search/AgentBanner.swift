@@ -377,6 +377,9 @@ struct AgentApproval: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
+            if let receipt = session.receipt {
+                FormReceiptTable(receipt: receipt, after: session.receiptIsLate)
+            }
             HStack(spacing: 12) {
                 // To see what it asks about, outlined on its page.
                 if held.hold.reason != .leave {

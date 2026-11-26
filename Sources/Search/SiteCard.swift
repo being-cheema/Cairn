@@ -405,6 +405,7 @@ struct SiteCard: View {
             if let safety {
                 Row(safety.title, submenu: true) { deeper = true }
             }
+            StructuredDataLine(tab: tab)
             Row("Copy Address", keys: ShortcutStore.shared.key(for: "tabs.copyAddress")?.display ?? "") { after { browser.copyAddress() } }
             Separator()
             Row("Print…", keys: ShortcutStore.shared.key(for: "file.print")?.display ?? "") { after { browser.printPage() } }
