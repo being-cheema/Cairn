@@ -155,8 +155,17 @@ enum PageScripts {
     """#
 
     private static let readBody = #"""
-    (function (key, snap, most, longest, withText, nodeOffset, viewportOnly, textOffset) {
-      var found = candidates(), els = [], nodes = [], cut = false, vw = innerWidth, vh = innerHeight, seen = 0;
+    (function (key, snap, most, longest, withText, nodeOffset, viewportOnly, textOffset, since) {
+      // For a read compared with the one before (PageDiff): in the same
+      // document an element keeps its number, so its handle stays good. A
+      // new document has no list kept, and gets a number never used for
+      // this tab, so an old handle can't come to name something else.
+      var before = since === null ? null : globalThis[key];
+      var same = !!before && before.snap === since && before.els.length < 6000;
+      var found = candidates(), els = same ? before.els.slice() : [], nodes = [], cut = false, vw = innerWidth, vh = innerHeight, seen = 0;
+      var known = new Map();
+      els.forEach(function (el, i) { known.set(el, i); });
+      if (same) snap = since;
       for (var i = 0; i < found.length; i++) {
         var el = found[i], r0 = wanted(el);
         if (!r0 || !visible(el)) continue;
@@ -166,7 +175,8 @@ enum PageScripts {
         if (viewportOnly && !(r.bottom > 0 && r.right > 0 && r.top < vh && r.left < vw)) continue;
         if (seen++ < nodeOffset) continue;
         if (nodes.length >= most) { cut = true; break; }
-        var n = { e: els.length, role: r0, name: name(el) };
+        var at = known.has(el) ? known.get(el) : els.length;
+        var n = { e: at, role: r0, name: name(el) };
         if (r0 === 'heading') n.level = +(el.getAttribute('aria-level') || el.tagName.slice(1)) || 2;
         if (/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) && !/^(submit|button|reset|image|checkbox|radio)$/i.test(el.type || '')) {
           if (secret(el)) { n.redacted = true; n.filled = !!el.value; } else n.value = String(el.value).slice(0, 500);
@@ -181,10 +191,11 @@ enum PageScripts {
         if (el.getRootNode() !== document) n.shadow = true;
         n.box = [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)];
         n.inView = r.bottom > 0 && r.right > 0 && r.top < vh && r.left < vw;
-        els.push(el); nodes.push(n);
+        if (at === els.length) els.push(el);
+        nodes.push(n);
       }
       globalThis[key] = { snap: snap, els: els };
-      var out = { url: location.href, title: document.title, nodes: nodes, nodesTruncated: cut,
+      var out = { url: location.href, title: document.title, nodes: nodes, nodesTruncated: cut, snap: snap, same: same,
         nodeOffset: nodeOffset, nextNodeOffset: cut ? nodeOffset + nodes.length : null,
         viewport: { width: vw, height: vh, scrollY: Math.round(scrollY),
           scrollHeight: document.documentElement ? document.documentElement.scrollHeight : 0 } };
@@ -407,9 +418,51 @@ enum PageScripts {
 
     /// The page's visible controls and headings, with the element list kept
     /// under `key` for touch.
+    /// `since` names an earlier read to keep the numbering of (PageDiff).
     static func read(key: String, snap: Int, most: Int, longest: Int, text: Bool,
-                     nodeOffset: Int = 0, viewportOnly: Bool = false, textOffset: Int = 0) -> String {
-        call(readBody, [key, snap, most, longest, text, nodeOffset, viewportOnly, textOffset])
+                     nodeOffset: Int = 0, viewportOnly: Bool = false, textOffset: Int = 0, since: Int? = nil) -> String {
+        call(readBody, [key, snap, most, longest, text, nodeOffset, viewportOnly, textOffset, since.map { $0 as Any } ?? NSNull()])
+    }
+
+    /// One look at whether the page is holding still (PageSettle): how often
+    /// its document has changed since the first look, the frames drawn, and
+    /// where its controls are. The watch is Search's, in Search's world: the
+    /// page can't see it, and `settleDone` takes it away.
+    static func settleSample() -> String {
+        call(#"""
+        (function () {
+          var s = globalThis.__searchSettle;
+          if (!s) {
+            s = globalThis.__searchSettle = { mutations: 0, frames: 0, asked: false };
+            s.watch = new MutationObserver(function (records) { s.mutations += records.length; });
+            s.watch.observe(document, { subtree: true, childList: true, attributes: true, characterData: true });
+          }
+          if (!s.asked) {
+            s.asked = true;
+            requestAnimationFrame(function () {
+              s.frames++;
+              requestAnimationFrame(function () { s.frames++; s.asked = false; });
+            });
+          }
+          var found = candidates(), hash = 0;
+          for (var i = 0; i < found.length && i < 400; i++) {
+            var r = found[i].getBoundingClientRect();
+            var box = [r.left, r.top, r.width, r.height];
+            for (var k = 0; k < 4; k++) hash = (hash * 31 + Math.round(box[k])) | 0;
+          }
+          return JSON.stringify({ ok: true, mutations: s.mutations, frames: s.frames, boxes: found.length + ':' + hash });
+        })
+        """#, [])
+    }
+
+    static func settleDone() -> String {
+        call(#"""
+        (function () {
+          var s = globalThis.__searchSettle;
+          if (s) { s.watch.disconnect(); delete globalThis.__searchSettle; }
+          return JSON.stringify({ ok: true });
+        })
+        """#, [])
     }
 
     /// One element of the last read under `key`: "click", "press", "scroll",

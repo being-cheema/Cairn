@@ -236,6 +236,13 @@ final class ClaudeSession: ObservableObject {
         draft = earlier.followUp
     }
 
+    /// What came of a step, in the browser's words (PageDiff.summary), on
+    /// the list of what the turn did.
+    func consequence(_ words: String) {
+        guard running, let last = turns.indices.last, turns[last].steps.last != words else { return }
+        turns[last].steps.append(words)
+    }
+
     /// A card for the turn in hand; false when there is no room or no turn.
     func add(_ artifact: Artifact) -> Bool {
         guard let last = turns.indices.last, turns[last].artifacts.count < 6 else { return false }
