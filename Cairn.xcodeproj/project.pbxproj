@@ -218,6 +218,7 @@
 		E4C2786B9086A18EA1020E87 /* IPhoneAsk.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FD176F37B4544CCB9EDC841 /* IPhoneAsk.swift */; };
 		E58C224827CC979B5BC5F173 /* FullScreenEscape.swift in Sources */ = {isa = PBXBuildFile; fileRef = 580DA494D5F4E469E98BD657 /* FullScreenEscape.swift */; };
 		E5CF896F2F0E502555C6BE2D /* AgentGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8379674D042E25B77B4480E7 /* AgentGate.swift */; };
+		A70000000000000000000105 /* Journey.swift in Sources */ = {isa = PBXBuildFile; fileRef = A70000000000000000000005 /* Journey.swift */; };
 		A70000000000000000000104 /* StructuredData.swift in Sources */ = {isa = PBXBuildFile; fileRef = A70000000000000000000004 /* StructuredData.swift */; };
 		A70000000000000000000103 /* MarginNotes.swift in Sources */ = {isa = PBXBuildFile; fileRef = A70000000000000000000003 /* MarginNotes.swift */; };
 		A70000000000000000000102 /* FormReceipt.swift in Sources */ = {isa = PBXBuildFile; fileRef = A70000000000000000000002 /* FormReceipt.swift */; };
@@ -416,6 +417,7 @@
 		82911EA0E31E67F7D9E2AC5D /* SettingsIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SettingsIndex.swift; path = Sources/Search/SettingsIndex.swift; sourceTree = SOURCE_ROOT; };
 		82E59D50C2200C467315D4F9 /* ImageMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ImageMenu.swift; path = Sources/Search/ImageMenu.swift; sourceTree = SOURCE_ROOT; };
 		8379674D042E25B77B4480E7 /* AgentGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AgentGate.swift; path = Sources/Search/AgentGate.swift; sourceTree = SOURCE_ROOT; };
+		A70000000000000000000005 /* Journey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Journey.swift; path = Sources/Search/Journey.swift; sourceTree = SOURCE_ROOT; };
 		A70000000000000000000004 /* StructuredData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = StructuredData.swift; path = Sources/Search/StructuredData.swift; sourceTree = SOURCE_ROOT; };
 		A70000000000000000000003 /* MarginNotes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MarginNotes.swift; path = Sources/Search/MarginNotes.swift; sourceTree = SOURCE_ROOT; };
 		A70000000000000000000002 /* FormReceipt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = FormReceipt.swift; path = Sources/Search/FormReceipt.swift; sourceTree = SOURCE_ROOT; };
@@ -617,6 +619,7 @@
 				BB9127E55C232A51DE422327 /* AgentBanner.swift */,
 				5A3B2EDD8D3157B85CF50D9B /* AgentControl.swift */,
 				8379674D042E25B77B4480E7 /* AgentGate.swift */,
+				A70000000000000000000005 /* Journey.swift */,
 				A70000000000000000000004 /* StructuredData.swift */,
 				A70000000000000000000003 /* MarginNotes.swift */,
 				A70000000000000000000002 /* FormReceipt.swift */,
@@ -980,6 +983,7 @@
 				38FA09E06371716F9CE55373 /* AgentBanner.swift in Sources */,
 				01744E61AC11FE472BB499F1 /* AgentControl.swift in Sources */,
 				E5CF896F2F0E502555C6BE2D /* AgentGate.swift in Sources */,
+				A70000000000000000000105 /* Journey.swift in Sources */,
 				A70000000000000000000104 /* StructuredData.swift in Sources */,
 				A70000000000000000000103 /* MarginNotes.swift in Sources */,
 				A70000000000000000000102 /* FormReceipt.swift in Sources */,

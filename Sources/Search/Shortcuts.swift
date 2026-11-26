@@ -253,6 +253,8 @@ struct Command: Identifiable {
         Command("view.sitePanel", "Show Side Panel", .view, nil) { $0.toggleSitePanel() },
         // Claude in the side panel.
         Command("view.claudePanel", "Claude Panel", .view, KeyCombo("k", option: true)) { $0.toggleClaudePanel() },
+        // The tabs as trees of what was opened from what (Journey.swift).
+        Command("view.journey", "Tab Journey", .view, KeyCombo("g", option: true)) { $0.journeying.toggle() },
         // Not ⌥A alone: in a text field that types a letter (å) on many
         // layouts.
         Command("view.marginNotes", "Show Margin Notes", .view, KeyCombo("a", option: true)) { _ in
