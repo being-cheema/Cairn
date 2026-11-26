@@ -17,6 +17,9 @@ struct ClaudePanel: View {
     let close: () -> Void
     let openSettings: () -> Void
     @FocusState private var typing: Bool
+    /// The row of the "@" list the keys are on, and a list put away with esc.
+    @State private var picked = 0
+    @State private var dismissed: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -185,14 +188,26 @@ struct ClaudePanel: View {
 
     private var composer: some View {
         VStack(alignment: .leading, spacing: 6) {
+            if !choices.isEmpty { MentionList(choices: choices, picked: min(picked, choices.count - 1)) { take($0) } }
+            if !session.mentions.isEmpty { chips }
             HStack(alignment: .bottom, spacing: 8) {
-                TextField("", text: $session.draft, prompt: Text("Ask Claude…").foregroundStyle(Palette.muted), axis: .vertical)
+                TextField("", text: $session.draft, prompt: Text("Ask Claude… @ for a tab").foregroundStyle(Palette.muted), axis: .vertical)
                     .textFieldStyle(.plain)
                     .font(.system(size: 13))
                     .foregroundStyle(Palette.ink)
                     .lineLimit(1...6)
                     .focused($typing)
-                    .onSubmit { session.submit() }
+                    .onSubmit {
+                        if choices.isEmpty { session.submit() } else { take(choices[min(picked, choices.count - 1)]) }
+                    }
+                    .onKeyPress(.upArrow) { move(-1) }
+                    .onKeyPress(.downArrow) { move(1) }
+                    .onKeyPress(.escape) {
+                        guard !choices.isEmpty else { return .ignored }
+                        dismissed = session.draft
+                        return .handled
+                    }
+                    .onChange(of: session.draft) { _, _ in picked = 0 }
                     .disabled(session.running)
                     .padding(.vertical, 5)
                 send
@@ -219,6 +234,71 @@ struct ClaudePanel: View {
         .padding(.horizontal, 12)
         .padding(.top, 6)
         .padding(.bottom, 10)
+    }
+
+    // MARK: - "@"
+
+    /// What the "@" being typed may become: your selection, then tabs.
+    private var choices: [MentionChoice] {
+        guard !session.running, session.draft != dismissed, session.mentions.count < Mentions.most,
+              let query = Mentions.query(in: session.draft), let browser = session.browser else { return [] }
+        let front = browser.active
+        var out: [MentionChoice] = []
+        if let front, Mentions.mayName(front), query.isEmpty || "selected text".hasPrefix(query.lowercased()) {
+            out.append(.selection(front))
+        }
+        out += Mentions.matching(query, among: browser.tabs, front: front).map { .tab($0, front: $0.id == front?.id) }
+        return out
+    }
+
+    private func move(_ by: Int) -> KeyPress.Result {
+        guard !choices.isEmpty else { return .ignored }
+        picked = (min(picked, choices.count - 1) + by + choices.count) % choices.count
+        return .handled
+    }
+
+    private func take(_ choice: MentionChoice) {
+        session.draft = Mentions.removingQuery(from: session.draft)
+        typing = true
+        switch choice {
+        case .tab(let tab, _):
+            session.mention(.tab(tab.id, label: Mentions.label(tab)))
+        case .selection(let tab):
+            Task { @MainActor in
+                if let text = await Mentions.selection(in: tab) {
+                    session.mention(.selection(text, from: Mentions.label(tab)))
+                } else {
+                    session.browser?.announce("Nothing is selected on that page")
+                }
+            }
+        }
+    }
+
+    private var chips: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(session.mentions) { mention in
+                        HStack(spacing: 4) {
+                            Text(verbatim: mention.label).font(.system(size: 11.5)).foregroundStyle(Palette.ink).lineLimit(1)
+                            Button { session.mentions.removeAll { $0.id == mention.id } } label: {
+                                Image(systemName: "xmark").font(.system(size: 8, weight: .bold)).foregroundStyle(Palette.muted)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Remove \(mention.label)")
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Palette.wash, in: Capsule())
+                    }
+                }
+            }
+            // Said before it goes: what leaves this Mac with the message.
+            Text("The visible text goes to Claude with this message, once.")
+                .font(.system(size: 10.5))
+                .foregroundStyle(Palette.muted)
+        }
+        .padding(.horizontal, 4)
     }
 
     /// Which model, from the few Claude Code takes by name. A change starts a
@@ -284,6 +364,15 @@ struct ClaudePanel: View {
 
         var body: some View {
             VStack(alignment: .leading, spacing: 10) {
+                if !turn.attached.isEmpty {
+                    HStack(spacing: 0) {
+                        Spacer(minLength: 36)
+                        Text(verbatim: turn.attached.joined(separator: "  "))
+                            .font(.system(size: 10.5))
+                            .foregroundStyle(Palette.muted)
+                            .lineLimit(2)
+                    }
+                }
                 HStack(spacing: 0) {
                     Spacer(minLength: 36)
                     Text(verbatim: turn.question)
@@ -355,6 +444,56 @@ struct ClaudePanel: View {
                 }
             }
         }
+    }
+}
+
+/// One row of the "@" list.
+enum MentionChoice: Identifiable {
+    case selection(Tab)
+    case tab(Tab, front: Bool)
+
+    var id: String {
+        switch self {
+        case .selection: return "selection"
+        case .tab(let tab, _): return "\(tab.id)"
+        }
+    }
+}
+
+private struct MentionList: View {
+    let choices: [MentionChoice]
+    let picked: Int
+    let take: (MentionChoice) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            ForEach(Array(choices.enumerated()), id: \.element.id) { index, choice in
+                Button { take(choice) } label: {
+                    HStack(spacing: 7) {
+                        switch choice {
+                        case .selection:
+                            Text("Selected Text").font(.system(size: 12)).foregroundStyle(Palette.ink)
+                            Spacer(minLength: 0)
+                        case .tab(let tab, let front):
+                            Mark(icon: tab.icon, letter: tab.monogram, size: 13)
+                            Text(verbatim: Mentions.label(tab)).font(.system(size: 12)).foregroundStyle(Palette.ink).lineLimit(1)
+                            Spacer(minLength: 4)
+                            Text(verbatim: front ? "Current Tab" : tab.pageAddress?.host() ?? "")
+                                .font(.system(size: 10.5)).foregroundStyle(Palette.muted).lineLimit(1)
+                        }
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(index == picked ? Palette.hover : .clear, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(index == picked ? .isSelected : [])
+            }
+        }
+        .padding(4)
+        .background(Palette.ground, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Palette.hairline, lineWidth: 1))
     }
 }
 

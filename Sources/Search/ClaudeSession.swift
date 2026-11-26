@@ -28,6 +28,8 @@ final class ClaudeSession: ObservableObject {
         var failed: String?
         /// The tabs it left to you when it finished.
         var left: [Tab.ID] = []
+        /// What you attached to your message, as its chips said it.
+        var attached: [String] = []
     }
 
     /// Why it can't start, as the panel says it.
@@ -38,6 +40,13 @@ final class ClaudeSession: ObservableObject {
     }
 
     @Published private(set) var turns: [Turn] = []
+    /// Named with "@" for the next message, and that one only (Mentions).
+    @Published var mentions: [Mention] = []
+
+    func mention(_ new: Mention) {
+        guard mentions.count < Mentions.most, !mentions.contains(where: { $0.id == new.id }) else { return }
+        mentions.append(new)
+    }
 
     /// A finished exchange put in by the bench, to look at the panel in use
     /// without Claude Code. A test run only.
@@ -122,7 +131,11 @@ final class ClaudeSession: ObservableObject {
         if process == nil, !start() { return }
         problem = nil
         draft = ""
-        turns.append(Turn(question: text))
+        let named = mentions
+        mentions = []
+        var turn = Turn(question: text)
+        turn.attached = named.map(\.label)
+        turns.append(turn)
         seenTools = [:]
         streamed = false
         writing = false
@@ -132,9 +145,20 @@ final class ClaudeSession: ObservableObject {
         running = true
         // This Send is the consent for what the run does to answer it.
         AgentControl.shared.panelArm(pass: pass, true)
-        let line = ClaudeCode.message(text)
+        guard !named.isEmpty else { return write(text) }
+        // What was named is read now, once. Stopped meanwhile, nothing goes.
+        let mine = generation
+        Task { @MainActor [weak self] in
+            let tabs = self?.browser?.tabs ?? []
+            let attached = await Mentions.gather(named, among: tabs)
+            guard let self, self.generation == mine, self.running else { return }
+            self.write(Mentions.message(text, with: attached))
+        }
+    }
+
+    private func write(_ text: String) {
         do {
-            try input?.write(contentsOf: line)
+            try input?.write(contentsOf: ClaudeCode.message(text))
         } catch {
             finish(failing: "Couldn't reach Claude Code. Try again.")
             stop()
@@ -147,6 +171,7 @@ final class ClaudeSession: ObservableObject {
         turns = []
         problem = nil
         draft = ""
+        mentions = []
     }
 
     /// The tabs the turn in hand left to you (AgentControl's hand-over).
