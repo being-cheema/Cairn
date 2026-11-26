@@ -2,7 +2,7 @@
 
 Cairn handles your passwords, your history and every page you open, so a
 hole in it matters more than most bugs. If you find one, please tell us
-privately first.
+privately first. (Dramatic reveals are for films. This is a password manager.)
 
 ## How to report
 
@@ -20,6 +20,8 @@ spelling out the attack, is fine.
 
 ## What happens next
 
+No hold music.
+
 - You get an answer from the person who maintains Cairn, not a form.
 - The fix goes into the next version. A copy of Cairn that was built with an
   update feed picks it up on its own; one built without a feed has to be
@@ -28,6 +30,8 @@ spelling out the attack, is fine.
   rather not be.
 
 ## What counts
+
+Short version: anything that makes you say "wait, it can do *that*?"
 
 Anything that lets a web page, an extension, another app or someone on the
 network do more than they should: read files, passwords, cookies or

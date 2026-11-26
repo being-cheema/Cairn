@@ -1,10 +1,16 @@
 # Developing Cairn
 
+Oh, you're *building* it. Look at you. The commands and details below are the straight version, with the occasional interruption from management.
+
 ### Why the source is here
+
+Trust issues. Healthy ones.
 
 So anyone can read exactly what a browser handling their passwords and history is doing, build it themselves, or fix something that bothers them. It is about 128,000 lines of Swift in `Sources/Search/`, plus about 73,000 for the optional developer tools and 35,000 of tests, with no dependencies beyond what Apple ships with macOS, one file per concern.
 
 ### Building it
+
+Coffee optional. Xcode, regrettably, not.
 
 - macOS 14 or later, Xcode 16 / Swift 6 toolchain
 - `swift build` — runs the app straight from the SwiftPM binary
@@ -26,6 +32,8 @@ A build you make yourself won't be notarized, so the first launch needs a right-
 
 ### If you used Search before
 
+It's not a messy breakup. Everyone keeps their own stuff.
+
 Cairn has its own folder, keychain label and bundle id, so it does not see Search's. Nothing is deleted or moved, and nothing is copied without you:
 
 - **Data folder.** The first time Cairn runs without a folder of its own and finds `~/Library/Application Support/Search`, it *copies* it, so pins, history, bookmarks and the session carry over and a Search installed beside this one keeps working.
@@ -33,6 +41,8 @@ Cairn has its own folder, keychain label and bundle id, so it does not see Searc
 - **Not carried over:** settings (a different defaults domain), cookies and site sign-ins (WebKit keeps them per app), the proxy password, saved AI keys and the list of coding agents you approved. Enter those again.
 
 ### How it's put together
+
+A tour of the guts. Gloves not required.
 
 - **SwiftUI** for everything drawn, **AppKit** for the handful of things SwiftUI doesn't reach on macOS (the window's title bar, dragging the window by an empty part of the tab row), **WKWebView** for pages.
 - One `Tab` per page. Its web view is built lazily — a tab restored from last session doesn't cost a process until you switch to it. That's most of why launching with twenty tabs is still instant. Each page runs in WebKit's own content process, as in Safari; a tab you close is really gone.
@@ -43,6 +53,8 @@ Cairn has its own folder, keychain label and bundle id, so it does not see Searc
 - `Sources/Search/` is one file per concern: `Vault.swift` is the keychain, `Shield.swift` the ad blocker, `Curtain.swift` the hidden elements, `Session.swift` what comes back at launch, `Updater.swift` the update, `Bench.swift` the test socket, and so on. There's no framework of its own to learn first.
 
 ### Testing it without closing it
+
+Because closing forty tabs to run a test is how villains are made.
 
 Turn on **Settings › About › Developer › Let a script drive Cairn** and the running app listens on a Unix socket in its own folder (readable by your user only). `./bench` at the root of the repository speaks it:
 
