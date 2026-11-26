@@ -414,6 +414,10 @@ struct ClaudePanel: View {
                     }
                 }
 
+                ForEach(turn.artifacts) { artifact in
+                    ArtifactCard(artifact: artifact, browser: browser)
+                }
+
                 if let browser, !turn.left.isEmpty || !turn.answer.isEmpty {
                     LeftTabs(browser: browser, ids: turn.left, named: PanelProse.tabsNamed(in: turn.answer))
                 }

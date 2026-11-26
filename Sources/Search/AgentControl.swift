@@ -1809,6 +1809,24 @@ final class AgentControl: ObservableObject {
                                         message: verdict == .timedOut ? "The person didn't hand the tab back in time" : "The person didn't sign in",
                                         hint: "Say so in your reply. Don't ask again unless they tell you to.").said)
                 }
+            case .createArtifact:
+                // Shown in the panel, which only its own run has.
+                guard session.panel, let panel = session.browser?.claude else {
+                    throw AgentRefusal(code: "no_panel", message: "Cards are shown only for the side panel's Claude",
+                                       hint: "Put the result in your reply instead.")
+                }
+                let made = Artifact.parse(request) { handle in
+                    guard let id = session.pages[handle], session.own.contains(id),
+                          let tab = browser.tabs.first(where: { $0.id == id }), let url = tab.pageAddress else { return nil }
+                    return Artifact.Source(tab: id, site: url.host() ?? "page", address: AgentRules.url(url.absoluteString))
+                }
+                switch made {
+                case .failure(let problem):
+                    throw AgentRefusal(code: "bad_artifact", message: problem.rawValue)
+                case .success(let artifact):
+                    guard panel.add(artifact) else { throw AgentRefusal(code: "too_many", message: "No more cards for this message") }
+                    answer(["shown": true])
+                }
             case .tabs:
                 tabs(session, browser, answer)
             case .open:

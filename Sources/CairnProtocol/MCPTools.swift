@@ -111,6 +111,19 @@ public enum MCPTools {
             tool("screenshot", .shot, passes: [],
                  "A PNG of a tab of your own as it is laid out, with password and card fields blacked out.",
                  ["page": page, "width": number("Snapshot width in points")], required: ["page"]),
+            tool("create_artifact", .createArtifact,
+                 "Show a result in Cairn's side panel as a card the person can read and copy: a comparison table "
+                     + "(columns and rows), a brief or a checklist (sections). Give source_page (a page handle, such as p1) "
+                     + "on a cell or section that came from a page. Plain words only. Only for the side panel's Claude.",
+                 ["title": string(), "kind": ["type": "string", "enum": ["table", "brief", "checklist"]],
+                  "columns": ["type": "array", "items": ["type": "string"]],
+                  "rows": ["type": "array", "items": ["type": "array", "items": [
+                      "type": "object", "properties": ["text": ["type": "string"], "source_page": ["type": "string"]],
+                      "required": ["text"]] as [String: Any]] as [String: Any]],
+                  "sections": ["type": "array", "items": [
+                      "type": "object", "properties": ["heading": ["type": "string"], "body": ["type": "string"],
+                                                       "source_page": ["type": "string"]]] as [String: Any]]],
+                 required: ["title", "kind"]),
             tool("disconnect", .bye,
                  "Let go of Cairn when the whole task is done: its Stop and the mark on the tab you work in go, and your "
                      + "tabs stay open as the person's. You can't use them again after this."),

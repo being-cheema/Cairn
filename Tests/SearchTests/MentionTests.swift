@@ -4,6 +4,11 @@ import XCTest
 /// A tab of yours goes to Claude only when named, only as its text, once.
 @MainActor
 final class MentionTests: XCTestCase {
+    override class func setUp() {
+        super.setUp()
+        TestWorld.enter()
+    }
+
     func testTheWordBeingAskedFor() {
         XCTAssertEqual(Mentions.query(in: "@"), "")
         XCTAssertEqual(Mentions.query(in: "compare @doc"), "doc")

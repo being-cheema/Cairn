@@ -17,6 +17,7 @@ public enum AgentVerb: String, CaseIterable, Sendable {
     case waitFor = "wait_for"
     case waitForSignIn = "wait_for_sign_in"
     case shot, bye
+    case createArtifact = "create_artifact"
 }
 
 public enum AgentWire {

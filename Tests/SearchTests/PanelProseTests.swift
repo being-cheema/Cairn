@@ -4,6 +4,11 @@ import XCTest
 /// Claude's answer set as text, with nothing in it to follow or fetch.
 @MainActor
 final class PanelProseTests: XCTestCase {
+    override class func setUp() {
+        super.setUp()
+        TestWorld.enter()
+    }
+
     func testBlocks() {
         let text = """
         ## Result

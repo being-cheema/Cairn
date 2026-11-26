@@ -218,6 +218,7 @@
 		E4C2786B9086A18EA1020E87 /* IPhoneAsk.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FD176F37B4544CCB9EDC841 /* IPhoneAsk.swift */; };
 		E58C224827CC979B5BC5F173 /* FullScreenEscape.swift in Sources */ = {isa = PBXBuildFile; fileRef = 580DA494D5F4E469E98BD657 /* FullScreenEscape.swift */; };
 		E5CF896F2F0E502555C6BE2D /* AgentGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8379674D042E25B77B4480E7 /* AgentGate.swift */; };
+		B3C0896F2F0E502555C6BE2D /* Artifact.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3C0674D042E25B77B4480E7 /* Artifact.swift */; };
 		B3B0896F2F0E502555C6BE2D /* Mentions.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3B0674D042E25B77B4480E7 /* Mentions.swift */; };
 		B3A0896F2F0E502555C6BE2D /* PanelProse.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3A0674D042E25B77B4480E7 /* PanelProse.swift */; };
 		B1D0896F2F0E502555C6BE2D /* AgentOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1D0674D042E25B77B4480E7 /* AgentOverlayView.swift */; };
@@ -394,6 +395,7 @@
 		82911EA0E31E67F7D9E2AC5D /* SettingsIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SettingsIndex.swift; path = Sources/Search/SettingsIndex.swift; sourceTree = SOURCE_ROOT; };
 		82E59D50C2200C467315D4F9 /* ImageMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ImageMenu.swift; path = Sources/Search/ImageMenu.swift; sourceTree = SOURCE_ROOT; };
 		8379674D042E25B77B4480E7 /* AgentGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AgentGate.swift; path = Sources/Search/AgentGate.swift; sourceTree = SOURCE_ROOT; };
+		B3C0674D042E25B77B4480E7 /* Artifact.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Artifact.swift; path = Sources/Search/Artifact.swift; sourceTree = SOURCE_ROOT; };
 		B3B0674D042E25B77B4480E7 /* Mentions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Mentions.swift; path = Sources/Search/Mentions.swift; sourceTree = SOURCE_ROOT; };
 		B3A0674D042E25B77B4480E7 /* PanelProse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PanelProse.swift; path = Sources/Search/PanelProse.swift; sourceTree = SOURCE_ROOT; };
 		B1D0674D042E25B77B4480E7 /* AgentOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AgentOverlayView.swift; path = Sources/Search/AgentOverlayView.swift; sourceTree = SOURCE_ROOT; };
@@ -573,6 +575,7 @@
 				BB9127E55C232A51DE422327 /* AgentBanner.swift */,
 				5A3B2EDD8D3157B85CF50D9B /* AgentControl.swift */,
 				8379674D042E25B77B4480E7 /* AgentGate.swift */,
+				B3C0674D042E25B77B4480E7 /* Artifact.swift */,
 				B3B0674D042E25B77B4480E7 /* Mentions.swift */,
 				B3A0674D042E25B77B4480E7 /* PanelProse.swift */,
 				B1D0674D042E25B77B4480E7 /* AgentOverlayView.swift */,
@@ -914,6 +917,7 @@
 				38FA09E06371716F9CE55373 /* AgentBanner.swift in Sources */,
 				01744E61AC11FE472BB499F1 /* AgentControl.swift in Sources */,
 				E5CF896F2F0E502555C6BE2D /* AgentGate.swift in Sources */,
+				B3C0896F2F0E502555C6BE2D /* Artifact.swift in Sources */,
 				B3B0896F2F0E502555C6BE2D /* Mentions.swift in Sources */,
 				B3A0896F2F0E502555C6BE2D /* PanelProse.swift in Sources */,
 				B1D0896F2F0E502555C6BE2D /* AgentOverlayView.swift in Sources */,

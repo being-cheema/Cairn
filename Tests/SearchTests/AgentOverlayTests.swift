@@ -5,6 +5,11 @@ import XCTest
 /// The agent's mark over its page, and the letters tabs wear.
 @MainActor
 final class AgentOverlayTests: XCTestCase {
+    override class func setUp() {
+        super.setUp()
+        TestWorld.enter()
+    }
+
     func testABoxFollowsThePagesZoom() {
         XCTAssertEqual(AgentOverlayView.place([10, 20, 100, 30], zoom: 1.5), CGRect(x: 15, y: 30, width: 150, height: 45))
         for bad in [[], [1, 2, 3], [0, 0, 0, 10], [0, 0, 10, -1], [Double.nan, 0, 1, 1], [0, 0, .infinity, 1]] {

@@ -6,6 +6,11 @@ import XCTest
 /// with no browser there.
 @MainActor
 final class CairnProtocolTests: XCTestCase {
+    override class func setUp() {
+        super.setUp()
+        TestWorld.enter()
+    }
+
     func testTheSharedNamesAreTheAppsOwn() {
         XCTAssertEqual(AgentWire.folderName, Brand.folderName)
         XCTAssertEqual(AgentControl.verbs, Set(AgentVerb.allCases.map(\.rawValue)))
@@ -46,7 +51,7 @@ final class CairnProtocolTests: XCTestCase {
     func testEveryToolSendsAVerbAndDeclaresWhatItPasses() throws {
         let names = MCPTools.all.map(\.name)
         XCTAssertEqual(Set(names).count, names.count)
-        XCTAssertEqual(names.count, 15)
+        XCTAssertEqual(names.count, 16)
         for tool in MCPTools.all {
             XCTAssertTrue(tool.passes.allSatisfy { tool.properties[$0] != nil || $0 == "selector" }, tool.name)
             XCTAssertTrue(tool.required.allSatisfy { tool.properties[$0] != nil }, tool.name)

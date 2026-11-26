@@ -7,6 +7,11 @@ import XCTest
 /// stays hidden after the person has had it.
 @MainActor
 final class PassTheBatonTests: XCTestCase {
+    override class func setUp() {
+        super.setUp()
+        TestWorld.enter()
+    }
+
     func testAnAgentsTabIsKeptFromYoursUnlessItIsInYourHands() {
         let yours = Tab()
         XCTAssertFalse(yours.keptFromYou)

@@ -28,6 +28,8 @@ final class ClaudeSession: ObservableObject {
         var failed: String?
         /// The tabs it left to you when it finished.
         var left: [Tab.ID] = []
+        /// Results it laid out as cards (create_artifact).
+        var artifacts: [Artifact] = []
         /// What you attached to your message, as its chips said it.
         var attached: [String] = []
     }
@@ -172,6 +174,13 @@ final class ClaudeSession: ObservableObject {
         problem = nil
         draft = ""
         mentions = []
+    }
+
+    /// A card for the turn in hand; false when there is no room or no turn.
+    func add(_ artifact: Artifact) -> Bool {
+        guard let last = turns.indices.last, turns[last].artifacts.count < 6 else { return false }
+        turns[last].artifacts.append(artifact)
+        return true
     }
 
     /// The tabs the turn in hand left to you (AgentControl's hand-over).

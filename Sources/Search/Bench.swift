@@ -3330,6 +3330,12 @@ final class Bench {
                 browser.claude.submit()
             case "stop": browser.claude.stop()
             case "new": browser.claude.newChat()
+            // The front tab named for the next message, as picking it after
+            // "@" names it.
+            case "mention":
+                if let tab = browser.active, Mentions.mayName(tab) {
+                    browser.claude.mention(.tab(tab.id, label: Mentions.label(tab)))
+                }
             case "program":
                 browser.claude.stop()
                 let path = request["path"] as? String

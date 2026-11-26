@@ -4,6 +4,11 @@ import XCTest
 /// What an agent's tab may load, and what is held on its way out.
 @MainActor
 final class NavigationPolicyTests: XCTestCase {
+    override class func setUp() {
+        super.setUp()
+        TestWorld.enter()
+    }
+
     private func url(_ text: String) -> URL { URL(string: text) ?? URL(fileURLWithPath: "/bad") }
 
     func testWhereOpenAndGoMayPoint() {

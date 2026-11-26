@@ -5,6 +5,11 @@ import WebKit
 /// Where an agent may not go: this Mac and the networks around it.
 @MainActor
 final class AgentNetworkTests: XCTestCase {
+    override class func setUp() {
+        super.setUp()
+        TestWorld.enter()
+    }
+
     private func ip(_ host: String) -> Bool { PrivateNetwork.isPrivate(host: host) }
 
     func testPrivateHostsInEveryForm() {
