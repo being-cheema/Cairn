@@ -359,6 +359,13 @@ enum PageScripts {
         for (var i = 0; i < all.length; i++) {
           var el = all[i], t = el.tagName;
           if (el.shadowRoot) roots.push(el.shadowRoot);
+          // Not the viewer of a PDF that is the document itself: it is the
+          // page, and covered it left nothing to see or read. The type is
+          // WebKit's, from how the document was served, which a web page
+          // can't claim for itself.
+          // Its password and form boxes, drawn beside it, are still covered.
+          if (t === 'EMBED' && el === (document.body && document.body.firstElementChild)
+              && document.contentType === 'application/pdf') continue;
           if (/^(IFRAME|FRAME|EMBED|OBJECT|PORTAL|FENCEDFRAME)$/.test(t)) { out.push(el); continue; }
           if ((t === 'INPUT' || t === 'TEXTAREA') && secret(el)) { out.push(el); continue; }
           if (el.shadowRoot || el.children.length || (el.textContent || '').trim()) continue;
