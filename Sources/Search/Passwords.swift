@@ -2,7 +2,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 /// The one tint for taking something away, wherever it is on this page.
-private enum Tone {
+enum Tone {
     /// A red that reads as text on paper (about 5:1) and on the dark ground
     /// (about 6:1); the plain red at 75% was 2.2:1 in light.
     static let remove = Color(nsColor: NSColor(name: nil) { appearance in
