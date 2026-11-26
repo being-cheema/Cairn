@@ -190,3 +190,25 @@ final class AgentCardTests: XCTestCase {
         return count
     }
 }
+
+/// Who a card says is asking, and that What's New speaks for this app.
+@MainActor
+final class CardNamesTests: XCTestCase {
+    func testThePanelsOwnRunIsClaudeAndAnOutsideProgramIsQuoted() {
+        let pay = AgentGate.Hold(reason: .pay, summary: "Pay")
+        let leave = AgentGate.Hold(reason: .leave, summary: "Leave", site: "example.org")
+        XCTAssertEqual(AgentApproval.title(client: "Claude", hold: pay, own: true), "Claude is waiting for you")
+        XCTAssertEqual(AgentApproval.title(client: "Claude", hold: leave, own: true), "Claude wants to go to another site")
+        // A program calling itself Claude is still only what it says it is.
+        XCTAssertEqual(AgentApproval.title(client: "Claude", hold: pay), "“Claude” is waiting for you")
+    }
+
+    func testWhatsNewDoesNotSpeakForTheOldApp() {
+        for note in WhatsNew.notes {
+            for line in [note.headline] + note.new + note.better + note.fixed {
+                XCTAssertFalse(line.range(of: #"\bSearch (›|is|can|opens)|\b(in|on|with) Search\b"#, options: .regularExpression) != nil, line)
+            }
+        }
+        XCTAssertEqual(WhatsNew.notes.first?.version, "1.0.19")
+    }
+}

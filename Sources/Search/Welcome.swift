@@ -299,7 +299,7 @@ struct WelcomePanel: View {
                 Key("⌘,", "A painted wall behind the blank tab, if you want one — Settings › Themes. Off until you choose.")
                 Key("⌘1", "Pressed again on its pin, back to where you were.")
                 Key("⇧⌘P", "Float a video in \(Brand.name)'s window, or in macOS's picture in picture. Settings › Browsing.")
-                Key("⌃-click", "Claude or ChatGPT in a side panel beside the page: right-click a tab › Open in Side Panel, or View › Side Panel.")
+                Key("⌥⌘K", "Claude browses for you in tabs of its own, from a panel beside the page. To keep a site there instead, right-click its tab › Open in Side Panel.")
                 Key("⌘Q", "\(Brand.name) can ask before it quits. Settings › General.")
                 Key("⌘,", "Your passwords, under the sign-in field — Settings › Passwords.")
                 if PageTranslator.available {
@@ -606,7 +606,8 @@ struct WelcomePanel: View {
                     .padding(.horizontal, 7)
                     .padding(.vertical, 3)
                     .background(Palette.wash, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-                    .frame(minWidth: 44)
+                    // One width for all, so the words beside them line up.
+                    .frame(width: 72)
                 Text(what).font(.system(size: 13)).foregroundStyle(Palette.muted)
             }
         }

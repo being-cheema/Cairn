@@ -1460,6 +1460,7 @@ struct PasswordsPanel: View {
                         }
                     }
                 }
+                Rule(inset: 0)
                 HStack(spacing: 8) {
                     Pill("Cancel") { if isDirty { confirmDiscard { done(nil) } } else { done(nil) } }
                     Spacer(minLength: 0)

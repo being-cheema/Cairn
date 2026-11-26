@@ -568,9 +568,12 @@ final class AgentSession: ObservableObject, Identifiable {
     /// close when it ends, however it ends (AgentEnd.handsOver).
     fileprivate var declined = false
 
+    /// The name the window gives it: the panel's own run is Claude.
+    var shownName: String { panel ? "Claude" : client }
+
     /// Why "Always allow" isn't offered, or nil when it is.
     var noAlways: String? {
-        guard AgentTrust.shared.usable else { return "this copy of \(Brand.name) has nowhere safe to keep it" }
+        guard AgentTrust.shared.usable else { return "this build can't save lasting permission" }
         guard let launcher else { return "\(Brand.name) couldn't tell which program started it" }
         return launcher.unrememberable
     }

@@ -1851,17 +1851,20 @@ struct Pill: View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 11.5))
-                .foregroundStyle(filled ? Palette.ground : tint)
+                // Filled and off is a grey pill with words on it: faded as
+                // the others are, its pale words on pale coral couldn't be
+                // read, and the button looked missing.
+                .foregroundStyle(filled ? (enabled ? Palette.ground : Palette.ink) : tint)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
-                .background(filled ? Palette.accent : (hovering && enabled ? Palette.hover : Palette.ground), in: Capsule())
-                .overlay(Capsule().strokeBorder(filled ? .clear : Palette.hairline, lineWidth: 1))
+                .background(filled ? (enabled ? Palette.accent : Palette.hover) : (hovering && enabled ? Palette.hover : Palette.ground), in: Capsule())
+                .overlay(Capsule().strokeBorder(filled && enabled ? .clear : Palette.hairline, lineWidth: 1))
                 .frame(minHeight: 28)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .focusRing(Capsule())
-        .opacity(enabled ? 1 : 0.4)
+        .opacity(enabled || filled ? 1 : 0.4)
         .onHover { hovering = $0 }
         .animation(Motion.quick, value: hovering)
     }

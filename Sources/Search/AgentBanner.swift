@@ -151,7 +151,7 @@ private struct AgentStatusFace: View {
 
     private var words: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(session.client)
+            Text(session.shownName)
                 .font(.system(size: prefs.sideTitle))
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -164,7 +164,7 @@ private struct AgentStatusFace: View {
     private var pill: some View {
         HStack(spacing: 4) {
             mark.font(.system(size: 10, weight: .medium))
-            Text(session.client)
+            Text(session.shownName)
                 .font(.system(size: 11, weight: .medium))
                 .lineLimit(1)
                 .foregroundStyle(hovering ? Palette.ink : Palette.ink.opacity(0.75))
@@ -242,13 +242,13 @@ struct StopAgentMenuItem: View {
 enum AgentWords {
     @MainActor
     static func line(_ session: AgentSession) -> String {
-        session.busy ? "\(session.client) is using \(Brand.name)" : "\(session.client), idle"
+        session.busy ? "\(session.shownName) is using \(Brand.name)" : "\(session.shownName), idle"
     }
 
     /// Said for a few seconds once let in without asking.
     @MainActor
     static func admitted(_ session: AgentSession) -> String {
-        "\(session.client) let in automatically"
+        "\(session.shownName) let in automatically"
     }
 
     /// In the strip, where there is room for one short line.
@@ -280,7 +280,7 @@ private struct AgentQuestion: View {
                 }
             }
             // Ticked only by a fresh click on it, as Allow is pressed.
-            Toggle("Let it see my open tabs", isOn: Binding(
+            Toggle("Let it read my open tabs, except private ones", isOn: Binding(
                 get: { session.wantsTabs },
                 set: { _ in AgentControl.shared.toggleTabs(event: NSApp.currentEvent) }))
                 .toggleStyle(.checkbox)
@@ -291,7 +291,7 @@ private struct AgentQuestion: View {
             // Offered only for a program its signature names (AgentTrust);
             // otherwise, why not.
             if let why = session.noAlways {
-                Text("Can't be remembered: \(why).")
+                Text("One-time permission: \(why).")
                     .font(.system(size: 10.5))
                     .foregroundStyle(Palette.muted)
                     .fixedSize(horizontal: false, vertical: true)
@@ -346,7 +346,7 @@ private struct AgentQuestion: View {
 
     /// The name is the program's own word for itself; this is macOS's.
     private var detail: String {
-        let from = session.program.isEmpty ? "" : "From \(session.program) on this Mac. "
+        let from = session.program.isEmpty ? "" : "Started by \(session.program) on this Mac. "
         return from + "It works in tabs of its own while you watch, until you press Stop. "
             + "It never sees passwords, card numbers, private tabs or Settings."
     }
@@ -364,7 +364,7 @@ struct AgentApproval: View {
             HStack(alignment: .top, spacing: 10) {
                 ArtPicture(name: "approval", size: 44)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(verbatim: AgentApproval.title(client: session.client, hold: held.hold))
+                    Text(verbatim: AgentApproval.title(client: session.shownName, hold: held.hold, own: session.panel))
                         .font(.system(size: 12.5, weight: .medium))
                         .foregroundStyle(Palette.ink)
                     Text(verbatim: AgentApproval.detail(held.hold))
@@ -412,8 +412,10 @@ extension AgentApproval {
     /// The card's words. A move to another site is said as one, with the
     /// site, rather than as the rule's name; the rest as the browser holds
     /// them (AgentGate), the page's words in quotes.
-    static func title(client: String, hold: AgentGate.Hold) -> String {
-        hold.reason == .leave ? "“\(client)” wants to go to another site" : "“\(client)” is waiting for you"
+    static func title(client: String, hold: AgentGate.Hold, own: Bool = false) -> String {
+        // Quotes mark a name a program gave itself; the panel's is ours.
+        let name = own ? client : "“\(client)”"
+        return hold.reason == .leave ? "\(name) wants to go to another site" : "\(name) is waiting for you"
     }
 
     static func detail(_ hold: AgentGate.Hold) -> String {

@@ -203,13 +203,16 @@ struct ClaudePanel: View {
             .background(Palette.wash.opacity(0.6), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Palette.hairline, lineWidth: 1))
 
-            HStack(spacing: 6) {
+            HStack(spacing: 8) {
                 modelMenu
-                Text("· Claude Code on this Mac · may be wrong")
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Palette.wash, in: Capsule())
+                Text("Claude can make mistakes. Check important details.")
                     .font(.system(size: 11))
                     .foregroundStyle(Palette.muted)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .help("Answered by the Claude Code program on this Mac")
             }
             .padding(.horizontal, 4)
         }
@@ -233,10 +236,8 @@ struct ClaudePanel: View {
                 Text("Changing it starts a new chat")
             }
         } label: {
-            HStack(spacing: 3) {
-                Text(verbatim: shown)
-                Ink("chevron.up.chevron.down", size: 13).font(.system(size: 7.5, weight: .semibold))
-            }
+            // One run of text: a menu's own button drops a drawn glyph.
+            Text(verbatim: "Model: \(shown) ▾")
             .font(.system(size: 10.5, weight: .medium))
             .foregroundStyle(Palette.muted)
         }
