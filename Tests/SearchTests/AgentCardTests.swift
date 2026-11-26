@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import WebKit
 import XCTest
 @testable import Search
 
@@ -210,5 +211,43 @@ final class CardNamesTests: XCTestCase {
             }
         }
         XCTAssertEqual(WhatsNew.notes.first?.version, "1.0.21")
+    }
+}
+
+/// What came from upstream mustn't change what holds for an agent's tab.
+@MainActor
+final class AgentTabsAndUpstreamTests: XCTestCase {
+    override class func setUp() {
+        super.setUp()
+        TestWorld.enter()
+    }
+
+    /// LoadTurns makes pages out of sight wait. An agent's can't: the agent's
+    /// wait reads a page that hasn't started as one that has finished.
+    func testAnAgentsPageNeverWaitsForATurn() {
+        _ = NSApplication.shared
+        // Every turn taken, by loads that stay in them.
+        let busy = (0..<LoadTurns.at).map { _ in PageView(frame: .zero, configuration: WKWebViewConfiguration()) }
+        for view in busy { view.inTurn { true } }
+        defer { for view in busy { LoadTurns.shared.shown(view) } }
+
+        let yours = PageView(frame: .zero, configuration: WKWebViewConfiguration())
+        var yoursRan = false
+        yours.inTurn { yoursRan = true; return true }
+        XCTAssertFalse(yoursRan, "the turns are all taken, or this test shows nothing")
+        LoadTurns.shared.shown(yours)
+
+        let theirs = PageView(frame: .zero, configuration: WKWebViewConfiguration())
+        theirs.neverWaits = true
+        var theirsRan = false
+        theirs.inTurn { theirsRan = true; return true }
+        XCTAssertTrue(theirsRan)
+    }
+
+    func testAnAgentsTabsViewIsMarkedNotToWait() {
+        let tab = Tab(bench: true)
+        _ = tab.web
+        tab.agent = true
+        XCTAssertEqual((tab.web as? PageView)?.neverWaits, true)
     }
 }

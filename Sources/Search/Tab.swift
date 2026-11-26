@@ -30,7 +30,7 @@ enum Web {
     @MainActor static func release(_ controller: WKUserContentController) {
         for name in [ScrollRelay.name, VeilRelay.name, FormRelay.name, ImageRelay.name, MediaKeys.name,
                      StoreRelay.name, PasskeyRelay.name, MiddleRelay.name, IconRelay.name, PopupGestureRelay.name, DuskRelay.name,
-                     TranslateRelay.name, PageDrafts.name] {
+                     TranslateRelay.name, PageDrafts.name, MeetPiPRelay.name] {
             controller.removeScriptMessageHandler(forName: name, contentWorld: world)
             controller.removeScriptMessageHandler(forName: name, contentWorld: .page)
         }
@@ -718,6 +718,8 @@ final class Tab: ObservableObject, Identifiable {
 
     /// What the page hands back when you point at something and click it.
     var onPick: ((Tab, Veil) -> Void)?
+    /// What the page hands back when you drag it instead: moved or resized.
+    var onShape: ((Tab, Veil) -> Void)?
     /// The page has a sign-in on it; the page has just sent one.
     var onSignIn: ((Tab) -> Void)?
     /// The caret has entered or left one of the sign-in boxes; where the box
@@ -790,6 +792,13 @@ final class Tab: ObservableObject, Identifiable {
     private let iconChanges = IconRelay()
     private let middles = MiddleRelay()
     private let dusk = DuskRelay()
+    private let meetPiP = MeetPiPRelay()
+    /// Google Meet's own little window (MeetPiP.swift): the page gave
+    /// mediaSession the handler Chrome calls on a tab switch; it asked for
+    /// its window just now; and when Search's tab switch asked for one.
+    var meetPiPArmed = false
+    var meetPiPAsk: (at: TimeInterval, width: Double, height: Double)?
+    var meetPiPAuto: TimeInterval?
     var popupGesture = PopupGesture()
     /// Windows this page asked for and was refused, newest last, a few at
     /// most: the quiet sign beside its title offers them (BlockedPopups.swift).
@@ -831,7 +840,9 @@ final class Tab: ObservableObject, Identifiable {
 
     /// A bench tab a coding agent opened (AgentControl): marked as its own
     /// in the row, and kept to the web.
-    var agent = false
+    var agent = false {
+        didSet { (built as? PageView)?.neverWaits = agent }
+    }
     /// You have it for now, to sign in (AgentControl's Pass the Baton).
     var inYourHands = false
     /// An agent's tab, and not in your hands: nothing of yours goes into it
@@ -1074,6 +1085,7 @@ final class Tab: ObservableObject, Identifiable {
         FrameRate.apply(to: configuration.preferences)
         ClickIDs.apply(to: configuration.preferences, shy: shy)
         let web = PageView(frame: .zero, configuration: configuration)
+        web.neverWaits = agent
         // The trackpad pinch is WebKit's own: it magnifies what is on screen
         // and lets you move around inside it, the way pinching does everywhere
         // else on a Mac. ⌘+ and ⌘- are the other thing — they lay the page out
@@ -1151,6 +1163,8 @@ final class Tab: ObservableObject, Identifiable {
         controller.add(middles, contentWorld: Web.world, name: MiddleRelay.name)
         controller.add(dusk, contentWorld: Web.world, name: DuskRelay.name)
         controller.add(translateRelay, contentWorld: Web.world, name: TranslateRelay.name)
+        meetPiP.tab = self
+        controller.add(meetPiP, contentWorld: Web.world, name: MeetPiPRelay.name)
         PopupGestureRelay.install(on: controller)
         Shield.shared.protect(controller)
         built = web
@@ -1360,6 +1374,12 @@ final class Tab: ObservableObject, Identifiable {
         // Every frame, in the page's own world and ahead of its scripts: a
         // live player's speed nudges go through it (see LiveRate.swift).
         add(LiveRate.script, .atDocumentStart, mainFrameOnly: false, in: .page)
+        // Only on Meet, with Settings › Videos › Google Meet's own mini
+        // window on: Chrome's little window for a call (see MeetPiP.swift).
+        if MeetPiP.applies(url ?? pageAddress) {
+            add(MeetPiP.page, .atDocumentStart, mainFrameOnly: true, in: .page)
+            add(MeetPiP.bridge, .atDocumentStart, mainFrameOnly: true, in: Web.world)
+        }
         // Every frame, in the page's own world: a page an extension lists
         // reaches it as chrome.runtime (see ExtensionExternal.swift).
         if let external = ExtensionExternal.script {
@@ -1447,7 +1467,11 @@ final class Tab: ObservableObject, Identifiable {
             """, arguments: ["selector": selector]) { shows in then(shows as? Bool ?? false) }
     }
 
-    func startPicking() { web.evaluateInSearch("window.__officeVeil && window.__officeVeil.on()") }
+    /// `shaping`: a drag moves or resizes what is outlined, a click still
+    /// hides it (Settings › Browsing › Pages).
+    func startPicking(shaping: Bool = false) {
+        web.evaluateInSearch("window.__officeVeil && window.__officeVeil.on(\(shaping))")
+    }
     func stopPicking() { web.evaluateInSearch("window.__officeVeil && window.__officeVeil.off()") }
 
     func foundSignIn() { onSignIn?(self) }
@@ -1646,6 +1670,10 @@ final class Tab: ObservableObject, Identifiable {
         onPick?(self, veil)
     }
 
+    func shaped(_ veil: Veil) {
+        onShape?(self, veil)
+    }
+
     /// Show one hidden thing while the pointer rests on its row in the list.
     func peek(_ selector: String, keeping css: String) {
         web.evaluateInSearch(
@@ -1731,9 +1759,15 @@ final class Tab: ObservableObject, Identifiable {
         let token = loadGeneration
         Shield.shared.whenReady { [weak self] in
             guard let self, self.loadGeneration == token else { return }
-            self.web.open(url)
-            // Back, from a page that came out of one of Search's own, goes there.
-            self.steps()
+            // Out of sight, in its turn (LoadTurns).
+            let view = self.web
+            view.inTurn { [weak self, weak view] in
+                guard let self, let view, self.loadGeneration == token, self.built === view else { return false }
+                view.open(url)
+                // Back, from a page that came out of one of Search's own, goes there.
+                self.steps()
+                return true
+            }
         }
     }
 
@@ -2028,33 +2062,39 @@ final class Tab: ObservableObject, Identifiable {
             }
             return
         }
-        // A tab that slept has its own history to go back to — the page, its
-        // back list and its scroll position, in one. Anything else starts
-        // from the address. A file does too: its history comes back without
-        // the folder it may read, and showed nothing.
-        if let state, !url.isFileURL {
-            view.interactionState = state
-        } else {
-            view.open(url)
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self, weak view] in
-            // A page that has said why it isn't there (recoverFromCrash gave
-            // up, or it never arrived) isn't asked for again behind that.
-            guard let self, let view, self.loadGeneration == token, self.built === view, self.failure == nil else { return }
-            guard self.built?.url?.absoluteString != "about:blank" else {
+        // Out of sight, in its turn (LoadTurns): the check after it too,
+        // timed from when it was asked for.
+        view.inTurn { [weak self, weak view] in
+            guard let self, let view, self.loadGeneration == token, self.built === view else { return false }
+            // A tab that slept has its own history to go back to — the page, its
+            // back list and its scroll position, in one. Anything else starts
+            // from the address. A file does too: its history comes back without
+            // the folder it may read, and showed nothing.
+            if let state, !url.isFileURL {
+                view.interactionState = state
+            } else {
                 view.open(url)
-                return
             }
-            view.evaluateJavaScript("document.readyState") { [weak self, weak view] _, error in
-                MainActor.assumeIsolated {
-                    guard let self, let view, self.loadGeneration == token, self.built === view, self.failure == nil,
-                          let error = error as NSError? else { return }
-                    guard error.domain == WKErrorDomain,
-                          error.code == WKError.webContentProcessTerminated.rawValue
-                    else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self, weak view] in
+                // A page that has said why it isn't there (recoverFromCrash gave
+                // up, or it never arrived) isn't asked for again behind that.
+                guard let self, let view, self.loadGeneration == token, self.built === view, self.failure == nil else { return }
+                guard self.built?.url?.absoluteString != "about:blank" else {
                     view.open(url)
+                    return
+                }
+                view.evaluateJavaScript("document.readyState") { [weak self, weak view] _, error in
+                    MainActor.assumeIsolated {
+                        guard let self, let view, self.loadGeneration == token, self.built === view, self.failure == nil,
+                              let error = error as NSError? else { return }
+                        guard error.domain == WKErrorDomain,
+                              error.code == WKError.webContentProcessTerminated.rawValue
+                        else { return }
+                        view.open(url)
+                    }
                 }
             }
+            return true
         }
     }
 
@@ -2074,7 +2114,12 @@ final class Tab: ObservableObject, Identifiable {
         // address is what to show, and reload alone would have nothing to do.
         if hollow, let address {
             loadGeneration &+= 1
-            web.open(address)
+            let token = loadGeneration, view = web
+            view.inTurn { [weak self, weak view] in
+                guard let self, let view, self.loadGeneration == token, self.built === view else { return false }
+                view.open(address)
+                return true
+            }
             return
         }
         guard let built else { return }
@@ -2195,15 +2240,19 @@ final class Tab: ObservableObject, Identifiable {
             return
         }
         // A file is read again with the folder it may read (see open).
-        if let address, hollow || address.isFileURL {
-            loadGeneration &+= 1
-            web.open(address)
-        } else if fromOrigin {
-            loadGeneration &+= 1
-            web.reloadFromOrigin()
-        } else {
-            loadGeneration &+= 1
-            web.reload()
+        // Out of sight, in its turn (LoadTurns).
+        loadGeneration &+= 1
+        let token = loadGeneration, view = web, again = address.flatMap { hollow || $0.isFileURL ? $0 : nil }
+        view.inTurn { [weak self, weak view] in
+            guard let self, let view, self.loadGeneration == token, self.built === view else { return false }
+            if let again {
+                view.open(again)
+            } else if fromOrigin {
+                view.reloadFromOrigin()
+            } else {
+                view.reload()
+            }
+            return true
         }
     }
     func stop() {
@@ -2271,6 +2320,7 @@ final class Tab: ObservableObject, Identifiable {
         onZoom = nil
         onLink = nil
         onPick = nil
+        onShape = nil
         onPickEnd = nil
         onSignIn = nil
         onField = nil
@@ -3183,9 +3233,20 @@ final class PageView: WKWebView {
         gateTrackingAreas()
     }
 
+    /// An agent's page. Its wait takes a page that hasn't started for one
+    /// that has finished (AgentControl.settle), so it never takes a turn.
+    var neverWaits = false
+
+    /// `load` now, or in its turn while the page is out of sight (LoadTurns).
+    func inTurn(_ load: @escaping LoadTurns.Load) {
+        if neverWaits { _ = load() } else { LoadTurns.shared.start(self, load) }
+    }
+
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         gateTrackingAreas()
+        // In sight now: a load waiting its turn starts (LoadTurns).
+        if LoadTurns.inSight(self) { LoadTurns.shared.shown(self) }
         guard window != nil, onWindow != nil else { return }
         // Not in this very step: the stage puts the view in its window and
         // only then gives it its size, and a page asked to load before that
