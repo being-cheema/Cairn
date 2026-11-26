@@ -73,5 +73,7 @@ final class PanelProseTests: XCTestCase {
         let pills = LeftTabs.pills(ids: [left.id], named: [named.title, "No such tab"], among: [left, named, hidden])
         XCTAssertEqual(pills.first?.id, left.id)
         XCTAssertFalse(pills.contains { $0.id == hidden.id })
+        // Another tab with the title of one already shown adds no second pill.
+        XCTAssertEqual(LeftTabs.pills(ids: [left.id], named: [left.title], among: [named, left]).map(\.id), [left.id])
     }
 }

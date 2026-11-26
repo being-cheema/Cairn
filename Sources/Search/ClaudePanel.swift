@@ -513,8 +513,10 @@ struct LeftTabs: View {
     /// here. Never a private one.
     static func pills(ids: [Tab.ID], named: [String], among tabs: [Tab]) -> [Tab] {
         var out = ids.compactMap { id in tabs.first { $0.id == id } }
-        for title in named {
-            if let tab = tabs.first(where: { !$0.shy && $0.title == title }), !out.contains(where: { $0.id == tab.id }) {
+        // A title already shown is the one meant: yours of the same name
+        // beside the one it left would be two pills nobody can tell apart.
+        for title in named where !out.contains(where: { $0.title == title }) {
+            if let tab = tabs.first(where: { !$0.shy && $0.title == title }) {
                 out.append(tab)
             }
         }
