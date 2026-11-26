@@ -973,8 +973,11 @@ struct ContentView: View {
         VStack(spacing: 8) {
             announcement
             // A coding agent's question; never anything over the page once
-            // it is answered (AgentBanner).
+            // it is answered (AgentBanner). Centred over the page's own
+            // room: centred on the window, it lay over the side panel.
             AgentBar(browser: browser)
+                .frame(maxWidth: .infinity)
+                .padding(sideOnRight ? .leading : .trailing, panelRoom)
             if let ask = browser.asking {
                 Group {
                     if ask.screen { ScreenQuestion(browser: browser, ask: ask) }

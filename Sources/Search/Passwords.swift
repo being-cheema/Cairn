@@ -61,6 +61,25 @@ private func errorLine(_ text: String) -> some View {
     .accessibilityElement(children: .combine)
 }
 
+/// A card of rows no taller than its rows, which scroll inside it past
+/// `atMost`. A scroll view alone takes all the height it is offered, which
+/// left a gap under a short list, and cut a long one's card off mid-row.
+private struct Rows<Content: View>: View {
+    let atMost: CGFloat
+    @ViewBuilder let content: () -> Content
+    @State private var height: CGFloat = 0
+
+    var body: some View {
+        Card {
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 0) { content() }
+                    .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { height = $0 }
+            }
+            .frame(height: min(height, atMost))
+        }
+    }
+}
+
 /// Every password kept: a list on the left, the one picked on the right. The
 /// same rule as ever: a password is never shown until you have proved you are
 /// you (Vault.Unlock), and never for longer than it takes to read it.
@@ -308,17 +327,21 @@ struct PasswordsPanel: View {
             }
             Spacer(minLength: 0)
         } else {
-            ScrollView(showsIndicators: false) {
-                Card {
-                    ForEach(Array(rows.enumerated()), id: \.element.id) { index, login in
-                        if index > 0 { Rule() }
-                        Row(login: login, picked: selected == login.id, flagged: report?.flagged.contains(login.id) ?? false,
-                            focus: $focusedRow) {
-                            guardEdits { editing = nil; selected = login.id }
+            // The card holds still and the rows move inside it: scrolled the
+            // other way round, its foot was off the page and the last row
+            // looked cut off.
+            Card {
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 0) {
+                        ForEach(Array(rows.enumerated()), id: \.element.id) { index, login in
+                            if index > 0 { Rule() }
+                            Row(login: login, picked: selected == login.id, flagged: report?.flagged.contains(login.id) ?? false,
+                                focus: $focusedRow) {
+                                guardEdits { editing = nil; selected = login.id }
+                            }
                         }
                     }
                 }
-                .padding(.bottom, 2)
             }
             .onKeyPress(.upArrow) { step(-1); return .handled }
             .onKeyPress(.downArrow) { step(1); return .handled }
@@ -424,24 +447,21 @@ struct PasswordsPanel: View {
                      button: "Show codes", busy: loadingCodes ? "Reading…" : nil, action: loadCodes)
             }
         } else {
-            ScrollView(showsIndicators: false) {
-                Card {
-                    ForEach(Array(coded.enumerated()), id: \.element.id) { index, item in
-                        if index > 0 { Rule() }
-                        HStack(spacing: 12) {
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(item.name).font(.system(size: 13)).foregroundStyle(Palette.ink).lineLimit(1)
-                                Text(item.detail).font(.system(size: 11.5)).foregroundStyle(Palette.muted).lineLimit(1)
-                            }
-                            Spacer(minLength: 8)
-                            CodeLine(key: item.key) { browser.announce($0) }
+            Rows(atMost: 440) {
+                ForEach(Array(coded.enumerated()), id: \.element.id) { index, item in
+                    if index > 0 { Rule() }
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(item.name).font(.system(size: 13)).foregroundStyle(Palette.ink).lineLimit(1)
+                            Text(item.detail).font(.system(size: 11.5)).foregroundStyle(Palette.muted).lineLimit(1)
                         }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
+                        Spacer(minLength: 8)
+                        CodeLine(key: item.key) { browser.announce($0) }
                     }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
                 }
             }
-            .frame(maxHeight: 440)
         }
     }
 
@@ -484,9 +504,9 @@ struct PasswordsPanel: View {
                         .foregroundStyle(Palette.ink)
                         .textSelection(.enabled)
                     Text("\(left)s")
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundStyle(left <= 5 ? Palette.accent : Palette.muted)
-                        .frame(width: 26, alignment: .trailing)
+                        .font(.system(size: 12, weight: left <= 5 ? .bold : .medium, design: .monospaced))
+                        .foregroundStyle(left <= 5 ? Palette.accent : Palette.ink)
+                        .frame(width: 28, alignment: .trailing)
                         // Colour alone says it is about to change; a reader
                         // of the screen is told too.
                         .accessibilityLabel("Time left")
@@ -520,28 +540,25 @@ struct PasswordsPanel: View {
                             art: "approval")
                 }
             } else {
-                ScrollView(showsIndicators: false) {
-                    Card {
-                        ForEach(Array(passkeyList.enumerated()), id: \.element.id) { index, record in
-                            if index > 0 { Rule() }
-                            HStack(spacing: 12) {
-                                Mark(icon: Favicons.shared.cached(record.rp), letter: record.rp.first.map { String($0).uppercased() } ?? "•", size: 16)
-                                VStack(alignment: .leading, spacing: 1) {
-                                    Text(record.rp).font(.system(size: 13)).foregroundStyle(Palette.ink).lineLimit(1)
-                                    Text(record.userName.isEmpty ? record.displayName : record.userName)
-                                        .font(.system(size: 11.5)).foregroundStyle(Palette.muted).lineLimit(1).truncationMode(.middle)
-                                }
-                                Spacer(minLength: 8)
-                                Text(record.lastUsed.map { "Used \(Self.when.string(from: $0))" } ?? "Made \(Self.when.string(from: record.created))")
-                                    .font(.system(size: 11.5)).foregroundStyle(Palette.muted)
-                                Quick("Remove", tint: Tone.remove) { removePasskey(record) }
+                Rows(atMost: 330) {
+                    ForEach(Array(passkeyList.enumerated()), id: \.element.id) { index, record in
+                        if index > 0 { Rule() }
+                        HStack(spacing: 12) {
+                            Mark(icon: Favicons.shared.cached(record.rp), letter: record.rp.first.map { String($0).uppercased() } ?? "•", size: 16)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(record.rp).font(.system(size: 13)).foregroundStyle(Palette.ink).lineLimit(1)
+                                Text(record.userName.isEmpty ? record.displayName : record.userName)
+                                    .font(.system(size: 11.5)).foregroundStyle(Palette.muted).lineLimit(1).truncationMode(.middle)
                             }
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
+                            Spacer(minLength: 8)
+                            Text(record.lastUsed.map { "Used \(Self.when.string(from: $0))" } ?? "Made \(Self.when.string(from: record.created))")
+                                .font(.system(size: 11.5)).foregroundStyle(Palette.muted)
+                            Quick("Remove", tint: Tone.remove) { removePasskey(record) }
                         }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
                     }
                 }
-                .frame(maxHeight: 330)
             }
             Text("Passkeys made here stay on this Mac, and are signed only after Touch ID. An iCloud Keychain passkey can be used here only once it is brought in; otherwise sign in another way once, then make a new one.")
                 .font(.system(size: 11.5))
@@ -675,25 +692,22 @@ struct PasswordsPanel: View {
                                 : "Nothing under \(active?.rawValue ?? "that").", art: "approval")
                     }
                 } else {
-                    ScrollView(showsIndicators: false) {
-                        Card {
-                            ForEach(Array(shown.enumerated()), id: \.element.id) { index, finding in
-                                if index > 0 { Rule() }
-                                HStack(spacing: 12) {
-                                    VStack(alignment: .leading, spacing: 1) {
-                                        Text(finding.name).font(.system(size: 13)).foregroundStyle(Palette.ink).lineLimit(1)
-                                        Text(finding.user.isEmpty ? finding.why : "\(finding.user) · \(finding.why)")
-                                            .font(.system(size: 11.5)).foregroundStyle(Palette.muted).lineLimit(2)
-                                    }
-                                    Spacer(minLength: 8)
-                                    Quick("Show") { jump(to: finding.id) }
+                    Rows(atMost: 330) {
+                        ForEach(Array(shown.enumerated()), id: \.element.id) { index, finding in
+                            if index > 0 { Rule() }
+                            HStack(spacing: 12) {
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(finding.name).font(.system(size: 13)).foregroundStyle(Palette.ink).lineLimit(1)
+                                    Text(finding.user.isEmpty ? finding.why : "\(finding.user) · \(finding.why)")
+                                        .font(.system(size: 11.5)).foregroundStyle(Palette.muted).lineLimit(2)
                                 }
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 10)
+                                Spacer(minLength: 8)
+                                Quick("Show") { jump(to: finding.id) }
                             }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
                         }
                     }
-                    .frame(maxHeight: 330)
                 }
                 Text("Checked on this Mac, \(count(report.checked, "password", "passwords")), and nothing was sent anywhere. That is also why no password is looked up in a list of leaked ones: that would mean sending something out.")
                     .font(.system(size: 11.5))

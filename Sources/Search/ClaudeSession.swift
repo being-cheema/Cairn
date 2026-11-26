@@ -73,6 +73,8 @@ final class ClaudeSession: ObservableObject {
     /// Words of the message in progress arrived as they were written, so the
     /// finished message repeating them is not shown twice.
     private var streamed = false
+    /// Words of the answer are arriving, with no tool since (see `step`).
+    @Published private var writing = false
     /// The next words open a new paragraph.
     private var needBreak = false
     /// The words of the message in progress, and of the one before it in
@@ -121,6 +123,7 @@ final class ClaudeSession: ObservableObject {
         turns.append(Turn(question: text))
         seenTools = [:]
         streamed = false
+        writing = false
         needBreak = false
         current = ""
         previous = ""
@@ -148,7 +151,12 @@ final class ClaudeSession: ObservableObject {
     var browser: Browser? { window() }
 
     /// What it is doing now, while it is: the last thing it said it was at.
-    var step: String? { running ? turns.last?.steps.last : nil }
+    /// Nothing once it is writing its answer, or once it has let go of the
+    /// browser: the last step is over, and would otherwise stay up as if not.
+    var step: String? {
+        guard running, !writing, let last = turns.last?.steps.last, last != ClaudeCode.leaving else { return nil }
+        return last
+    }
 
     /// Ends the run, for Stop, for closing the panel, for a window going.
     func stop() {
@@ -291,12 +299,15 @@ final class ClaudeSession: ObservableObject {
                 turns[last].answer += text
                 current += text
                 streamed = true
+                writing = true
             case .text(let text):
                 // Already shown as it was written.
                 if streamed { continue }
                 turns[last].answer += (turns[last].answer.isEmpty ? "" : "\n\n") + text
                 current += text
+                writing = true
             case .tool(let id, let step):
+                writing = false
                 if let id {
                     if let at = seenTools[id] {
                         if turns[last].steps.indices.contains(at) { turns[last].steps[at] = step }

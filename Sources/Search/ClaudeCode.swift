@@ -282,6 +282,9 @@ enum ClaudeCode {
         }
     }
 
+    /// The step for `disconnect`: the last thing it does with the browser.
+    static let leaving = "Leaving its tabs to you"
+
     /// `mcp__search__read_page` as the person would say it; with the site,
     /// for a tab opened or a page gone to, once its input has arrived (the
     /// finished message carries it; the first word of a tool does not).
@@ -305,7 +308,7 @@ enum ClaudeCode {
             "press": "Pressing a key",
             "scroll": "Scrolling",
             // It is done with the browser: its tabs stay, as the person's.
-            "disconnect": "Leaving its tabs to you",
+            "disconnect": leaving,
         ]
         if let host = site(input?["url"] as? String) {
             switch bare {

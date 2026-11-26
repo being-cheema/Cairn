@@ -122,14 +122,20 @@ final class Assistant: ObservableObject, Identifiable {
                     // talked into writing on and on is stopped.
                     if self.turns[self.turns.count - 1].answer.count > Assistant.longest { break }
                 }
-                self?.finish(nil)
+                self?.finish(Task.isCancelled ? Assistant.stopped : nil)
             } catch {
-                self?.finish(error.localizedDescription)
+                self?.finish(Task.isCancelled ? Assistant.stopped : error.localizedDescription)
             }
         }
     }
 
     static let longest = 16_000
+
+    /// What a turn ended by Stop says, under what had arrived.
+    static let stopped = "You stopped it."
+
+    /// An answer is arriving, so there is something to stop.
+    var writing: Bool { turns.last.map { !$0.done } ?? false }
 
     private func finish(_ failed: String?) {
         guard !turns.isEmpty, let read else { return }
@@ -258,6 +264,9 @@ struct AssistantPanel: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Palette.ink)
                 Spacer(minLength: 0)
+                if assistant.writing {
+                    Pill("Stop") { assistant.stop() }
+                }
                 Door(icon: "xmark", help: "Close   esc") { browser.closeAssistant() }
             }
             .padding(.horizontal, 16)

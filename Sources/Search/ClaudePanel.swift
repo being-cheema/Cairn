@@ -116,7 +116,7 @@ struct ClaudePanel: View {
                 Text("What should I do?")
                     .font(Typeface.heading(19, weight: .medium))
                     .foregroundStyle(Palette.ink)
-                Text("I work in a clean browser of my own: not signed in to anything, and gone when we're done. I never use your saved passwords, and anything that sends, pays or posts waits for your click.")
+                Text("I work in tabs of my own, not signed in to anything. When I finish, they're yours. I never use your saved passwords, and anything that sends, pays or posts waits for your click.")
                     .font(.system(size: 12))
                     .foregroundStyle(Palette.muted)
                     .fixedSize(horizontal: false, vertical: true)
