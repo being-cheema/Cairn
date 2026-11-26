@@ -82,7 +82,7 @@ enum ClaudeCode {
         // The tabs outlive the task now (AgentControl.handOverTaskTabs): the
         // model is told so, or it says the result is somewhere it can't see.
         parts.append("When the whole task is done, call disconnect: your tabs then stay open as the person's, and you can no longer use them, so disconnect only at the end. In your answer name the tab that holds the result by its title, such as \"the YouTube tab\"; never say it is behind or in front of another tab, which you cannot see. If the task is something to watch or listen to, leave it playing.")
-        parts.append("Be quick: do not narrate each step. Answer in short plain text, with no markdown.")
+        parts.append("Be quick: do not narrate each step. Answer briefly. Simple Markdown is shown: short headings, lists, bold, tables and code blocks. Nothing in your answer can be clicked, so name sites in words. To point at a tab, write [Tab: its exact title].")
         return parts.joined(separator: " ")
     }
 

@@ -325,8 +325,8 @@ struct ClaudePanel: View {
                     }
                 }
 
-                if let browser, !turn.left.isEmpty {
-                    LeftTabs(browser: browser, ids: turn.left)
+                if let browser, !turn.left.isEmpty || !turn.answer.isEmpty {
+                    LeftTabs(browser: browser, ids: turn.left, named: PanelProse.tabsNamed(in: turn.answer))
                 }
 
                 if turn.answer.isEmpty, turn.failed == nil, working, turn.steps.isEmpty {
@@ -337,16 +337,9 @@ struct ClaudePanel: View {
                     .foregroundStyle(Palette.muted)
                 }
 
-                // As written, and never as markdown: no link to follow, no
-                // picture to fetch.
+                // Set as text, with nothing in it to follow or fetch (PanelProse).
                 if !turn.answer.isEmpty {
-                    Text(verbatim: turn.answer)
-                        .font(.system(size: 13))
-                        .foregroundStyle(Palette.ink)
-                        .lineSpacing(3)
-                        .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    ProseView(text: turn.answer)
                 }
 
                 if let failed = turn.failed {
@@ -370,9 +363,23 @@ struct ClaudePanel: View {
 struct LeftTabs: View {
     @ObservedObject var browser: Browser
     let ids: [Tab.ID]
+    /// Titles the answer points at (PanelProse.tabsNamed).
+    var named: [String] = []
+
+    /// The tabs left to you, then any others the answer names that are open
+    /// here. Never a private one.
+    static func pills(ids: [Tab.ID], named: [String], among tabs: [Tab]) -> [Tab] {
+        var out = ids.compactMap { id in tabs.first { $0.id == id } }
+        for title in named {
+            if let tab = tabs.first(where: { !$0.shy && $0.title == title }), !out.contains(where: { $0.id == tab.id }) {
+                out.append(tab)
+            }
+        }
+        return out
+    }
 
     var body: some View {
-        let open = ids.compactMap { id in browser.tabs.first { $0.id == id } }
+        let open = Self.pills(ids: ids, named: named, among: browser.tabs)
         if !open.isEmpty {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
