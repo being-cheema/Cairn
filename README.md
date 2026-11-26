@@ -2,10 +2,10 @@
 
 # 🪨 Cairn
 
-### A browser made by Claude, for Claude. You're just here to click Approve.
+### A browser made by Claude, for Claude. You're also invited. Somebody has to click Approve.
 
 **A native Mac browser where Claude does the legwork and you keep the last word.**
-WebKit. SwiftUI. No Chromium. No account. No telemetry. No third-party packages.
+WebKit. SwiftUI. No Chromium, no account, no telemetry, no third-party packages. We're running out of things to not have.
 
 [Why](#why-this-exists) · [The leash](#the-leash) · [The fine print](#where-the-leash-ends) · [Build it](#summon-it) · [Credit](#license-and-credit)
 
@@ -18,16 +18,20 @@ WebKit. SwiftUI. No Chromium. No account. No telemetry. No third-party packages.
 
 ## Why this exists
 
-Letting an AI loose in the browser where you're signed in to *everything* is a
-bold lifestyle choice. Your email. Your bank. That shop that remembers your card.
-One page with *"ignore your instructions and…"* tucked inside it, and your new
-assistant has a very interesting afternoon.
+Hi. You're reading a README, which already puts you ahead of most people.
 
-So Cairn does it the other way round. **Claude gets tabs of its own**, born
-signed in to nothing, with none of your cookies. It reads, clicks, types and
-digs. When it reaches something with consequences, it stops, outlines the exact
-button in the page, and **waits for you**. A keypress won't answer. Neither
-will an accessibility press, or anything the agent sends. It wants your click.
+Here's the thing about letting an AI loose in the browser where you're signed in
+to *everything*: it's a very bold choice. Your email. Your bank. That shop that
+remembers your card better than you do. Then one web page whispers *"ignore your
+instructions and…"* and your helpful new assistant has a *really* interesting
+afternoon.
+
+So we did it the other way round. **Claude gets tabs of its own.** Signed in to
+nothing. None of your cookies. It reads, clicks, types and digs. And when it gets
+to something with consequences, it stops, circles the exact button in the page,
+and **waits for you**. A keypress won't answer. Neither will an accessibility
+press, or anything the agent sends. It wants your click. Congratulations on your
+new job.
 
 ## What it does
 
@@ -40,7 +44,7 @@ will an accessibility press, or anything the agent sends. It wants your click.
 
 ## The leash
 
-These rules are in the browser's code, not in a prompt asking nicely.
+These rules are in the browser's code. Not in a prompt that says *please*.
 
 | | |
 |---|---|
@@ -54,7 +58,7 @@ These rules are in the browser's code, not in a prompt asking nicely.
 
 ## Where the leash ends
 
-Read this part. A security promise with no fine print is a horoscope.
+This is the part most adverts mumble very fast at the end. Please read it slowly. A security promise with no fine print is a horoscope.
 
 What a page's script sends with `fetch` or XHR
 isn't a page load, so the browser can't hold it: a button that sends that way
@@ -66,6 +70,8 @@ Treat the approval card as a strong guard, not a proof. Claude can be wrong,
 and a page can try to talk it into things.
 
 ## Also, it's a real browser
+
+An actual one. With tabs and everything. We were as surprised as you are.
 
 Cairn is a browser with nothing in the way. A row of tabs — down the left, or across the top if you prefer — and the page. There is no toolbar, no start page, no sidebar of suggestions, no account to sign into, nothing that wants your attention. You type an address or a few words in one field and you are on the page.
 
@@ -130,8 +136,9 @@ With Split View on, `⌥⌘N` splits the current page and `⌃⌘←` / `⌃⌘�
 
 ## Summon it
 
-There is **no download**. Nothing here is notarised, so you build it yourself,
-which also means you can read every line before it touches your passwords.
+There is **no download**. Nothing here is notarised, so you build it yourself.
+We're calling that a feature, because it means you can read every line before it
+touches your passwords. (It's also because notarising costs money.)
 
 You need macOS 14 or later (extensions need 15.4), Xcode 16 or later, and, for the Claude panel, [Claude Code](https://claude.com/claude-code) installed and signed in.
 
@@ -157,10 +164,10 @@ Cairn asks you in the window when it connects. "Always allow" is offered only by
 
 ## Poke holes in it
 
-If you can make an agent in Cairn spend, send or sign in without your click, or get a secret to a model, **I want to hear it.** Please report it privately, as [SECURITY.md](SECURITY.md) says. For everything else, see [CONTRIBUTING.md](CONTRIBUTING.md): small changes, no new dependencies, nothing that phones home.
+If you can make an agent in Cairn spend, send or sign in without your click, or get a secret to a model, **I very much want to hear about it.** Ideally before the internet does. Please report it privately, as [SECURITY.md](SECURITY.md) says. For everything else, see [CONTRIBUTING.md](CONTRIBUTING.md): small changes, no new dependencies, nothing that phones home.
 
 ## License and credit
 
-Cairn stands on [Search](https://github.com/driceroland/Search), a small and quiet browser by [Office Commun](https://officecommun.com). Where this page says "upstream", it means Search. Go and look at it.
+None of this would exist without the people who built the actual browser. Cairn stands on [Search](https://github.com/driceroland/Search), a small and quiet browser by [Office Commun](https://officecommun.com). Where this page says "upstream", it means Search. Go and look at it.
 
 MIT — see [LICENSE](LICENSE), whose copyright notice (© 2026 Office Commun) stays as it is: this is their browser, and everything here began as their code. Cairn is a fork of [Search](https://github.com/driceroland/Search) by Office Commun; Settings › About says so too. They ask that forks be renamed and not reuse "Search" or the app icon. The name is Cairn. The name, the app icon and the mark are Cairn's own.
