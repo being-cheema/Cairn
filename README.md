@@ -1,36 +1,65 @@
 # Cairn
 
-*A browser made by Claude, for Claude.* An agentic browser: Claude does the work
-in tabs of its own, and you approve anything that matters.
+*A browser made by Claude, for Claude.* Claude does the work in tabs of its
+own, and you approve anything that matters.
 
-A small, fast, quiet web browser for the Mac, and a personal fork of
+A small, quiet web browser for the Mac, built on WebKit, and a personal fork of
 [Search](https://github.com/driceroland/Search) by [Office Commun](https://officecommun.com),
-which is MIT-licensed. The browser is theirs; the renaming and what is built on
-it are not. Where this README says "upstream", it means Search.
+which is MIT-licensed. The browser it started from is theirs. Where this README
+says "upstream", it means Search.
 
-**macOS 14 or later.** There is no download: build it yourself (see
-[Building it](#building-it)). Nothing here is signed, notarised or published
-for anyone else, and the screenshot, installers and Homebrew cask that Search
-ships are not part of this fork.
+**macOS 14 or later** (extensions need 15.4). There is no download: build it
+yourself (see [Building it](#building-it)). Nothing here is notarised or
+published for anyone else.
 
-## Where this is going
+## What this fork adds
 
-The aim is a browser where an AI does the work and you approve anything that
-matters. **None of that exists yet.** What is here today is Search, renamed,
-with everything that talked to its upstream's servers cut off:
+- **Claude in the side panel** (`⌥⌘K`), run by the Claude Code program already
+  on your Mac, to browse for you in tabs of its own.
+- **The same door for your own agents**, such as Claude Code in a terminal.
+- **Its own passwords, verification codes and passkeys**, kept on this Mac.
+- Its own name, look and data folder, with everything that talked to the
+  upstream's servers cut off.
 
-- no update feed (an unconfigured build never checks for updates);
-- its own bundle id, data folder, keychain label and log subsystem
-  (`Sources/Search/Brand.swift` is the one place they are written);
-- a one-time way to bring over what Search kept (see
-  [If you used Search before](#if-you-used-search-before)).
+## Claude, and what it can't do
 
-`Tests/brand_audit.py` fails if the upstream's name, domain or signing team
-turns up again in code or scripts. The AI work is planned in steps, each
-written down before it is built. The hard rules for it: no sign-in with a
-Claude subscription, only your own API key in the keychain or your own Claude
-Code over the local socket; never your real signed-in tabs; and a page's text
-is data, never instructions.
+**The panel.** Cairn starts your installed `claude`, and only a copy Anthropic
+signed. It gets no tools but this browser's: no shell, no files, no web search.
+Cairn has no Claude sign-in of its own; it uses whatever your Claude Code is
+signed in to. Nothing to switch on: pressing Send is the go-ahead.
+
+**Your own agent.** Register the server that is in the repository (and inside
+the app):
+
+```bash
+claude mcp add search -- "$PWD/search-mcp"
+```
+
+Cairn asks you in the window when it connects. "Always allow" is offered only
+by a build signed with a provisioning profile.
+
+**The rules, for both:**
+
+| | |
+|---|---|
+| Its tabs | Opened by it, in a store of their own: signed in to nothing, none of your cookies. It can't drive your tabs and never sees private ones. It can read your open tabs only if you tick that box for an outside agent. |
+| Secrets | It never gets, types or fills a saved password, passkey, card number or one-time code. Those fields are blanked in what it reads and in screenshots. It can't sign in. |
+| Your click | Paying, sending, signing in, submitting a form and going to a site the task hasn't used wait for **Approve**. Only a real click of yours answers. |
+| Forms | A form is held again as it leaves the page, whatever its button said and in any language, unless your Approve just covered it. |
+| Your network | It can't reach this Mac, your local network or other private addresses, including through redirects. That means it can't test a site on `localhost` yet. |
+| Stop | Closes its tabs. A task that finishes normally leaves them to you. |
+
+**The limits of those rules.** What a page's script sends with `fetch` or XHR
+isn't a page load, so the browser can't hold it: a button that sends that way
+is held only if its wording or its form gives it away, and the wording checks
+are English. The private-network block looks a name up before WebKit does, so
+a server that changes its answer in between (DNS rebinding) can get past it,
+and a public name pointing inside can still be fetched by a page's own script.
+Treat the approval card as a strong guard, not a proof. Claude can be wrong,
+and a page can try to talk it into things.
+
+**Not in this build:** the upstream's summarise-and-ask AI add-on is in the
+source but switched off (`AI.shipped`).
 
 ---
 
@@ -38,9 +67,9 @@ is data, never instructions.
 
 Cairn is a browser with nothing in the way. A row of tabs — down the left, or across the top if you prefer — and the page. There is no toolbar, no start page, no sidebar of suggestions, no account to sign into, nothing that wants your attention. You type an address or a few words in one field and you are on the page.
 
-It uses **WebKit**, the engine already inside every Mac (it is what Safari runs on). That is why the whole app is about 10 MB on disk and opens instantly: there is no second copy of Chromium to download, update and keep in memory.
+It uses **WebKit**, the engine already inside every Mac (it is what Safari runs on). That is why the whole app is under 20 MB on disk and opens quickly: there is no second copy of Chromium to download, update and keep in memory.
 
-Search was built by a design studio that spends its whole day in a browser and was tired of the ones that had become products. This one is a tool too.
+The upstream was built by a design studio that spends its whole day in a browser and was tired of the ones that had become products. This one is a tool too.
 
 ## What it does
 
@@ -52,11 +81,12 @@ Search was built by a design studio that spends its whole day in a browser and w
 - **Hide anything, for good.** `⇧⌘H`, then click a cookie banner, a newsletter overlay, a rail of "related" nonsense — it goes, and it is still gone on that site next time, before the page has drawn a single frame.
 - **An ad blocker that runs before the page.** Third-party trackers and ad networks are stopped at the network level, so there is nothing to render and nothing to slow down. On by default, off per site if something breaks.
 - **Video that follows you.** `⇧⌘P` lifts the video out of the page into a small window that stays above everything, including other apps.
-- **Passwords, in your keychain.** Cairn offers to save a sign-in once it has actually worked, and offers your saved accounts, and the Mac's passkeys for the site, under the field when you click it — the way Safari does, never filling anything on its own. Everything lives in the macOS keychain, encrypted by the system, readable only by Cairn. Bring yours in from Chrome, Arc, Dia, Brave or Edge in one click; nothing leaves the Mac. Keep them in Apple's Passwords app instead? Turn it on in Settings › Passwords and its accounts and verification codes come up under their box too.
+- **Passwords, in your keychain.** Cairn offers to save a sign-in once it has worked, and lists your accounts under the field when you click it. It never fills anything on its own. The Passwords page (`⌥⌘L`) has verification codes (TOTP), a strong-password generator, a health check done on this Mac (reused, weak, old, plain http), import from other browsers and managers, and export as an encrypted backup or a plain CSV.
+- **Passkeys of its own.** Without Apple's browser entitlement, which needs a paid developer account, Cairn makes and keeps passkeys itself, behind Touch ID. They are not your iCloud Keychain passkeys: sign in another way once, then add a Cairn passkey in the site's settings. Passkeys made here stay on this Mac. There is no phone or security-key sign-in this way. Importing from Apple's Passwords app is written but has never worked on a real export.
 - **Light, dark, or the Mac's own.** The frame and the pages follow.
 - **A wall behind the blank tab, if you like.** Settings › Themes paints it with a scenic mural, a pack of stickers, a colour, a gradient or a picture of your own, in light and dark, drawn once and kept so it costs nothing while you browse. Off until you choose one.
 - **Bookmarks, history, downloads** — each a panel, each searchable, each one keystroke away.
-- **Chrome extensions, without Chrome.** Paste a Chrome Web Store link in Settings › Extensions, or open the extension's page in Search and press Add. It runs on WebKit's own extension engine — the one Safari uses — and where Chrome has APIs WebKit doesn't (bookmarks, history, downloads, side panel, offscreen documents, fonts, notifications, speech, OAuth sign-in), Search fills them in itself. They live behind the puzzle button; pin the ones you use often. Building your own? Load its folder as an unpacked extension and press Reload after each change, as in Chrome's developer mode. macOS 15.4 or later.
+- **Chrome extensions, without Chrome.** Paste a Chrome Web Store link in Settings › Extensions, or open the extension's page in Cairn and press Add. It runs on WebKit's own extension engine — the one Safari uses — and where Chrome has APIs WebKit doesn't (bookmarks, history, downloads, side panel, offscreen documents, fonts, notifications, speech, OAuth sign-in), Cairn fills them in itself. They live behind the puzzle button; pin the ones you use often. Building your own? Load its folder as an unpacked extension and press Reload after each change, as in Chrome's developer mode. macOS 15.4 or later.
 - **Updates only if you give it somewhere to look.** A build made without an update feed (the default) has no updater: no timer, no request, no menu item. If you build one with `CAIRN_FEED_URL` and `CAIRN_TEAM_ID`, it checks that feed at launch and then every hour, downloads a newer build, verifies it is signed by your team, and swaps it in for the next launch. Nothing restarts on its own.
 
 ## What it doesn't do
@@ -65,19 +95,20 @@ On purpose:
 
 - No extension you have to install to feel at home. Blocking ads, hiding clutter, reading mode, picture-in-picture and passwords are built in; extensions are there for everything else.
 - No account, no cloud, no server of ours. Sync is **opt-in** and off by default: turn it on in Settings › General and pick a folder (iCloud Drive, Dropbox, a shared disk); it writes small files there and whatever moves that folder between your Macs does the rest. Without it, your tabs, history and passwords are on your Mac and nowhere else.
-- No telemetry, no analytics, no crash reports sent anywhere. The only things that leave your Mac are the pages you ask for, their icons, and, only if you built it with a feed, one small hourly request for the update file.
+- No telemetry, no analytics, no crash reports sent anywhere. What leaves your Mac is what you use: the pages you ask for and their icons, search suggestions if you turn them on, the Chrome Web Store for extensions you add, live folders you set up, what your Claude Code sends when you use Claude, and, only if you built it with a feed, one small hourly request for the update file.
 - Several windows are supported (⌘N), each with tabs of its own; pinned tabs are shared.
 
 ## Privacy, concretely
 
 | What | Where it is | Who can read it |
 |---|---|---|
-| Passwords | The macOS login keychain, as ordinary keychain items tagged `Cairn` | Cairn, as you signed it. Any other app triggers the system's permission dialog. |
-| History, bookmarks, open tabs, hidden elements | Small JSON files in `~/Library/Application Support/Cairn/` | You. |
-| Cookies and site data | WebKit's own store for the app | The sites that set them, as in any browser. |
-| Extensions | Unpacked in `~/Library/Application Support/Cairn/Extensions/`, their data in WebKit's extension store | Each extension, within the permissions you accepted when adding it. |
+| Passwords, codes, passkeys | The macOS login keychain, as items tagged `Cairn` | Cairn, as you signed it. Another app gets the system's permission dialog. Touch ID is asked by Cairn itself, not enforced by the keychain. |
+| History, bookmarks, open tabs, hidden elements | Small files in `~/Library/Application Support/Cairn/` | You. |
+| Cookies and site data | WebKit's own store for the app | The sites that set them. |
+| Extensions | `~/Library/Application Support/Cairn/Extensions/`, their data in WebKit's extension store | Each extension, within the permissions you accepted. |
 | Folder sync, if you turn it on | A `Cairn Sync` folder inside the folder you pick | Whoever can read that folder. |
-| Anything else | Nowhere. There is no server. | — |
+| What you ask Claude, and what it reads for you | Sent to Anthropic by your own Claude Code | Anthropic, under your account's terms. Nothing goes until you press Send or your agent asks. Cairn keeps no copy of the chat. |
+| Anything else | Nowhere. This project has no server. | — |
 
 A **private tab** (`⇧⌘N`) has its own cookie jar and leaves nothing behind when it closes.
 
@@ -105,13 +136,13 @@ With Split View on, `⌥⌘N` splits the current page and `⌃⌘←` / `⌃⌘�
 
 ### Why the source is here
 
-So anyone can read exactly what a browser handling their passwords and history is doing, build it themselves, or fix something that bothers them. The code is small enough to actually read — about 103,000 lines of Swift in `Sources/` (about 131,000 with its tests), no dependencies beyond what Apple ships with macOS, one file per concern.
+So anyone can read exactly what a browser handling their passwords and history is doing, build it themselves, or fix something that bothers them. It is about 128,000 lines of Swift in `Sources/Search/`, plus about 73,000 for the optional developer tools and 35,000 of tests, with no dependencies beyond what Apple ships with macOS, one file per concern.
 
 ### Building it
 
 - macOS 14 or later, Xcode 16 / Swift 6 toolchain
 - `swift build` — runs the app straight from the SwiftPM binary
-- `./build.sh` — assembles a real, double-clickable `Cairn.app` in `build/`, ad-hoc signed so it runs on your own Mac. `SEARCH_DEV=1 ./build.sh` makes it a dev build, on a yellow icon and named for its branch (`Cairn-split-view` from `claude/split-view-4a6927`), so it's never mistaken for another build; `SEARCH_FEATURE=name` picks the name. It shares the installed app's settings and its bundle id, so while both run, a link from another app may land in either
+- `./build.sh` — assembles a real, double-clickable `Cairn.app` in `build/`, ad-hoc signed so it runs on your own Mac. An ad-hoc build makes the keychain ask about your saved items again after every rebuild; set `SEARCH_SIGN_IDENTITY` to a free Apple Development certificate's hash and "Always Allow" lasts. `SEARCH_DEV=1 ./build.sh` makes it a dev build, on a yellow icon and named for its branch (`Cairn-split-view` from `claude/split-view-4a6927`), so it's never mistaken for another build; `SEARCH_FEATURE=name` picks the name. It shares the installed app's settings and its bundle id, so while both run, a link from another app may land in either
 
 The names come from `Sources/Search/Brand.swift`; `build.sh` reads that file. What only you know goes in through environment variables, and none has a default that points at anyone else:
 
@@ -142,12 +173,12 @@ Cairn has its own folder, keychain label and bundle id, so it does not see Searc
 - The ad blocker is a `WKContentRuleList` compiled once at launch and enforced inside WebKit's networking, before a request is made — zero cost at run time, unlike a JavaScript blocker.
 - Hidden elements are a per-site list of selectors injected as a stylesheet at document start, so nothing is ever seen appearing and vanishing.
 - Every colour is a light/dark pair in `Design.swift`, resolved by the window's appearance; nothing else in the code knows which mode it is in.
-- Extensions run on `WKWebExtension` (macOS 15.4+). `Crx.swift` fetches an extension from the Chrome Web Store's public update address and checks the CRX3 signature against the extension's id before anything is unpacked. `Extensions.swift` is the browser's side of WebKit's contract — tabs, the window, permissions, popups. `ExtensionShims.swift` adds, at install, a small script to the extension's worker, pages and content scripts: it defines the Chrome APIs WebKit lacks — `userScripts`, `privacy`, `browsingData`, `sessions`, the old FileSystem API and more — as calls answered natively by Search, and mends the places where WebKit behaves differently from Chrome: replies from pages that don't answer, listeners added after a worker starts, workers WebKit loses track of, members and constants it leaves out. Extension pages are served from `chrome-extension://<id>/`, the address they have in Chrome, so servers and sites recognise them. `./bench ext-*` drives all of it from the shell against a test run. `ExtensionNative.swift` speaks Chrome's native messaging to hosts registered in Chrome's `NativeMessagingHosts` folders.
+- Extensions run on `WKWebExtension` (macOS 15.4+). `Crx.swift` fetches an extension from the Chrome Web Store's public update address and checks the CRX3 signature against the extension's id before anything is unpacked. `Extensions.swift` is the browser's side of WebKit's contract — tabs, the window, permissions, popups. `ExtensionShims.swift` adds, at install, a small script to the extension's worker, pages and content scripts: it defines the Chrome APIs WebKit lacks — `userScripts`, `privacy`, `browsingData`, `sessions`, the old FileSystem API and more — as calls answered natively by Cairn, and mends the places where WebKit behaves differently from Chrome: replies from pages that don't answer, listeners added after a worker starts, workers WebKit loses track of, members and constants it leaves out. Extension pages are served from `chrome-extension://<id>/`, the address they have in Chrome, so servers and sites recognise them. `./bench ext-*` drives all of it from the shell against a test run. `ExtensionNative.swift` speaks Chrome's native messaging to hosts registered in Chrome's `NativeMessagingHosts` folders.
 - `Sources/Search/` is one file per concern: `Vault.swift` is the keychain, `Shield.swift` the ad blocker, `Curtain.swift` the hidden elements, `Session.swift` what comes back at launch, `Updater.swift` the update, `Bench.swift` the test socket, and so on. There's no framework of its own to learn first.
 
 ### Testing it without closing it
 
-Turn on **Settings › General › Let a script drive Search** and the running app listens on a Unix socket in its own folder (readable by your user only). `./bench` at the root of the repository speaks it:
+Turn on **Settings › About › Developer › Let a script drive Cairn** and the running app listens on a Unix socket in its own folder (readable by your user only). `./bench` at the root of the repository speaks it:
 
 ```
 ./bench open https://example.com     # a tab of its own, at the end of your row, marked with a flask
@@ -161,17 +192,13 @@ Turn on **Settings › General › Let a script drive Search** and the running a
 
 Bench tabs are never selected for you, never enter the session or the history, and go when the script says so. It is how this browser is tested while somebody is using it.
 
-An agent can drive an isolated copy of Search through `./bench-mcp`, an MCP server over the same socket. Run `./build.sh` from the repository root first, then register the server with your client:
+For working on the browser itself, `./bench-mcp` is an MCP server over the same test socket. Build first, then register it:
 
 ```sh
 claude mcp add search-bench -- "$PWD/bench-mcp"
-codex mcp add search-bench -- "$PWD/bench-mcp"
-agy mcp add --type stdio search-bench "$PWD/bench-mcp"
 ```
 
-Each session starts this checkout's `build/Search.app` hidden, in a test world of its own, and wipes that world when it closes; the browser you use is never in reach. Its tools read a page as roles and names, or as an outline of its sections to open one at a time, click with real mouse events, type and check what the field holds, and wait on a condition, and a handle that has gone stale or a button that is covered is an error, never a guess. `python3 Tests/bench_mcp.py` checks it end to end.
-
-To let an agent use the Search you have open instead, turn on Settings › About › Developer › Let coding agents use Search, and give it `./search-mcp`: `claude mcp add search -- "$PWD/search-mcp"`. Search asks you in the window each time one connects, shows a pill with Stop while it is there, and keeps it to tabs of its own; the rules are in `Sources/Search/AgentControl.swift`, and `python3 Tests/agent_control.py` checks them in a hidden probe.
+Each session starts this checkout's `build/Cairn.app` hidden, in a test world of its own, and wipes that world when it closes; the browser you use is never in reach. `python3 Tests/bench_mcp.py` checks it. This is not the browsing agent above: that is `search-mcp`, whose rules are in `Sources/Search/AgentControl.swift` and `python3 Tests/agent_control.py` and `Tests/agent_gate.py` check them in a hidden probe. [CLAUDE.md](CLAUDE.md) has the rules for changing any of it.
 
 `python3 Tests/split_view.py`, after `./build.sh`, checks Split View through the app's own model in a hidden test run with its own settings and files, all removed afterwards. It never makes or shows a window; what can only be seen (dragging onto a page's edge, the divider under the pointer, the motion) is checked by hand on a release candidate.
 
@@ -181,4 +208,4 @@ This is a personal fork, kept small on purpose. The rules it inherits are in [CO
 
 ### License and credit
 
-MIT — see [LICENSE](LICENSE), whose copyright notice (© 2026 Office Commun) stays as it is: this is their browser, and everything here began as their code. Cairn is a fork of [Search](https://github.com/driceroland/Search) by Office Commun; Settings › About says so too. They ask that forks be renamed and not reuse "Search" or the app icon. The name is Cairn. **The app icon and the in-app logomark are still the upstream's** (`Icon/`, `Logomark` in `Sources/Search/`), and many menus and messages still say "Search": replace both before you give a build to anyone else.
+MIT — see [LICENSE](LICENSE), whose copyright notice (© 2026 Office Commun) stays as it is: this is their browser, and everything here began as their code. Cairn is a fork of [Search](https://github.com/driceroland/Search) by Office Commun; Settings › About says so too. They ask that forks be renamed and not reuse "Search" or the app icon. The name is Cairn. The name, the app icon and the mark are Cairn's own.

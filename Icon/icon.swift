@@ -17,7 +17,7 @@ try? FileManager.default.createDirectory(at: out, withIntermediateDirectories: t
 
 /// The mark: a cairn, three stones stacked, each a little off the one under
 /// it, on its own 400 × 360 canvas. (It was the upstream's pill with an S; this
-/// is Cairn's own.) Design.swift's `Logomark` is still the upstream's.
+/// is Cairn's own.) Design.swift's `Logomark` is the same path.
 let canvas = (width: 400.0, height: 360.0)
 let markData = "M350 284C350 322.66 282.85 354 200 354C117.16 354 50 322.66 50 284C50 245.34 117.16 214 200 214C282.85 214 350 245.34 350 284ZM312 154C312 184.93 264.54 210 206 210C147.46 210 100 184.93 100 154C100 123.07 147.46 98 206 98C264.54 98 312 123.07 312 154ZM260 50C260 74.3 231.35 94 196 94C160.65 94 132 74.3 132 50C132 25.7 160.65 6 196 6C231.35 6 260 25.7 260 50Z"
 
