@@ -2,7 +2,7 @@ import CryptoKit
 import Foundation
 import Security
 
-/// The passkeys Cairn keeps itself (SPEC-passkeys.md): one keychain item each.
+/// The passkeys Cairn keeps itself (docs/history/SPEC-passkeys.md): one keychain item each.
 /// The private key is the item's secret; everything a list needs sits in the
 /// item's attributes, so listing and looking one up never read a secret (and
 /// never prompt). Only `key(for:)` does, at the moment of signing.

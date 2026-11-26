@@ -15,12 +15,12 @@ looks or behaves — spaces, groups, a visible address bar, a new panel — is:
 - **optional, and off by default**: someone who never asks for it never sees it;
 - **findable**: a switch in Settings, and a mention in the welcome screens if it's a big one, so people know it's there to turn on.
 
-Fixes and things every browser is expected to do (Tab moving between a form's fields, ⌘1–⌘9) don't need a switch. Before building a bigger feature, look at how other browsers do it and read what people asked for on its issue; [ROADMAP.md](ROADMAP.md) lists where each request came from.
+Fixes and things every browser is expected to do (Tab moving between a form's fields, ⌘1–⌘9) don't need a switch. Before building a bigger feature, look at how other browsers do it and read what people asked for on its issue; [the upstream's old roadmap](docs/history/ROADMAP-upstream.md) lists where each request came from.
 
 ## Where things are tracked
 
-- [ROADMAP.md](ROADMAP.md): the upstream's list of ideas and reports, as it stood when this fork was made. It is kept for reference and is not updated here (the `./ideas` tool that wrote it talked to the upstream's database and was removed).
-- [CHANGELOG.md](CHANGELOG.md): what has changed since the last version. A pull request that fixes or adds something also adds its line under **Unreleased** (and takes its item off the roadmap), so the next update's notes write themselves.
+- [docs/history/ROADMAP-upstream.md](docs/history/ROADMAP-upstream.md): the upstream's list of ideas and reports, as it stood when this fork was made. It is kept for reference and is not updated here (the `./ideas` tool that wrote it talked to the upstream's database and was removed).
+- [CHANGELOG.md](CHANGELOG.md): what has changed since the last version. A pull request that fixes or adds something also adds its line under **Unreleased**, so the next update's notes write themselves.
 
 ## What tends to get merged
 

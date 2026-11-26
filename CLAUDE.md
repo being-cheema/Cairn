@@ -6,7 +6,7 @@ Cairn is a native macOS browser (WebKit, SwiftUI and AppKit), bundle id
 target and module are still called `Search`; that name stays internal.
 
 Where a spec or the README disagrees with the code, the code is right.
-`SPEC*.md` and `UXAUDIT.md` are records of how things were planned or found,
+The files in `docs/history/` are records of how things were planned or found,
 and parts of them are out of date.
 
 ## Rules that don't bend

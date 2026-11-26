@@ -32,7 +32,7 @@ ALLOWED = {
     "LICENSE": "the MIT licence names its copyright holder, and must stay intact",
     "README.md": "credits the upstream project, as its licence and its request ask",
     "CHANGELOG.md": "upstream history, quoted as it was written",
-    "ROADMAP.md": "upstream history, quoted as it was written",
+    "docs/history/ROADMAP-upstream.md": "upstream history, quoted as it was written",
     "Tests/brand_audit.py": "this file names what it looks for",
 }
 

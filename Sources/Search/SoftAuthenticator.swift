@@ -14,7 +14,7 @@ indirect enum CBORValue {
 }
 
 /// A WebAuthn level 2 authenticator in software, for a build that can't use
-/// Apple's passkeys (see SPEC-passkeys.md). Pure: no keychain and no UI, so
+/// Apple's passkeys (see docs/history/SPEC-passkeys.md). Pure: no keychain and no UI, so
 /// the caller keeps the key and decides when Touch ID has been proven.
 enum SoftAuthenticator {
     struct Made {

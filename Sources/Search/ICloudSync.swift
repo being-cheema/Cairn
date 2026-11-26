@@ -7,7 +7,7 @@ import Combine
 // person's own iCloud. On for a new install once the welcome is left, off
 // for anyone who had Search before until they turn it on (SyncDefault.swift;
 // Settings › General › Sync with iCloud, or the What's New card). The rules
-// are SYNC.md, here and in the Search-iOS repository, followed to the
+// are docs/SYNC.md, here and in the Search-iOS repository, followed to the
 // letter: change it there and here, or not at all.
 //
 //   - CloudKit container iCloud.io.github.being-cheema.cairn, the private
@@ -46,7 +46,7 @@ import Combine
 // CloudKit (creating a CKContainer there would end the app). Test runs
 // (SEARCH_PROBE) never do either.
 
-// MARK: - the shapes SYNC.md adds to the Mac's own (PinDef, Bookmark, Space)
+// MARK: - the shapes docs/SYNC.md adds to the Mac's own (PinDef, Bookmark, Space)
 
 /// One device's open tabs, as the other devices see them.
 struct DeviceTabs: Codable, Equatable {
@@ -188,7 +188,7 @@ enum ICloudMerge {
 
     /// The fields each shape's Mac type writes: its own, which it sets or
     /// clears. Any other field in a record is someone else's and rides
-    /// along untouched (SYNC.md, "Fields a device doesn't know ride along").
+    /// along untouched (docs/SYNC.md, "Fields a device doesn't know ride along").
     /// ICloudSyncTests checks these against the types themselves.
     static let known: [Shape: Set<String>] = [
         .pins: ["id", "letter", "home", "title", "name", "listed", "folder", "pair"],
@@ -966,7 +966,7 @@ final class ICloudSync: ObservableObject {
     /// Search's zone deleted, from another device (Delete Search's data
     /// from iCloud) or in iCloud's settings: sync turns off here and says
     /// why. The zone isn't made again and nothing goes back up; what is on
-    /// this Mac stays (SYNC.md).
+    /// this Mac stays (docs/SYNC.md).
     func zoneGone() {
         guard on else { return }
         engine?.close()
@@ -1290,7 +1290,7 @@ final class CloudKitEngine: ICloudEngine, CKSyncEngineDelegate, @unchecked Senda
                     }
                 case .zoneNotFound:
                     // Deleted while this Mac had something to send: it
-                    // turns off, and the zone isn't made again (SYNC.md).
+                    // turns off, and the zone isn't made again (docs/SYNC.md).
                     actions.append { owner.zoneGone() }
                 case .unknownItem:
                     actions.append { owner.forgetFields(key) }

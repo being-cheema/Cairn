@@ -1,7 +1,7 @@
 import AppKit
 import AuthenticationServices
 
-/// Passkeys Cairn keeps itself (SPEC-passkeys.md), for a build the Mac's own
+/// Passkeys Cairn keeps itself (docs/history/SPEC-passkeys.md), for a build the Mac's own
 /// passkey sign-in can't be reached from: that needs an entitlement only the
 /// paid Apple program grants. A page's request is the same one `Passkeys`
 /// checks and carries; this answers it from the keychain instead of the Mac's
