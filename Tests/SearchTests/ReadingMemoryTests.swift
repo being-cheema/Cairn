@@ -180,6 +180,32 @@ final class ReadingMemoryTests: XCTestCase {
         XCTAssertNil(ReadingMemory.address(of: agents))
     }
 
+    /// The other side of the test above: an ordinary tab's page, loaded, is
+    /// kept under its address, and the reading of it ends up in the file.
+    /// Served from a name this Mac answers for itself, as pages on this Mac
+    /// are never kept.
+    func testAnOrdinaryTabsPageIsReadAndKept() async throws {
+        let browser = Browser()
+        let tab = try XCTUnwrap(browser.open(try XCTUnwrap(URL(string: "about:blank")), foreground: true))
+        XCTAssertTrue(tab.store === Spaces.store(for: Space.firstID), "how an ordinary tab is told from the rest")
+        let url = try XCTUnwrap(URL(string: "https://example.invalid/article"))
+        let paragraphs = String(repeating: "<p>Owls hunt at night and hear the smallest rustle in the grass.</p>", count: 20)
+        // The blank page the tab was opened on is let finish first.
+        for _ in 0..<50 where tab.committed == nil || tab.web.isLoading {
+            try await Task.sleep(nanoseconds: 100_000_000)
+        }
+        tab.web.loadHTMLString("<title>Owls</title><article>\(paragraphs)</article>", baseURL: url)
+        for _ in 0..<100 where tab.committed != url || tab.loading || tab.web.isLoading {
+            try await Task.sleep(nanoseconds: 100_000_000)
+        }
+        XCTAssertEqual(tab.committed?.absoluteString, url.absoluteString)
+        let memory = memory()
+        memory.turn(true)
+        await memory.take(tab)
+        memory.index.drain()
+        XCTAssertEqual(memory.index.page(at: url.absoluteString)?.title, "Owls")
+    }
+
     func testPagesWithSecretFieldsPaymentsOrEditorsAreRefused() async throws {
         let web = WKWebView(frame: NSRect(x: 0, y: 0, width: 600, height: 400))
         func verdict(_ body: String) async throws -> String? {
