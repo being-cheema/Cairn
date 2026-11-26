@@ -50,6 +50,8 @@ final class AgentReplayTests: XCTestCase {
         var recorder = MacroRecorder()
         recorder.took(MacroStep(kind: .open, tab: 0, url: "https://example.com/"), on: UUID())
         var record = TaskRecord(prompt: "find shoes", model: nil)
+        XCTAssertNil(MacroStore.macro(from: record, recorder), "one not finished is no recipe")
+        record.outcome = .completed
         XCTAssertNotNil(MacroStore.macro(from: record, recorder))
         record.outcome = .stopped
         XCTAssertNil(MacroStore.macro(from: record, recorder))

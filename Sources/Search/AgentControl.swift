@@ -1437,7 +1437,7 @@ final class AgentControl: ObservableObject {
             // What you approved may be a form, and sending it is asked about
             // again as it leaves (vet): this Approve answers that too.
             if verdict == .approved, hold.reason != .leave, hold.reason != .signIn, let sending {
-                session?.sendGrant = .init(tab: sending, until: ProcessInfo.processInfo.systemUptime + Self.grantFor)
+                session?.sendGrant = .init(tab: sending, to: hold.sends, until: ProcessInfo.processInfo.systemUptime + Self.grantFor)
             }
             then(verdict)
         }
@@ -1615,7 +1615,7 @@ final class AgentControl: ObservableObject {
         let send = {
             switch NavigationPolicyEngine.send(method: method, to: url, fromMainFrame: fromMain, toMainFrame: toMain,
                                                now: ProcessInfo.processInfo.systemUptime,
-                                               grantedUntil: session.sendGrant?.until(on: tab.id) ?? 0) {
+                                               grantedUntil: session.sendGrant?.until(on: tab.id, to: url) ?? 0) {
             case .go:
                 done(true)
             case .covered:

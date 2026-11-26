@@ -196,9 +196,67 @@ final class AgentIsolationTests: XCTestCase {
 
     func testAnApproveCoversOnlyTheTabItWasAskedAbout() {
         let asked = UUID()
-        let grant = NavigationPolicyEngine.SendGrant(tab: asked, until: 100)
-        XCTAssertEqual(grant.until(on: asked), 100)
-        XCTAssertEqual(grant.until(on: UUID()), 0, "another tab's send is asked about")
+        let form = URL(string: "https://shop.example/order?step=1")
+        let grant = NavigationPolicyEngine.SendGrant(tab: asked, to: form, until: 100)
+        XCTAssertEqual(grant.until(on: asked, to: form), 100)
+        XCTAssertEqual(grant.until(on: UUID(), to: form), 0, "another tab's send is asked about")
+    }
+
+    /// An Approve is for the form you were shown: sending anything anywhere
+    /// else, from the same tab and in the same moment, is asked about.
+    func testAnApproveCoversOnlyTheAddressTheFormWasGoingTo() throws {
+        let tab = UUID()
+        func url(_ text: String) throws -> URL { try XCTUnwrap(URL(string: text)) }
+        let grant = NavigationPolicyEngine.SendGrant(tab: tab, to: try url("https://shop.example/order"), until: 100)
+        XCTAssertEqual(grant.until(on: tab, to: try url("https://SHOP.example/order?token=1")), 100)
+        for other in ["https://shop.example/transfer", "https://evil.example/order", "http://shop.example/order",
+                      "https://shop.example:8443/order", "https://shop.example.evil.net/order"] {
+            XCTAssertEqual(grant.until(on: tab, to: try url(other)), 0, other)
+        }
+        let unknown = NavigationPolicyEngine.SendGrant(tab: tab, to: nil, until: 100)
+        XCTAssertEqual(unknown.until(on: tab, to: try url("https://shop.example/order")), 0,
+                       "where it would go wasn't known: the send itself is asked about")
+    }
+
+    func testTheQuestionKnowsWhereTheFormWouldGo() throws {
+        var target = AgentGate.Target()
+        target.tag = "button"
+        target.submits = true
+        target.inForm = true
+        target.method = "post"
+        target.action = "https://shop.example/order"
+        let page = URL(string: "https://shop.example/cart")
+        let submit = AgentGate.hold(click: target, on: page, sites: [], rules: .standard)
+        XCTAssertEqual(submit?.sends?.absoluteString, "https://shop.example/order")
+        // A button a script acts on: where it sends can't be told from it.
+        target.submits = false
+        target.type = "button"
+        target.label = "Send"
+        let scripted = try XCTUnwrap(AgentGate.hold(click: target, on: page, sites: [], rules: .standard))
+        XCTAssertNil(scripted.sends)
+    }
+
+    /// A button with an address of its own sends there, not to the form's.
+    func testAButtonsOwnAddressIsTheOneRead() async throws {
+        let web = WKWebView(frame: NSRect(x: 0, y: 0, width: 400, height: 300))
+        web.loadHTMLString("""
+            <form action="/order" method=post><button id=own formaction="/gift">Buy</button><button id=plain>Buy</button></form>
+            <form method=post><button id=none>Buy</button></form>
+            """, baseURL: URL(string: "https://shop.example/cart"))
+        for _ in 0..<50 where (try? await web.evaluateJavaScript("!!document.getElementById('none')")) as? Bool != true {
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        func sends(_ id: String) async throws -> String? {
+            _ = try await web.evaluateJavaScript("document.getElementById('\(id)').focus(); true")
+            let value = try await web.evaluateJavaScript(PageScripts.focused(), in: nil, contentWorld: Web.world)
+            let data = try XCTUnwrap((value as? String)?.data(using: .utf8))
+            let out = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            return AgentGate.Target(out["gate"])?.action
+        }
+        let own = try await sends("own"), plain = try await sends("plain"), none = try await sends("none")
+        XCTAssertEqual(own, "https://shop.example/gift")
+        XCTAssertEqual(plain, "https://shop.example/order")
+        XCTAssertEqual(none, "https://shop.example/cart")
     }
 
     // MARK: - an agent that goes away mid sign-in

@@ -82,6 +82,8 @@ enum AgentGate {
         /// carries data out (NavigationPolicyEngine.egressWarning). It is
         /// only ever more to read: nothing is held or let go because of it.
         var warning: String?
+        /// Where the form asked about would send, when that can be told.
+        var sends: URL?
     }
 
     struct Rules: Equatable {
@@ -126,7 +128,12 @@ enum AgentGate {
         let pressed = target.viaReturn ? "Return in a form" : name.isEmpty ? "a button" : "“\(name)”"
 
         if rules.commits {
-            func held(_ reason: Reason, _ text: String) -> Hold { Hold(reason: reason, summary: text, fingerprint: target.fingerprint) }
+            // Known only for a button that submits its form: what a script
+            // sends can't be told, and is asked about as it leaves.
+            let sends = target.submits ? URL(string: target.action) : nil
+            func held(_ reason: Reason, _ text: String) -> Hold {
+                Hold(reason: reason, summary: text, fingerprint: target.fingerprint, sends: sends)
+            }
             if target.hasCard, target.submits || (target.pressable && matches(payWords, target.label)) {
                 return held(.pay, "Pay: press \(pressed) on \(where_)")
             }

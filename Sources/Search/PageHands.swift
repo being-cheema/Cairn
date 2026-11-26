@@ -144,10 +144,17 @@ enum PageScripts {
         if ((f.type || '').toLowerCase() === 'password') pw = true;
         if (/(^|\s)cc-/.test(ac) || /card.?(number|num|no)|cc.?num|cvc|cvv|csc/i.test(said)) card = true;
       });
+      // Where it would send: the button's own address when it has one. Read
+      // from the attributes, since a field named "action" would answer to
+      // form.action itself.
+      var goes = '';
+      if (form) {
+        try { goes = new URL((submits && el.getAttribute('formaction')) || form.getAttribute('action') || document.URL, document.baseURI).href; } catch (e) {}
+      }
       var a = el.closest ? el.closest('a[href]') : null;
       return { tag: tag, type: type, role: role(el), label: name(el), submits: submits, inForm: !!form, pw: pw, card: card,
         method: form ? String(form.method || 'get').toLowerCase() : '',
-        action: form ? String(form.action || '').slice(0, 300) : '',
+        action: String(goes).slice(0, 2000),
         // Longer than the rest: the check on what a link carries out reads it.
         href: a ? String(a.href).slice(0, 8000) : '',
         secret: secret(el),

@@ -14,9 +14,18 @@ enum NavigationPolicyEngine {
     /// Your Approve's cover for one send from one tab, for a moment.
     struct SendGrant: Equatable {
         var tab: UUID
+        var to: URL?
         var until: TimeInterval
         /// Nothing for any other tab: its send is a different one.
-        func until(on sending: UUID) -> TimeInterval { sending == tab ? until : 0 }
+        func until(on sending: UUID, to url: URL?) -> TimeInterval {
+            guard sending == tab, let asked = to, let url, Self.place(asked) == Self.place(url) else { return 0 }
+            return until
+        }
+
+        /// A form's destination, without what it carries in its query.
+        private static func place(_ url: URL) -> String {
+            "\(url.scheme?.lowercased() ?? "")://\(url.host()?.lowercased() ?? ""):\(url.port ?? -1)\(url.path())"
+        }
     }
 
     /// Why `open` or `go` can't have an address.
