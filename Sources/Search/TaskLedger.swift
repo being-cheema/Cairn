@@ -107,6 +107,11 @@ enum TaskLedger {
     private static let longestFile = 256 * 1024
 
     nonisolated static var folder: URL { Store.file("Tasks") }
+    /// Each profile's own: the first keeps the folder it had, the others
+    /// one beside it, never inside, so clearing one reaches no other.
+    nonisolated static func folder(for profile: UUID) -> URL {
+        profile == Profile.personalID ? folder : Store.file("Tasks-\(profile.uuidString)")
+    }
 
     private static func file(_ id: UUID, in folder: URL) -> URL { folder.appendingPathComponent("\(id.uuidString).json") }
 

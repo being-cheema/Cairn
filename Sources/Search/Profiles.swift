@@ -198,6 +198,7 @@ final class Profiles: ObservableObject {
         Profiles.histories.removeValue(forKey: id)?.retire()
         Profiles.bookmarkLists.removeValue(forKey: id)?.retire()
         Archive.forget(profile: id)
+        TaskLedger.removeAll(in: TaskLedger.folder(for: id))
         // Never opened this run: their files go all the same.
         for name in ["history-\(id.uuidString).json", "bookmarks-\(id.uuidString).json"] {
             Disk.remove(Store.file(name))

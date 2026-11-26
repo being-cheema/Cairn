@@ -14,6 +14,8 @@ struct TaskHistory: View {
     @State private var trouble: String?
     @State private var open: UUID?
 
+    private var folder: URL { TaskLedger.folder(for: session.browser?.profileID ?? Profile.personalID) }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -25,7 +27,7 @@ struct TaskHistory: View {
                     Quick("Delete All", tint: Palette.muted) {
                         Ask.sure("Delete the task history?", detail: "The records of what each task did are removed from this Mac.",
                                  confirm: "Delete All", returnCancels: true) {
-                            TaskLedger.removeAll()
+                            TaskLedger.removeAll(in: folder)
                             records = []
                         }
                     }
@@ -69,7 +71,7 @@ struct TaskHistory: View {
         .padding(12)
         .frame(width: 340)
         .onAppear {
-            records = TaskLedger.all()
+            records = TaskLedger.all(in: folder)
             macros = MacroStore.all()
         }
     }
@@ -136,7 +138,7 @@ struct TaskHistory: View {
                 }
                 Spacer(minLength: 0)
                 Quick("Delete", tint: Palette.muted) {
-                    TaskLedger.remove(record.id)
+                    TaskLedger.remove(record.id, in: folder)
                     records.removeAll { $0.id == record.id }
                 }
             }

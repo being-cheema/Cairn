@@ -590,7 +590,11 @@ final class Browser: NSObject, ObservableObject {
             ClaudeCode.Options(acts: true, model: self?.prefs.claudeModel)
         },
         window: { [weak self] in self },
-        keeping: { [weak self] in self?.prefs.keepsTaskHistory ?? true })
+        keeping: { [weak self] in self?.prefs.keepsTaskHistory ?? true },
+        keep: { [weak self] in
+            guard let self else { return }
+            TaskLedger.save($0, amending: $1, in: TaskLedger.folder(for: self.profileID))
+        })
 
     /// What Find a setting held in each Settings tab, for the tab to have
     /// it again when it is gone back to (SettingsPanel.tabID). Not
@@ -1803,15 +1807,15 @@ final class Browser: NSObject, ObservableObject {
             for history in Spaces.histories(of: profileID) { history.forget() }
             // The tabs Search closed by itself are pages you have been to.
             archive.clear()
-            // So is where Claude's tasks went (TaskLedger).
-            TaskLedger.removeAll()
             // And the words kept of pinned pages (PinChanges).
             PinChanges.shared.forgetAll()
             // And the watched pages, a list of places you go (PageWatch).
             PageWatches.shared.removeAll()
         }
-        // What was read goes with where you have been. It isn't kept by
-        // space, so clearing one space's history clears all of it.
+        // What was read, and where Claude's tasks went (TaskLedger), go with
+        // where you have been. Neither is kept by space, so clearing one
+        // space's history clears all of each: this profile's tasks only.
+        TaskLedger.removeAll(in: TaskLedger.folder(for: profileID))
         ReadingMemory.shared.clear()
         // Where links went is a list of where you have been, too.
         let choices = LinkChooser.cleared(prefs.linkChoices, spaces: Set(forgotten))

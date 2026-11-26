@@ -16,12 +16,16 @@ enum TypedSecrets {
         var out = text
         for pattern in shapes { out = replace(pattern, in: out) { _ in true } }
         // Not what AgentRules.scrubbed already took out of an address.
-        out = replace(labelled, in: out, group: 2) { !$0.hasPrefix("redacted") }
+        out = replace(labelled, in: out, group: 2) { !$0.hasPrefix("redacted") && !$0.hasPrefix(mark) }
         out = replace(numbered, in: out, group: 2) { _ in true }
         return replace(cardLike, in: out) { luhn($0) }
     }
 
     private static let shapes = [
+        // A password in an address: postgres://name:this@host.
+        #"(?<=://)[^/\s"'@?#]+:[^/\s"'@?#]+(?=@)"#,
+        #"\b[sr]k_(live|test)_[A-Za-z0-9]{10,}"#,
+        #"\bAIza[0-9A-Za-z_\-]{30,}"#,
         #"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(-----END [A-Z ]*PRIVATE KEY-----|$)"#,
         #"\bsk-[A-Za-z0-9_\-]{16,}"#,
         #"\b(gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{22,})"#,
@@ -32,8 +36,13 @@ enum TypedSecrets {
     ]
 
     /// A name for a secret, then "is", ":" or "=", then the thing itself.
+    /// The name may be part of a longer one (DB_PASSWORD, client_secret,
+    /// AWS_SECRET_ACCESS_KEY) or quoted, as in JSON. A quote never closed
+    /// takes the rest of its line.
     private static let labelled =
-        #"(?i)\b(password|passwd|pwd|passcode|passphrase|secret|api[ _\-]?key|access token|token)(?:\s+is\b:?\s*|\s*[:=]\s*)("[^"\n]*"|'[^'\n]*'|“[^”\n]*”|[^\s"'“]+)"#
+        #"(?i)(?<![A-Za-z0-9])(password|passwd|pwd|passcode|passphrase|secret|api[ _\-]?key|access token|token)"#
+        + #"(?:[_\-][A-Za-z0-9]+)*["']?(?:\s+is\b:?\s*|\s*[:=]\s*)"#
+        + #"("[^"\n]*"|'[^'\n]*'|“[^”\n]*”|["'“][^\n]*|[^\s"'“]+)"#
     /// A code that is digits needs no "is": "cvv 321", "the code is 493021".
     private static let numbered =
         #"(?i)\b(pin|cvv|cvc|otp|one[- ]time code|verification code|security code|2fa code)(?:\s+is\b:?\s*|\s*[:=]\s*|\s+)(\d{3,10})\b"#

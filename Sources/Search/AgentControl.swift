@@ -320,6 +320,8 @@ enum AgentRules {
             }
         }
         var changed = false
+        // A password written into the address itself.
+        if parts.password?.isEmpty == false { parts.password = "redacted"; changed = true }
         if let items = parts.queryItems {
             let kept = hidden(items)
             if kept != items { parts.queryItems = kept; changed = true }
