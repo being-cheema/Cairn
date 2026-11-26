@@ -120,6 +120,13 @@ enum PageScripts {
       return s;
     }
 
+    // Where it is drawn now, in CSS pixels of the viewport, for the app's
+    // own mark over the page (AgentOverlayView).
+    function boxOf(el) {
+      var r = el.getBoundingClientRect();
+      return [r.left, r.top, r.width, r.height];
+    }
+
     // What a click on this element, or Return in it, would commit, for the
     // agent's commit gates (AgentGate): its role and words, and the form it
     // is in with what that holds. Read here, where the page can't edit it
@@ -234,9 +241,9 @@ enum PageScripts {
           q = parts.join(' > ');
           if (document.querySelector(q) !== el) q = null;
         }
-        return JSON.stringify({ ok: true, selector: q, at: [Math.round(x), Math.round(y)], gate: gate(el) });
+        return JSON.stringify({ ok: true, selector: q, at: [Math.round(x), Math.round(y)], gate: gate(el), box: boxOf(el) });
       }
-      if (how === 'probe') return JSON.stringify({ ok: true, gate: gate(el) });
+      if (how === 'probe') return JSON.stringify({ ok: true, gate: gate(el), box: boxOf(el) });
       if (how === 'press') { el.click(); return JSON.stringify({ ok: true }); }
       if (how === 'scroll') {
         el.scrollIntoView({ block: 'center', inline: 'nearest' });
@@ -420,7 +427,7 @@ enum PageScripts {
         (function () {
           var el = document.activeElement;
           if (!el || el === document.body || el === document.documentElement) return JSON.stringify({ ok: true, gate: null });
-          return JSON.stringify({ ok: true, gate: gate(el) });
+          return JSON.stringify({ ok: true, gate: gate(el), box: boxOf(el) });
         })
         """#, [])
     }

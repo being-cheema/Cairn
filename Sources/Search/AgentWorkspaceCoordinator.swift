@@ -79,6 +79,7 @@ final class AgentWorkspaceCoordinator {
             for tab in browser.tabs where own.contains(tab.id) {
                 tab.agentWorking = false
                 tab.inYourHands = false
+                if let web = tab.built { AgentOverlayView.remove(from: web) }
                 PrivateNetworkRules.remove(from: tab)
                 released.append((browser, tab))
             }

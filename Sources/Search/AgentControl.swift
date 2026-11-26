@@ -1423,6 +1423,52 @@ final class AgentControl: ObservableObject {
         }
     }
 
+    // MARK: its hand, shown
+
+    /// A mark over its page for what it is doing (AgentOverlayView).
+    private func mark(_ tab: Tab, _ words: String, _ box: Any?, click: Bool = false, spotlight: Bool = false) {
+        guard let web = tab.built else { return }
+        let numbers = (box as? [Any])?.compactMap { ($0 as? NSNumber)?.doubleValue }
+        let place = numbers.flatMap { AgentOverlayView.place($0, zoom: web.pageZoom * web.magnification) }
+        AgentOverlayView.over(web).show(words, at: place, click: click, spotlight: spotlight)
+    }
+
+    /// What it is about to do to a control, with the page's name for it
+    /// quoted and cut short.
+    static func doing(_ verb: String, _ gate: Any?) -> String {
+        let name = AgentGate.quoted(AgentGate.Target(gate)?.label ?? "")
+        return name.isEmpty ? verb : "\(verb) “\(name)”"
+    }
+
+    /// While a question about a control waits for you, that control outlined
+    /// on its page, followed as the page moves (the tab brought forward is
+    /// laid out again). `script` answers with its box.
+    private func spotlight(_ tab: Tab, _ session: AgentSession, _ script: String) {
+        guard let held = session.held else { return }
+        func look() {
+            guard session.held === held, live(session) else {
+                if let web = tab.built { AgentOverlayView.over(web).clear() }
+                return
+            }
+            page(tab, session, script) { [weak self, weak session] result in
+                guard let self, let session, session.held === held else { return }
+                if case .success(let seen) = result {
+                    self.mark(tab, Self.doing("Waiting for you:", seen["gate"]), seen["box"], spotlight: true)
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { look() }
+            }
+        }
+        look()
+        // The question gone, however it went, so is the outline.
+        func watch() {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak session] in
+                if session?.held === held { return watch() }
+                if let web = tab.built { AgentOverlayView.over(web).clear() }
+            }
+        }
+        watch()
+    }
+
     // MARK: Pass the Baton
 
     // Signing in is yours. A sign-in the agent comes to — one it asks for
@@ -1619,6 +1665,7 @@ final class AgentControl: ObservableObject {
             if each === browser, landing?.id != session.lastWorked { landing = tab }
         }
         handed = kept
+        if session.panel { browser?.claude.left(released.filter { $0.browser === browser }.map(\.tab.id)) }
         session.pages = [:]
         session.snaps = [:]
         session.dialogs = [:]
@@ -1861,6 +1908,7 @@ final class AgentControl: ObservableObject {
                     if key.characters == " " { target.enter = target.submits }
                     guard let hold = AgentGate.hold(enter: target, on: tab.pageAddress, rules: rules) else { return press() }
                     if self.handsOverSignIn(hold, tab, session, answer) { return }
+                    defer { self.spotlight(tab, session, PageScripts.focused()) }
                     self.ask(hold, session) { verdict in
                         guard verdict == .approved else { return answer(Self.declined(hold, verdict)) }
                         // Still what was asked about.
@@ -2043,6 +2091,7 @@ final class AgentControl: ObservableObject {
         let longest = min(max(request["max_text"] as? Int ?? 20000, 0), 200_000)
         let nodeOffset = min(max(request["node_offset"] as? Int ?? 0, 0), 100_000)
         let textOffset = min(max(request["text_offset"] as? Int ?? 0, 0), 10_000_000)
+        if session.own.contains(tab.id) { mark(tab, "Reading the page", nil) }
         page(tab, session, PageScripts.read(key: Self.key, snap: snap, most: most, longest: longest, text: request["text"] as? Bool ?? true,
                                             nodeOffset: nodeOffset, viewportOnly: request["viewport_only"] as? Bool ?? false,
                                             textOffset: textOffset)) { result in
@@ -2082,6 +2131,7 @@ final class AgentControl: ObservableObject {
                 guard self.live(session) else { return answer(AgentRefusal(code: "stopped", message: "Stopped in \(Brand.name)").said) }
                 @MainActor func press(_ seen: [String: Any]) {
                     guard self.live(session) else { return answer(AgentRefusal(code: "stopped", message: "Stopped in \(Brand.name)").said) }
+                    self.mark(tab, Self.doing("Clicking", seen["gate"]), seen["box"], click: true)
                     guard let at = seen["at"] as? [Double], PageHands.click(tab.web, at: at) else {
                         answer(AgentRefusal(code: "not_clicked", message: "The page had nowhere to click").said)
                         return
@@ -2114,6 +2164,7 @@ final class AgentControl: ObservableObject {
                         press(now)
                     }
                 }
+                self.spotlight(tab, session, PageScripts.touch(key: Self.key, snap: snap, index: index, how: "probe", text: nil, replace: true, strict: true))
             }
         }
     }
@@ -2171,6 +2222,8 @@ final class AgentControl: ObservableObject {
                 }
             }
         }
+        // Where it is about to type; never what.
+        touch("probe", nil) { [weak self] seen in self?.mark(tab, Self.doing("Typing into", seen["gate"]), seen["box"]) }
         if request["keys"] as? Bool == true {
             // Real key events, into the field once focused. A field in the
             // room off screen may take the focus; one in your window you

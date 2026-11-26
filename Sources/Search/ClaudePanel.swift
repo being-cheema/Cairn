@@ -100,7 +100,7 @@ struct ClaudePanel: View {
                 welcome
             }
             ForEach(Array(session.turns.enumerated()), id: \.element.id) { index, turn in
-                TurnView(turn: turn, working: session.running && index == session.turns.count - 1)
+                TurnView(turn: turn, working: session.running && index == session.turns.count - 1, browser: session.browser)
                     .id(turn.id)
             }
         }
@@ -277,6 +277,7 @@ struct ClaudePanel: View {
     private struct TurnView: View {
         let turn: ClaudeSession.Turn
         let working: Bool
+        let browser: Browser?
 
         /// Only the latest few steps in full, the rest counted.
         private static let shown = 4
@@ -324,6 +325,10 @@ struct ClaudePanel: View {
                     }
                 }
 
+                if let browser, !turn.left.isEmpty {
+                    LeftTabs(browser: browser, ids: turn.left)
+                }
+
                 if turn.answer.isEmpty, turn.failed == nil, working, turn.steps.isEmpty {
                     HStack(spacing: 6) {
                         ProgressView().controlSize(.mini).frame(width: 12, height: 12)
@@ -356,6 +361,55 @@ struct ClaudePanel: View {
                     .background(Palette.wash, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
             }
+        }
+    }
+}
+
+/// The tabs a finished task left open, each a pill that goes to it. Closed
+/// ones drop out.
+struct LeftTabs: View {
+    @ObservedObject var browser: Browser
+    let ids: [Tab.ID]
+
+    var body: some View {
+        let open = ids.compactMap { id in browser.tabs.first { $0.id == id } }
+        if !open.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(open) { tab in LeftTab(tab: tab) { browser.select(tab) } }
+                }
+                .padding(.vertical, 1)
+            }
+        }
+    }
+
+    private struct LeftTab: View {
+        @ObservedObject var tab: Tab
+        let go: () -> Void
+
+        var body: some View {
+            Button(action: go) {
+                HStack(spacing: 6) {
+                    Mark(icon: tab.icon, letter: tab.monogram, size: 14)
+                    // The page's own title: words to show, nothing more.
+                    Text(verbatim: tab.title.isEmpty ? "Tab" : tab.title)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Palette.ink)
+                        .lineLimit(1)
+                        .frame(maxWidth: 150)
+                        .fixedSize(horizontal: true, vertical: false)
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 8.5, weight: .semibold))
+                        .foregroundStyle(Palette.muted)
+                }
+                .padding(.horizontal, 9)
+                .padding(.vertical, 5)
+                .background(Palette.wash, in: Capsule())
+                .overlay(Capsule().strokeBorder(Palette.hairline, lineWidth: 1))
+                .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .help("Go to this tab")
         }
     }
 }

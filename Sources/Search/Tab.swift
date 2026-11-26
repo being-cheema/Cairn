@@ -550,6 +550,19 @@ final class Tab: ObservableObject, Identifiable {
             return name.first.map { String($0).uppercased() } ?? "•"
         }
         let host = address?.host()?.replacingOccurrences(of: "www.", with: "") ?? ""
+        return Tab.letter(host: host, title: title)
+    }
+
+    /// The host's first letter, except for an address written in numbers and
+    /// for this Mac, where every tab would wear the same "1" or "L": there,
+    /// the page's title's.
+    nonisolated static func letter(host: String, title: String) -> String {
+        let numbered = !host.isEmpty && (host.contains(":") || host.allSatisfy { $0.isNumber || $0 == "." })
+        if numbered || host == "localhost",
+           let first = title.first(where: { $0.isLetter }) ?? title.first(where: { $0.isNumber }) {
+            // A title that is only the address again tells no more.
+            if !title.hasPrefix(host) { return String(first).uppercased() }
+        }
         return host.first.map { String($0).uppercased() } ?? "•"
     }
 

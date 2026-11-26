@@ -378,6 +378,12 @@ struct AgentApproval: View {
                 }
             }
             HStack(spacing: 12) {
+                // To see what it asks about, outlined on its page.
+                if held.hold.reason != .leave {
+                    Button { AgentControl.shared.showWaitingTab() } label: {
+                        Text("Show the Page").padding(.horizontal, 8).padding(.vertical, 6).contentShape(Rectangle())
+                    }
+                }
                 Spacer(minLength: 8)
                 Button { AgentControl.shared.answerHeld(approve: false, event: NSApp.currentEvent) } label: {
                     Text("Don't Approve")

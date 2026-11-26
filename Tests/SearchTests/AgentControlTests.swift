@@ -314,7 +314,9 @@ final class AgentControlTests: XCTestCase {
         // Without the pass: asked.
         XCTAssertFalse(run.admits(offered: nil, parent: 4242, parentStarted: started(100, 5)))
         XCTAssertFalse(run.admits(offered: "", parent: 4242, parentStarted: started(100, 5)))
-        XCTAssertFalse(run.admits(offered: String(pass.dropLast()) + "0", parent: 4242, parentStarted: started(100, 5)))
+        // Its last character another one (a fixed "0" was the pass itself, one run in 16).
+        let wrong = String(pass.dropLast()) + (pass.last == "0" ? "1" : "0")
+        XCTAssertFalse(run.admits(offered: wrong, parent: 4242, parentStarted: started(100, 5)))
         XCTAssertFalse(run.admits(offered: pass.uppercased(), parent: 4242, parentStarted: started(100, 5)))
         // With the pass, from anyone but the panel's own claude: asked.
         XCTAssertFalse(run.admits(offered: pass, parent: 4243, parentStarted: started(100, 5)), "another program that read it")

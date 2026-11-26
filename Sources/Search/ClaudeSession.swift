@@ -26,6 +26,8 @@ final class ClaudeSession: ObservableObject {
         var steps: [String] = []
         var done = false
         var failed: String?
+        /// The tabs it left to you when it finished.
+        var left: [Tab.ID] = []
     }
 
     /// Why it can't start, as the panel says it.
@@ -145,6 +147,12 @@ final class ClaudeSession: ObservableObject {
         turns = []
         problem = nil
         draft = ""
+    }
+
+    /// The tabs the turn in hand left to you (AgentControl's hand-over).
+    func left(_ tabs: [Tab.ID]) {
+        guard let last = turns.indices.last else { return }
+        turns[last].left += tabs.filter { !turns[last].left.contains($0) }
     }
 
     /// The window the panel is in, where its run works and asks.
