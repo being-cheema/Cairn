@@ -86,7 +86,9 @@ gitleaks goes into `.gitleaksignore` by fingerprint, after reading it.
 
 Check `git status` before `git add`. Never commit `xcuserdata/`, and don't let
 Xcode rewrite `Search.entitlements`. `Local/Art/` holds pictures that aren't
-MIT: it is git-ignored, and `build.sh` won't make a DMG while it has files.
+MIT (icons8's): it is git-ignored, and they are never committed. A published
+app may carry them only with the icons8 link in Settings › About
+(`Art.swift`), which `build.sh` checks for before a DMG.
 
 ## Where things are
 

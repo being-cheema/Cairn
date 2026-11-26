@@ -7,6 +7,8 @@ ever committed.
 
 Pictures for the app's quiet places (an empty list, a welcome, a held action),
 from icons8 in the Anthropic Claude Hand Drawn and Watercolor styles. They are
-not MIT. They stay in `Local/Art/`, are never committed and never distributed:
-`./build.sh release dmg` and `ship` refuse to run while the folder has files.
+not MIT. The files stay in `Local/Art/` and are never committed. A built app may
+carry them with a link to icons8.com in its About section, as icons8's licence
+page asks of free use in desktop apps; Settings › About shows it whenever the
+app has pictures, and `./build.sh release dmg` and `ship` check it is there.
 Without them the app draws a plain shape instead and is otherwise the same.

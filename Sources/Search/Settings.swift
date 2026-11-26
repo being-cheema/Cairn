@@ -1247,6 +1247,19 @@ struct SettingsPanel: View {
                 Text("A fork of Search by Office Commun (MIT) · version \(Updater.version)")
                     .font(.system(size: 12))
                     .foregroundStyle(Palette.muted)
+                // Owed wherever the pictures go (Art.swift). A tab of ours,
+                // and nothing is fetched until it is pressed.
+                if Art.credited() {
+                    Button { browser.open(Art.creditLink, foreground: true) } label: {
+                        Text(Art.creditWords)
+                            .font(.system(size: 12))
+                            .underline()
+                            .foregroundStyle(Palette.muted)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(.isLink)
+                    .help("icons8.com")
+                }
             }
         }
     }

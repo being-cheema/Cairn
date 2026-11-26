@@ -357,3 +357,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
+
+## Illustrations in a published app
+
+Not part of this repository, and not under its MIT licence. An app built with the owner's pictures carries illustrations from [Icons8](https://icons8.com), credited in Settings › About.

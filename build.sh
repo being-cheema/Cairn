@@ -93,12 +93,16 @@ case "${SEARCH_DEV:-}" in
   *) echo "SEARCH_DEV is 0 or 1, not “$SEARCH_DEV”" >&2; exit 1 ;;
 esac
 [ "$STEP" != "app" ] && [ "$DEV" = 1 ] && { echo "a dev build doesn't go in a DMG" >&2; exit 1; }
-# The pictures in Local/Art/ are icons8's, which are not MIT: they go into an
-# app built here for the owner's own use, never into one that is handed out.
+# The pictures in Local/Art/ are icons8's, which are not MIT: never committed.
+# An app that carries them may be handed out only with icons8's credit in its
+# About section (Art.swift), so a DMG or a ship checks it is still there.
 ART_FILES="$(find Local/Art -type f ! -iname 'README*' ! -name '.DS_Store' 2>/dev/null || true)"
 if [ "$STEP" != "app" ] && [ -n "$ART_FILES" ]; then
-  echo "Local/Art/ has icons8 pictures, which are not for distribution: move them out before a DMG or a ship" >&2
-  exit 1
+  if ! grep -q '"Illustrations by Icons8"' Sources/Search/Art.swift \
+     || ! grep -q 'Art\.creditWords' Sources/Search/Settings.swift; then
+    echo "Local/Art/ has icons8 pictures, but About no longer credits icons8: put the credit back before a DMG or a ship" >&2
+    exit 1
+  fi
 fi
 SHOWN="$NAME"
 if [ "$DEV" = 1 ]; then
@@ -245,7 +249,7 @@ swift build "${SWIFTFLAGS[@]}" --product cairn-mcp
 cp "$(swift build "${SWIFTFLAGS[@]}" --show-bin-path)/cairn-mcp" "$APP/Contents/MacOS/cairn-mcp"
 [ "$CONFIG" = "release" ] && strip -x "$APP/Contents/MacOS/cairn-mcp"
 # The owner's pictures (Art.swift), when there are any: the app draws a plain
-# circle in each place without them. Never in a DMG (checked above).
+# circle in each place without them. With them, About credits icons8 (above).
 if [ -n "$ART_FILES" ]; then
   mkdir -p "$APP/Contents/Resources/Art"
   cp Local/Art/*.png "$APP/Contents/Resources/Art/"

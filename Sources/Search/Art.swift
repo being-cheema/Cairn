@@ -4,11 +4,12 @@ import AppKit
 // The pictures in the app's quiet places: an empty list, a welcome, an action
 // held for you.
 //
-// They are the owner's own, from icons8, and not MIT: they live in
-// Local/Art/ (never committed), ./build.sh copies them into the app it builds
-// on this Mac, and a DMG or ship refuses to run while that folder has any.
-// So a clone of the repo has none, and every place that asks for one draws a
-// plain coral circle instead and is otherwise the same.
+// They come from icons8 and are not MIT: they live in Local/Art/ (never
+// committed) and ./build.sh copies them into the app. So a clone of the repo
+// has none, and every place that asks for one draws a plain coral circle
+// instead and is otherwise the same. icons8 lets a desktop app use them free
+// with a link to icons8.com in its About section: Settings › About shows it
+// in any build that has pictures, and a DMG or ship checks it is there.
 
 enum Art {
     /// The picture called `name` (Local/Art/<name>.png), if this build has it.
@@ -18,6 +19,14 @@ enum Art {
             .flatMap { NSImage(contentsOf: $0) }
         cache[name] = Held(image: found)
         return found
+    }
+
+    static let creditWords = "Illustrations by Icons8"
+    static let creditLink = URL(string: "https://icons8.com") ?? URL(fileURLWithPath: "/")
+
+    /// Whether `bundle` carries pictures, and so owes the credit.
+    static func credited(in bundle: Bundle = .main) -> Bool {
+        !(bundle.urls(forResourcesWithExtension: "png", subdirectory: "Art") ?? []).isEmpty
     }
 
     private struct Held { let image: NSImage? }
