@@ -9,6 +9,9 @@ struct TaskHistory: View {
     let close: () -> Void
 
     @State private var records: [TaskRecord] = []
+    @State private var macros: [FastMacro] = []
+    /// Why the last Run or Save didn't happen.
+    @State private var trouble: String?
     @State private var open: UUID?
 
     var body: some View {
@@ -34,6 +37,21 @@ struct TaskHistory: View {
                 .font(.system(size: 11))
                 .foregroundStyle(Palette.muted)
                 .fixedSize(horizontal: false, vertical: true)
+            if !macros.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Fast Macros").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.ink)
+                    ForEach(macros) { macro in
+                        MacroRow(session: session, macro: macro, trouble: $trouble, close: close) {
+                            MacroStore.remove(macro.id)
+                            macros = MacroStore.all()
+                        }
+                    }
+                }
+            }
+            if let trouble {
+                Text(verbatim: trouble).font(.system(size: 11)).foregroundStyle(Palette.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if records.isEmpty {
                 Text("No tasks yet.")
                     .font(.system(size: 12))
@@ -50,7 +68,10 @@ struct TaskHistory: View {
         }
         .padding(12)
         .frame(width: 340)
-        .onAppear { records = TaskLedger.all() }
+        .onAppear {
+            records = TaskLedger.all()
+            macros = MacroStore.all()
+        }
     }
 
     private func row(_ record: TaskRecord) -> some View {
@@ -83,6 +104,23 @@ struct TaskHistory: View {
             if !record.approvals.isEmpty { part("Approvals", record.approvals.map { Self.say($0) }) }
             // The addresses in full, so what Reopen opens is seen first.
             if !record.tabs.isEmpty { part("Tabs left to you", record.tabs.map { "\($0.title)\n\($0.url)" }) }
+            if let recorder = MacroStore.drafts[record.id] {
+                if let macro = MacroStore.macro(from: record, recorder) {
+                    Quick("Save as Fast Macro") {
+                        if MacroStore.save(macro) {
+                            MacroStore.draft(record.id, nil)
+                            macros = MacroStore.all()
+                            trouble = nil
+                        } else {
+                            trouble = "The macro couldn't be saved. Delete one if you have \(MacroStore.most)."
+                        }
+                    }
+                    .help("Keeps these steps on this Mac, to run again without Claude")
+                } else if record.outcome == .completed, let why = recorder.spoiled {
+                    Text(verbatim: "Can't be a Fast Macro: \(why).")
+                        .font(.system(size: 10.5)).foregroundStyle(Palette.muted)
+                }
+            }
             HStack(spacing: 6) {
                 if !record.reopenable.isEmpty {
                     Quick("Reopen Tabs") {
@@ -102,6 +140,81 @@ struct TaskHistory: View {
                     records.removeAll { $0.id == record.id }
                 }
             }
+        }
+    }
+
+    /// A saved macro: its steps in full before Run, and Run pressed only by
+    /// a click of yours on it (AgentControl.startReplay).
+    private struct MacroRow: View {
+        @ObservedObject var session: ClaudeSession
+        let macro: FastMacro
+        @Binding var trouble: String?
+        let close: () -> Void
+        let delete: () -> Void
+
+        @State private var open = false
+        @State private var spot = Spot()
+        private final class Spot { weak var view: NSView?; var since: TimeInterval = 0 }
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 5) {
+                Button {
+                    open.toggle()
+                    spot.since = ProcessInfo.processInfo.systemUptime
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: open ? "chevron.down" : "chevron.right").font(.system(size: 8, weight: .semibold))
+                        Text(verbatim: macro.name).font(.system(size: 12)).lineLimit(1)
+                        Spacer(minLength: 0)
+                    }
+                    .foregroundStyle(Palette.ink)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                if open {
+                    ForEach(Array(macro.steps.enumerated()), id: \.offset) { number, step in
+                        Text(verbatim: "\(number + 1). \(step.said)")
+                            .font(.system(size: 11)).foregroundStyle(Palette.ink)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Text("Runs without Claude, in tabs of its own, signed in to nothing. Paying, sending and leaving its sites still wait for your click. It stops if a page has changed.")
+                        .font(.system(size: 10.5)).foregroundStyle(Palette.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: 6) {
+                        Button { run() } label: {
+                            Text("Run")
+                                .font(.system(size: 11.5, weight: .medium))
+                                .foregroundStyle(Palette.ground)
+                                .padding(.horizontal, 12).padding(.vertical, 5)
+                                .background(Palette.ink, in: Capsule())
+                                .background(ClickSpot { spot.view = $0 })
+                        }
+                        .buttonStyle(.plain)
+                        Spacer(minLength: 0)
+                        Quick("Delete", tint: Palette.muted) { delete() }
+                    }
+                }
+            }
+            .padding(8)
+            .background(Palette.wash.opacity(open ? 1 : 0.5), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+
+        private func run() {
+            guard let browser = session.browser else { return }
+            let macro = macro, session = session
+            let why = AgentControl.shared.startReplay(macro, in: browser, event: NSApp.currentEvent, on: spot.view,
+                                                      shownAt: spot.since) { [weak browser] result in
+                switch result {
+                case .stopped(let why):
+                    browser?.announce("Macro stopped: \(why)")
+                case .finished(let page):
+                    // Attached and written, not sent: sending is your Send.
+                    session.mention(.macroResult(page, name: macro.name))
+                    if session.draft.isEmpty { session.draft = MacroStore.summaryRequest(macro) }
+                    browser?.announce("Macro finished. Press Send in the Claude panel for a summary.")
+                }
+            }
+            if let why { trouble = why } else { close() }
         }
     }
 

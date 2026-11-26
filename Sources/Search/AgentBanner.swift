@@ -524,7 +524,7 @@ extension AgentApproval {
 /// An AppKit view the size of the control it sits behind, so a click can be
 /// checked to have landed on that control (AgentRules.isClick). It takes no
 /// clicks itself.
-private struct ClickSpot: NSViewRepresentable {
+struct ClickSpot: NSViewRepresentable {
     let made: (NSView) -> Void
 
     final class Spot: NSView {

@@ -557,6 +557,8 @@ final class AgentSession: ObservableObject, Identifiable {
     fileprivate var offeredPass: String?
     /// Let in as the side panel's own run, by the Send that started it.
     @Published fileprivate(set) var panel = false
+    /// A Fast Macro being played (FastMacros): no program, no socket.
+    fileprivate var replaying = false
     /// Working now: a request in hand, or one a moment ago. Connected and
     /// quiet, the line says so (an agent that finished its turn without
     /// disconnecting keeps its connection until it goes idle for good).
@@ -1002,7 +1004,7 @@ final class AgentControl: ObservableObject {
             // The panel's run: not let in again until your next Send.
             if let pass = session.offeredPass { panelArm(pass: pass, false) }
             Self.log.notice("stopped: the panel's Claude is let in again only by your next message")
-        } else if stopped, was == .allowed {
+        } else if stopped, was == .allowed, !session.replaying {
             AgentTrust.shared.suspend(client: session.client, also: session.admittedBy)
             Self.log.notice("stopped: \(session.client, privacy: .public) is asked about again from now on")
         }
@@ -1542,6 +1544,7 @@ final class AgentControl: ObservableObject {
     private func handsOverSignIn(_ hold: AgentGate.Hold, _ tab: Tab, _ session: AgentSession,
                                  _ answer: @escaping ([String: Any]) -> Void) -> Bool {
         guard hold.reason == .signIn else { return false }
+        spoilMacro(session, "it needed you to sign in")
         passBaton(tab, session) { verdict in
             answer(verdict == .approved ? Self.resumed : Self.declined(hold, verdict))
         }
@@ -1769,6 +1772,176 @@ final class AgentControl: ObservableObject {
         if session.newTabs.count < 20 { session.newTabs.append(tab.id) }
     }
 
+    // MARK: Fast Macros
+
+    /// A step the panel's task took, noted for a macro (ClaudeSession). Only
+    /// one that was done: a refusal or an error is no step.
+    private func record(_ step: MacroStep, on tab: Tab, _ session: AgentSession, if out: [String: Any]) {
+        guard session.panel, out["error"] == nil, out["failure"] == nil, out["resumed"] == nil else { return }
+        session.browser?.claude.took(step, on: tab.id)
+    }
+
+    private func spoilMacro(_ session: AgentSession, _ why: String) {
+        if session.panel { session.browser?.claude.spoilMacro(why) }
+    }
+
+    enum Replayed: Equatable {
+        /// Every step done: what the last page showed, as a read gives it.
+        case finished(String)
+        /// Why it went no further.
+        case stopped(String)
+    }
+
+    /// Run, in the list of macros. Only your own fresh click on that button
+    /// starts one: nothing an agent sends can ask for it, there being no verb
+    /// for it. Returns why it can't start, or nil.
+    func startReplay(_ macro: FastMacro, in browser: Browser, event: NSEvent?, on view: NSView?, shownAt: TimeInterval,
+                     _ done: @escaping (Replayed) -> Void) -> String? {
+        guard AgentRules.isClick(event, on: view, in: view?.window, after: shownAt) else {
+            return "Click Run yourself to start a macro."
+        }
+        return replay(macro, in: browser, done)
+    }
+
+    /// The bench's and the tests' way past the click, in a test run only.
+    func replayForTest(_ macro: FastMacro, in browser: Browser, _ done: @escaping (Replayed) -> Void) -> String? {
+        Store.testing ? replay(macro, in: browser, done) : "Not a test run"
+    }
+
+    /// How long a step waits to find its control on the page.
+    static let anchorFor: TimeInterval = 10
+
+    /// The steps, each put to the same code a live agent's request goes
+    /// through (run): the task store, the address rules, vet, the questions
+    /// and Stop are all as they are for any agent. Nothing here answers a
+    /// question or fills a secret, and the first thing that isn't as it was
+    /// ends it.
+    private func replay(_ macro: FastMacro, in browser: Browser, _ done: @escaping (Replayed) -> Void) -> String? {
+        if let why = MacroRules.refusal(macro) { return "This macro can't be run: \(why)." }
+        guard session == nil else { return "An agent is at work. Stop it first, or wait." }
+        let session = AgentSession(fd: -1, program: "")
+        session.client = "Fast Macro"
+        session.replaying = true
+        session.greeted = true
+        // Never taken for idle between steps.
+        session.working = true
+        session.browser = browser
+        session.consent.hello()
+        session.consent.answer(allow: true, seesTabs: false)
+        session.closing = NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification, object: browser.window, queue: .main
+        ) { [weak self, weak session] _ in
+            MainActor.assumeIsolated { if let self, let session { self.end(session, .windowClosed) } }
+        }
+        self.session = session
+        began(session)
+
+        var pages: [String] = []
+        var over = false
+        func finish(_ result: Replayed) {
+            guard !over else { return }
+            over = true
+            // Done, or stopped short: its tabs are yours to look at, as a
+            // finished task's are. Your Stop, or a no to another site, has
+            // closed them already or will (AgentEnd.handsOver).
+            let last = session.lastWorked
+            if self.session === session { end(session, .bye) }
+            if let tab = browser.tabs.first(where: { $0.id == last }) { browser.select(tab) }
+            done(result)
+        }
+        func refused(_ out: [String: Any]) -> String? {
+            if let error = out["error"] as? [String: Any] { return error["message"] as? String ?? "It was refused" }
+            if let failure = out["failure"] as? String { return failure }
+            if out["timeout"] as? Bool == true { return "A page took too long to load" }
+            if out["resumed"] as? Bool == true { return "Signing in is yours: the macro goes no further" }
+            if out["verified"] as? Bool == false { return "Some typing didn't take" }
+            return nil
+        }
+        // A beat between the stopping of a watched run and its next step.
+        func put(_ request: [String: Any], _ then: @escaping ([String: Any]) -> Void) {
+            guard live(session) else { return finish(.stopped("Stopped")) }
+            run(request["do"] as? String ?? "", request, in: session) { out in
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated {
+                        guard self.live(session) else { return finish(.stopped("Stopped")) }
+                        if let why = refused(out) { return finish(.stopped(why)) }
+                        then(out)
+                    }
+                }
+            }
+        }
+        func sameHost(_ step: MacroStep) -> Bool {
+            guard let id = session.pages[pages[step.tab]], let tab = browser.tabs.first(where: { $0.id == id }) else { return false }
+            return tab.pageAddress?.host()?.lowercased() == step.host
+        }
+        func act(_ step: MacroStep, element: String, then: @escaping () -> Void) {
+            var request: [String: Any] = ["do": step.kind.rawValue, "element": element]
+            if step.kind == .type {
+                request["text"] = step.text ?? ""
+                request["replace"] = step.replace ?? true
+                request["keys"] = step.keys ?? false
+                request["submit"] = step.submit ?? false
+            }
+            put(request) { _ in then() }
+        }
+        // The control looked for until it is there, one and only one.
+        func find(_ step: MacroStep, until: Date, then: @escaping () -> Void) {
+            put(["do": "read", "page": pages[step.tab], "text": false, "max_nodes": 2000]) { out in
+                let found: MacroRules.Anchor = sameHost(step)
+                    ? MacroRules.anchor(step, among: out["nodes"] as? [[String: Any]] ?? [])
+                    : .mismatch("The page isn't on \(step.host ?? "the same site") any more")
+                switch found {
+                case .found(let element): act(step, element: element, then: then)
+                case .mismatch(let why):
+                    guard Date() < until else { return finish(.stopped(why)) }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { find(step, until: until, then: then) }
+                }
+            }
+        }
+        func step(_ index: Int) {
+            guard index < macro.steps.count else { return snapshot() }
+            let now = macro.steps[index]
+            let next = { step(index + 1) }
+            switch now.kind {
+            case .open:
+                put(["do": "open", "url": now.url ?? ""]) { out in
+                    guard let page = out["page"] as? String else { return finish(.stopped("A tab didn't open")) }
+                    pages.append(page)
+                    next()
+                }
+            case .go:
+                put(["do": "go", "page": pages[now.tab], "url": now.url ?? ""]) { _ in next() }
+            case .back, .forward:
+                put(["do": now.kind.rawValue, "page": pages[now.tab]]) { _ in next() }
+            case .click, .type:
+                find(now, until: Date().addingTimeInterval(Self.anchorFor), then: next)
+            case .press:
+                guard sameHost(now), let id = session.pages[pages[now.tab]], let tab = browser.tabs.first(where: { $0.id == id }) else {
+                    return finish(.stopped("The page isn't on \(now.host ?? "the same site") any more"))
+                }
+                // The key goes to what it went to, or nowhere.
+                page(tab, session, PageScripts.focused()) { result in
+                    var focused: AgentGate.Target?
+                    if case .success(let seen) = result { focused = AgentGate.Target(seen["gate"]) }
+                    guard focused?.role == now.role, focused?.label == now.name, focused?.secret != true else {
+                        return finish(.stopped("Something else has the keyboard on that page"))
+                    }
+                    put(["do": "press", "page": pages[now.tab], "key": now.key ?? ""]) { _ in next() }
+                }
+            }
+        }
+        func snapshot() {
+            let last = macro.steps.last?.tab ?? 0
+            put(["do": "read", "page": pages[last], "max_nodes": 1, "max_text": 12_000]) { out in
+                let words = (out["text"] as? String)
+                    ?? (out["pages"] as? [[String: Any]])?.compactMap { $0["text"] as? String }.joined(separator: "\n") ?? ""
+                finish(.finished("Title: \(out["title"] as? String ?? "")\nAddress: \(out["url"] as? String ?? "")\n\n\(words)"))
+            }
+        }
+        step(0)
+        return nil
+    }
+
     // MARK: - the verbs
 
     /// Every verb an agent may ask for, and nothing else. No `sign_in`, and
@@ -1837,6 +2010,7 @@ final class AgentControl: ObservableObject {
                 answer(["allowed": true, "seesTabs": session.consent.seesTabs, "client": session.client])
             case .waitForSignIn:
                 let tab = try self.tab(request, session, browser, .drive)
+                spoilMacro(session, "it needed you to sign in")
                 PageRoom.shared.house(tab)
                 passBaton(tab, session) { verdict in
                     if verdict == .approved { return answer(Self.resumed) }
@@ -1878,7 +2052,10 @@ final class AgentControl: ObservableObject {
                         if let site = AgentGate.site(url) { session.sites.insert(site) }
                         self.work(on: tab, session)
                         PageRoom.shared.house(tab)
-                        self.settle(tab, session, timeout: request["timeout"] as? Double ?? 20, answer)
+                        self.settle(tab, session, timeout: request["timeout"] as? Double ?? 20) { out in
+                            self.record(MacroStep(kind: .open, tab: 0, url: url.absoluteString), on: tab, session, if: out)
+                            answer(out)
+                        }
                     }
                 }
                 if let hold = AgentGate.hold(address: url, sites: session.sites, rules: rules(browser)) {
@@ -1896,7 +2073,10 @@ final class AgentControl: ObservableObject {
                     if let site = AgentGate.site(url) { session.sites.insert(site) }
                     tab.go(to: url)
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
-                        self?.settle(tab, session, timeout: request["timeout"] as? Double ?? 20, answer)
+                        self?.settle(tab, session, timeout: request["timeout"] as? Double ?? 20) { out in
+                            self?.record(MacroStep(kind: .go, tab: 0, url: url.absoluteString), on: tab, session, if: out)
+                            answer(out)
+                        }
                     }
                 }
                 if let hold = AgentGate.hold(address: url, sites: session.sites, rules: rules(browser)) {
@@ -1911,7 +2091,10 @@ final class AgentControl: ObservableObject {
                 PageRoom.shared.house(tab)
                 if verb == "back" { tab.web.goBack() } else { tab.web.goForward() }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-                    self?.settle(tab, session, timeout: request["timeout"] as? Double ?? 20, answer)
+                    self?.settle(tab, session, timeout: request["timeout"] as? Double ?? 20) { out in
+                        self?.record(MacroStep(kind: verb == "back" ? .back : .forward, tab: 0), on: tab, session, if: out)
+                        answer(out)
+                    }
                 }
             case .close:
                 let tab = try self.tab(request, session, browser, .drive)
@@ -1925,6 +2108,7 @@ final class AgentControl: ObservableObject {
             case .batchRead:
                 // An Approve from before covers nothing these pages send.
                 session.sendGrant = 0
+                spoilMacro(session, "it read several pages at once")
                 try batchRead(request, session, browser, answer)
             case .click:
                 session.sendGrant = 0
@@ -1941,11 +2125,26 @@ final class AgentControl: ObservableObject {
                 }
                 guard live(session) else { throw AgentRefusal(code: "stopped", message: "Stopped in \(Brand.name)") }
                 PageRoom.shared.house(tab)
-                func press() {
+                let spec = request["key"] as? String ?? ""
+                func send(_ focused: AgentGate.Target?, on host: String?) {
                     guard self.live(session) else { return answer(AgentRefusal(code: "stopped", message: "Stopped in \(Brand.name)").said) }
                     PageHands.key(tab.web, code: key.code, characters: key.characters, flags: key.flags)
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-                        self?.settle(tab, session, timeout: 10, answer)
+                        self?.settle(tab, session, timeout: 10) { out in
+                            self?.record(MacroStep(kind: .press, tab: 0, host: host, role: focused?.role, name: focused?.label, key: spec),
+                                         on: tab, session, if: out)
+                            answer(out)
+                        }
+                    }
+                }
+                func press() {
+                    // For a macro, what the key went to is kept with it.
+                    guard session.panel else { return send(nil, on: nil) }
+                    let host = tab.pageAddress?.host()?.lowercased()
+                    self.page(tab, session, PageScripts.focused()) { result in
+                        var focused: AgentGate.Target?
+                        if case .success(let seen) = result { focused = AgentGate.Target(seen["gate"]) }
+                        send(focused, on: host)
                     }
                 }
                 // Return, or Space on a button, in a form that would commit
@@ -2331,6 +2530,8 @@ final class AgentControl: ObservableObject {
                 @MainActor func press(_ seen: [String: Any]) {
                     guard self.live(session) else { return answer(AgentRefusal(code: "stopped", message: "Stopped in \(Brand.name)").said) }
                     self.mark(tab, Self.doing("Clicking", seen["gate"]), seen["box"], click: true)
+                    let aimed = AgentGate.Target(seen["gate"]) ?? AgentGate.Target()
+                    let host = tab.pageAddress?.host()?.lowercased()
                     guard let at = seen["at"] as? [Double], PageHands.click(tab.web, at: at) else {
                         answer(AgentRefusal(code: "not_clicked", message: "The page had nowhere to click").said)
                         return
@@ -2340,6 +2541,8 @@ final class AgentControl: ObservableObject {
                             var out = out
                             out["page"] = page
                             out["navigated"] = tab.address != before
+                            self.record(MacroStep(kind: .click, tab: 0, host: host, role: aimed.role, name: aimed.label),
+                                        on: tab, session, if: out)
                             answer(out)
                         }
                     }
@@ -2390,13 +2593,28 @@ final class AgentControl: ObservableObject {
                 }
             }
         }
+        var aimed: AgentGate.Target?
+        let host = tab.pageAddress?.host()?.lowercased()
+        let kept: ([String: Any]) -> Void = { [weak self] out in
+            if out["verified"] as? Bool == false {
+                self?.spoilMacro(session, "some typing didn't take")
+            } else if let aimed, !aimed.secret, aimed.type != "password" {
+                self?.record(MacroStep(kind: .type, tab: 0, host: host, role: aimed.role, name: aimed.label, text: text,
+                                       replace: replace, keys: request["keys"] as? Bool ?? false,
+                                       submit: request["submit"] as? Bool ?? false), on: tab, session, if: out)
+            } else if out["error"] == nil {
+                // Never kept, not even as a step with a blank.
+                self?.spoilMacro(session, "it typed into a secret field")
+            }
+            answer(out)
+        }
         func finish(_ out: [String: Any]) {
-            guard request["submit"] as? Bool == true else { return answer(out) }
+            guard request["submit"] as? Bool == true else { return kept(out) }
             func submit() {
                 touch("submit", "") { [weak self] _ in
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                         self?.settle(tab, session, timeout: request["timeout"] as? Double ?? 10) { state in
-                            answer(out.merging(state) { mine, _ in mine })
+                            kept(out.merging(state) { mine, _ in mine })
                         }
                     }
                 }
@@ -2422,7 +2640,10 @@ final class AgentControl: ObservableObject {
             }
         }
         // Where it is about to type; never what.
-        touch("probe", nil) { [weak self] seen in self?.mark(tab, Self.doing("Typing into", seen["gate"]), seen["box"]) }
+        touch("probe", nil) { [weak self] seen in
+            aimed = AgentGate.Target(seen["gate"])
+            self?.mark(tab, Self.doing("Typing into", seen["gate"]), seen["box"])
+        }
         if request["keys"] as? Bool == true {
             // Real key events, into the field once focused. A field in the
             // room off screen may take the focus; one in your window you

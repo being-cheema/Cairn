@@ -15,11 +15,14 @@ enum Mention: Equatable, Identifiable {
     case tab(Tab.ID, label: String)
     /// What you had selected when you picked it, kept as it was then.
     case selection(String, from: String)
+    /// What the last page showed when you ran a saved macro (FastMacros).
+    case macroResult(String, name: String)
 
     var id: String {
         switch self {
         case .tab(let id, _): return "tab-\(id)"
         case .selection(let text, let from): return "selection-\(from)-\(text.hashValue)"
+        case .macroResult(let text, let name): return "macro-\(name)-\(text.hashValue)"
         }
     }
 
@@ -28,6 +31,7 @@ enum Mention: Equatable, Identifiable {
         switch self {
         case .tab(_, let label): return "@" + label
         case .selection(let text, _): return "@Selected text (\(text.count) characters)"
+        case .macroResult(_, let name): return "@Macro result: \(name)"
         }
     }
 }
@@ -105,6 +109,9 @@ enum Mentions {
             switch mention {
             case .selection(let text, let from):
                 out.append(Attached(title: "Selected text from \(from)", address: "", text: text,
+                                    addressed: AIPage.addressesAI(text)))
+            case .macroResult(let text, let name):
+                out.append(Attached(title: "The last page of my macro \(name)", address: "", text: String(text.prefix(longest + 600)),
                                     addressed: AIPage.addressesAI(text)))
             case .tab(let id, _):
                 guard let tab = tabs.first(where: { $0.id == id }), mayName(tab), let read = await AIPage.read(tab) else { continue }

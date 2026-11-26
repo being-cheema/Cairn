@@ -28,6 +28,8 @@ enum AgentGate {
         var inForm = false
         var hasPassword = false
         var hasCard = false
+        /// A password, card or one-time-code field (PageScripts' secret).
+        var secret = false
         var method = ""
         var action = ""
         var href = ""
@@ -48,6 +50,7 @@ enum AgentGate {
             inForm = d["inForm"] as? Bool ?? false
             hasPassword = d["pw"] as? Bool ?? false
             hasCard = d["card"] as? Bool ?? false
+            secret = d["secret"] as? Bool ?? false
             method = d["method"] as? String ?? ""
             action = d["action"] as? String ?? ""
             href = d["href"] as? String ?? ""

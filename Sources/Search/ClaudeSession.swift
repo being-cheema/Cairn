@@ -165,6 +165,7 @@ final class ClaudeSession: ObservableObject {
         needBreak = false
         current = ""
         previous = ""
+        recorder = MacroRecorder()
         running = true
         // This Send is the consent for what the run does to answer it.
         AgentControl.shared.panelArm(pass: pass, true)
@@ -230,6 +231,21 @@ final class ClaudeSession: ObservableObject {
         record = now
         recorded = true
         keep(now, false)
+        // In memory only, until you press Save as Fast Macro.
+        if now.outcome == .completed, recorder != MacroRecorder() { MacroStore.draft(now.id, recorder) }
+    }
+
+    /// What this turn has done, towards a Fast Macro (FastMacros).
+    private var recorder = MacroRecorder()
+
+    func took(_ step: MacroStep, on tab: UUID) {
+        guard running, record != nil else { return }
+        recorder.took(step, on: tab)
+    }
+
+    func spoilMacro(_ why: String) {
+        guard running else { return }
+        recorder.spoil(why)
     }
 
     /// A new task seeded from an earlier one: in the box, for you to send.

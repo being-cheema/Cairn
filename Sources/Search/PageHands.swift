@@ -150,6 +150,7 @@ enum PageScripts {
         action: form ? String(form.action || '').slice(0, 300) : '',
         // Longer than the rest: the check on what a link carries out reads it.
         href: a ? String(a.href).slice(0, 8000) : '',
+        secret: secret(el),
         enter: !!form && (submits || (tag === 'input' && !/^(checkbox|radio|button|file|range|color|reset)$/.test(type))) };
     }
 

@@ -149,6 +149,7 @@ enum TaskLedger {
 
     static func remove(_ id: UUID, in folder: URL = TaskLedger.folder) {
         try? FileManager.default.removeItem(at: file(id, in: folder))
+        MacroStore.draft(id, nil)
     }
 
     /// When each folder was last cleared, in this run of the app. A task still
@@ -158,6 +159,7 @@ enum TaskLedger {
 
     static func removeAll(in folder: URL = TaskLedger.folder) {
         cleared[folder.path] = Date()
+        MacroStore.forgetDrafts()
         try? FileManager.default.removeItem(at: folder)
     }
 }
