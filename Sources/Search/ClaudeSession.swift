@@ -32,6 +32,8 @@ final class ClaudeSession: ObservableObject {
         var artifacts: [Artifact] = []
         /// What you attached to your message, as its chips said it.
         var attached: [String] = []
+        /// The pages being read side by side (batch_read), for their pills.
+        var scouts: [ScoutProgress] = []
     }
 
     /// Why it can't start, as the panel says it.
@@ -241,6 +243,12 @@ final class ClaudeSession: ObservableObject {
         guard let last = turns.indices.last, turns[last].artifacts.count < 6 else { return false }
         turns[last].artifacts.append(artifact)
         return true
+    }
+
+    /// Where each page of a batch_read has got to (AgentControl).
+    func scouting(_ pages: [ScoutProgress]) {
+        guard running, let last = turns.indices.last else { return }
+        turns[last].scouts = pages
     }
 
     /// The tabs the turn in hand left to you (AgentControl's hand-over).

@@ -1639,6 +1639,26 @@ final class AgentControl: ObservableObject {
         if held.hold.reason == .leave || session.usedBaton { session.declined = true }
     }
 
+    /// An allowed session with no socket, in a test run, for the unit tests
+    /// to put verbs to as a connected agent would (AgentReplayTests).
+    func sessionForTest(in browser: Browser) -> AgentSession? {
+        guard Store.testing, session == nil else { return nil }
+        let made = AgentSession(fd: -1, program: "test")
+        made.client = "test"
+        made.browser = browser
+        made.greeted = true
+        made.working = true
+        made.consent.hello()
+        made.consent.answer(allow: true, seesTabs: false)
+        session = made
+        return made
+    }
+
+    func askForTest(_ request: [String: Any], _ answer: @escaping ([String: Any]) -> Void) {
+        guard Store.testing, let session else { return }
+        run(request["do"] as? String ?? "", request, in: session, answer)
+    }
+
     /// For the bench's `agents`, in a test run.
     func answerHeldForTest(approve: Bool) {
         guard Store.testing, let session, let held = session.held else { return }
@@ -1902,6 +1922,10 @@ final class AgentControl: ObservableObject {
                 answer(["closed": handle])
             case .read:
                 try read(request, session, browser, answer)
+            case .batchRead:
+                // An Approve from before covers nothing these pages send.
+                session.sendGrant = 0
+                try batchRead(request, session, browser, answer)
             case .click:
                 session.sendGrant = 0
                 try click(request, session, browser, answer)
@@ -2145,6 +2169,86 @@ final class AgentControl: ObservableObject {
                 }
             }
         }
+    }
+
+    /// Several addresses opened in the task's store and read side by side
+    /// (BatchRead). Each is held to what `open` is held to, as if they had
+    /// been opened one after another, and all the questions come before any
+    /// of them is opened: one no, and nothing is. Nothing else the agent
+    /// asks is taken up until this has its answer (pump).
+    private func batchRead(_ request: [String: Any], _ session: AgentSession, _ browser: Browser,
+                           _ answer: @escaping ([String: Any]) -> Void) throws {
+        let urls = try BatchRead.urls(request).get()
+        guard session.held == nil else {
+            throw AgentRefusal(code: "waiting", message: "Something is already waiting for the person",
+                               hint: "Try again once they have answered.")
+        }
+        var progress = urls.enumerated().map { ScoutProgress(id: $0.offset, host: ClaudeCode.site($0.element.absoluteString) ?? "page") }
+        let show = { [weak session] in
+            if let session, session.panel { session.browser?.claude.scouting(progress) }
+        }
+        show()
+        func giveUp(_ out: [String: Any]) {
+            for index in progress.indices { progress[index].state = .failed }
+            show()
+            answer(out)
+        }
+        let rules = rules(browser)
+        let holds = BatchRead.holds(urls, sites: session.sites, rules: rules)
+        func ask(from index: Int) {
+            guard live(session) else { return giveUp(AgentRefusal(code: "stopped", message: "Stopped in \(Brand.name)").said) }
+            guard index < holds.count else { return open() }
+            self.ask(holds[index], session) { verdict in
+                guard verdict == .approved else { return giveUp(Self.declined(holds[index], verdict)) }
+                ask(from: index + 1)
+            }
+        }
+        func open() {
+            PrivateNetworkRules.ready { [weak self] list in
+                guard let self, self.live(session) else { return giveUp(AgentRefusal(code: "stopped", message: "Stopped in \(Brand.name)").said) }
+                guard list != nil else {
+                    return giveUp(AgentRefusal(code: "internal", message: "Couldn't set up the network rules: nothing was opened").said)
+                }
+                var each = request
+                each["max_nodes"] = request["max_nodes"] as? Int ?? BatchRead.nodes
+                each["max_text"] = request["max_text"] as? Int ?? BatchRead.text
+                var results = [[String: Any]](repeating: [:], count: urls.count)
+                var left = urls.count
+                for (index, url) in urls.enumerated() {
+                    let tab = session.workspace.open(url, in: browser)
+                    if let site = AgentGate.site(url) { session.sites.insert(site) }
+                    self.work(on: tab, session)
+                    PageRoom.shared.house(tab)
+                    progress[index].state = .loading
+                    let finish: ([String: Any]) -> Void = { out in
+                        var out = out
+                        out["asked"] = AgentRules.url(url.absoluteString)
+                        results[index] = out
+                        progress[index].state = out["error"] == nil ? .read : .failed
+                        show()
+                        left -= 1
+                        if left == 0 { answer(["results": results]) }
+                    }
+                    self.settle(tab, session, timeout: request["timeout"] as? Double ?? 20) { [weak self] state in
+                        guard let self, self.live(session) else { return finish(AgentRefusal(code: "stopped", message: "Stopped in \(Brand.name)").said) }
+                        // Where it ended up, redirects and all.
+                        if let host = tab.pageAddress?.host(), HostBlock.isBlocked(host) {
+                            session.workspace.forget(tab.id)
+                            browser.close(tab)
+                            return finish(BatchRead.blocked.said)
+                        }
+                        if let failure = state["failure"] as? String {
+                            var out = AgentRefusal(code: "failed", message: failure).said
+                            out["page"] = session.handle(for: tab)
+                            return finish(out)
+                        }
+                        self.reading(tab, each, session, finish)
+                    }
+                }
+                show()
+            }
+        }
+        ask(from: 0)
     }
 
     /// One read of a tab already found to be readable.

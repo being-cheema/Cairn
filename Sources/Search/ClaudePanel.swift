@@ -442,6 +442,10 @@ struct ClaudePanel: View {
                     }
                 }
 
+                if !turn.scouts.isEmpty {
+                    ScoutPills(pages: turn.scouts, working: working)
+                }
+
                 ForEach(turn.artifacts) { artifact in
                     ArtifactCard(artifact: artifact, browser: browser)
                 }
@@ -473,6 +477,40 @@ struct ClaudePanel: View {
                     .foregroundStyle(Palette.muted)
                     .padding(8)
                     .background(Palette.wash, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                }
+            }
+        }
+    }
+}
+
+/// A pill to each page a batch_read is on: its site, and how far it got. The
+/// site's name only, in a host's letters (ClaudeCode.site).
+private struct ScoutPills: View {
+    let pages: [ScoutProgress]
+    let working: Bool
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(pages) { page in
+                    HStack(spacing: 5) {
+                        Group {
+                            if working, page.state == .waiting || page.state == .loading {
+                                ProgressView().controlSize(.mini)
+                            } else {
+                                Image(systemName: page.state == .read ? "checkmark" : "xmark")
+                                    .font(.system(size: 8.5, weight: .semibold))
+                            }
+                        }
+                        .frame(width: 11, height: 11)
+                        Text(verbatim: page.host).font(.system(size: 11)).lineLimit(1)
+                    }
+                    .foregroundStyle(page.state == .read ? Palette.ink : Palette.muted)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Palette.wash, in: Capsule())
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("\(page.host), \(page.said(working: working))")
                 }
             }
         }
