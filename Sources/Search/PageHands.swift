@@ -252,9 +252,9 @@ enum PageScripts {
           q = parts.join(' > ');
           if (document.querySelector(q) !== el) q = null;
         }
-        return JSON.stringify({ ok: true, selector: q, at: [Math.round(x), Math.round(y)], gate: gate(el), box: boxOf(el) });
+        return JSON.stringify({ ok: true, selector: q, at: [Math.round(x), Math.round(y)], gate: gate(el), box: boxOf(el), receipt: receipt(el) });
       }
-      if (how === 'probe') return JSON.stringify({ ok: true, gate: gate(el), box: boxOf(el) });
+      if (how === 'probe') return JSON.stringify({ ok: true, gate: gate(el), box: boxOf(el), receipt: receipt(el) });
       if (how === 'press') { el.click(); return JSON.stringify({ ok: true }); }
       if (how === 'scroll') {
         el.scrollIntoView({ block: 'center', inline: 'nearest' });
@@ -413,7 +413,7 @@ enum PageScripts {
     }
 
     static func call(_ body: String, _ args: [Any]) -> String {
-        helpers + body + "(" + args.map(json).joined(separator: ", ") + ")"
+        helpers + FormReceipt.script + body + "(" + args.map(json).joined(separator: ", ") + ")"
     }
 
     /// The page's visible controls and headings, with the element list kept
@@ -480,9 +480,24 @@ enum PageScripts {
         (function () {
           var el = document.activeElement;
           if (!el || el === document.body || el === document.documentElement) return JSON.stringify({ ok: true, gate: null });
-          return JSON.stringify({ ok: true, gate: gate(el), box: boxOf(el) });
+          return JSON.stringify({ ok: true, gate: gate(el), box: boxOf(el), receipt: receipt(el) });
         })
         """#, [])
+    }
+
+    /// The fields of the one form in the page that posts to `address`, for a
+    /// send held as it leaves (AgentControl.vet), where no element says
+    /// which form it was. None, or more than one such form: nothing.
+    static func sending(to address: String) -> String {
+        call(#"""
+        (function (address) {
+          function bare(u) { return String(u).split('#')[0]; }
+          var found = Array.prototype.filter.call(document.querySelectorAll('form'), function (f) {
+            return String(formProperty(f, 'method')).toLowerCase() === 'post' && bare(formProperty(f, 'action')) === bare(address);
+          });
+          return JSON.stringify({ ok: true, receipt: found.length === 1 ? receiptOf(found[0]) : null });
+        })
+        """#, [address])
     }
 
     /// Every box of the page's that holds something, shadow roots included,

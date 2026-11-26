@@ -614,6 +614,11 @@ final class AgentSession: ObservableObject, Identifiable {
     fileprivate var sites = Set<String>()
     /// An action held for your click (AgentGate), and what to do with the answer.
     @Published fileprivate(set) var held: HeldAction?
+    /// What the held form holds, for the card and nothing else (FormReceipt):
+    /// never in an answer to the agent, the log or the task's record.
+    @Published fileprivate(set) var receipt: FormReceipt?
+    /// The receipt was read after the send had begun (vet).
+    fileprivate(set) var receiptIsLate = false
     /// What its pages asked with alert, confirm or prompt since it last heard,
     /// by tab: dismissed, and told (AgentControl.dialog).
     fileprivate var dialogs: [Tab.ID: [[String: Any]]] = [:]
@@ -1407,7 +1412,7 @@ final class AgentControl: ObservableObject {
     /// answer: yours, or none within `holdFor`, or the session going. The
     /// agent's call waits for it, and gets the result, or why not.
     private func ask(_ hold: AgentGate.Hold, _ session: AgentSession, within patience: TimeInterval = AgentControl.holdFor,
-                     then: @escaping (HeldAction.Answer) -> Void) {
+                     showing receipt: FormReceipt? = nil, then: @escaping (HeldAction.Answer) -> Void) {
         var answered = false
         let began = ProcessInfo.processInfo.systemUptime
         let held = HeldAction(hold: hold, since: began) { [weak session] verdict in
@@ -1415,6 +1420,7 @@ final class AgentControl: ObservableObject {
             answered = true
             session?.heldTime += ProcessInfo.processInfo.systemUptime - began
             session?.held = nil
+            session?.receipt = nil
             if verdict == .approved, let site = hold.site { session?.sites.insert(site) }
             // For the panel's task record (TaskLedger).
             if let session, session.panel {
@@ -1428,6 +1434,8 @@ final class AgentControl: ObservableObject {
             }
             then(verdict)
         }
+        session.receipt = receipt
+        session.receiptIsLate = false
         session.held = held
         Self.log.notice("held for your click: \(hold.reason.rawValue, privacy: .public)")
         DispatchQueue.main.asyncAfter(deadline: .now() + patience) { [weak session] in
@@ -1606,6 +1614,16 @@ final class AgentControl: ObservableObject {
                     session?.sendGrant = 0
                     guard verdict == .approved, let self, let session, self.live(session) else { return done(false) }
                     done(true)
+                }
+                // What its form holds, for the card, read once the question
+                // is up so that nothing waits on the page to ask it. Only
+                // the page's own form: a frame's isn't looked into.
+                if fromMain, toMain, let held = session.held {
+                    self.page(tab, session, PageScripts.sending(to: url.absoluteString)) { [weak session] result in
+                        guard let session, session.held === held, case .success(let out) = result else { return }
+                        session.receiptIsLate = true
+                        session.receipt = FormReceipt(out["receipt"])
+                    }
                 }
             }
         }
@@ -1947,11 +1965,13 @@ final class AgentControl: ObservableObject {
                     guard let hold = AgentGate.hold(enter: target, on: tab.pageAddress, rules: rules) else { return press() }
                     if self.handsOverSignIn(hold, tab, session, answer) { return }
                     defer { self.spotlight(tab, session, PageScripts.focused()) }
-                    self.ask(hold, session) { verdict in
+                    let shown = FormReceipt(seen["receipt"])
+                    self.ask(hold, session, showing: shown) { verdict in
                         guard verdict == .approved else { return answer(Self.declined(hold, verdict)) }
                         // Still what was asked about.
                         self.page(tab, session, PageScripts.focused()) { again in
-                            guard case .success(let now) = again, AgentGate.Target(now["gate"])?.fingerprint == target.fingerprint else {
+                            guard case .success(let now) = again, AgentGate.Target(now["gate"])?.fingerprint == target.fingerprint,
+                                  FormReceipt(now["receipt"]) == shown else {
                                 return answer(AgentRefusal(code: "changed", message: "The page changed while waiting: not done",
                                                            hint: "Read the page again and ask once more if it still applies.").said)
                             }
@@ -2288,12 +2308,16 @@ final class AgentControl: ObservableObject {
                     return press(seen)
                 }
                 if self.handsOverSignIn(hold, tab, session, answer) { return }
-                self.ask(hold, session) { verdict in
+                // The form's fields only for a button that would send it.
+                let shown = target.submits ? FormReceipt(seen["receipt"]) : nil
+                self.ask(hold, session, showing: shown) { verdict in
                     guard verdict == .approved else { return answer(Self.declined(hold, verdict)) }
                     // Asked about this element: it must still be it, and
-                    // where it is now is where the click goes.
+                    // where it is now is where the click goes. What the card
+                    // listed of its form must still be what it holds.
                     aim { again in
-                        guard case .success(let now) = again, AgentGate.Target(now["gate"])?.fingerprint == hold.fingerprint else {
+                        guard case .success(let now) = again, AgentGate.Target(now["gate"])?.fingerprint == hold.fingerprint,
+                              (target.submits ? FormReceipt(now["receipt"]) : nil) == shown else {
                             return answer(AgentRefusal(code: "changed", message: "The page changed while waiting: not done",
                                                        hint: "Read the page again and ask once more if it still applies.").said)
                         }
@@ -2346,10 +2370,12 @@ final class AgentControl: ObservableObject {
                 target.enter = true
                 guard let hold = AgentGate.hold(enter: target, on: tab.pageAddress, rules: rules) else { return submit() }
                 if self.handsOverSignIn(hold, tab, session, answer) { return }
-                self.ask(hold, session) { verdict in
+                let shown = FormReceipt(probed["receipt"])
+                self.ask(hold, session, showing: shown) { verdict in
                     guard verdict == .approved else { return answer(Self.declined(hold, verdict)) }
                     touch("probe", nil) { again in
-                        guard AgentGate.Target(again["gate"])?.fingerprint == target.fingerprint else {
+                        guard AgentGate.Target(again["gate"])?.fingerprint == target.fingerprint,
+                              FormReceipt(again["receipt"]) == shown else {
                             return answer(AgentRefusal(code: "changed", message: "The page changed while waiting: not done",
                                                        hint: "Read the page again and ask once more if it still applies.").said)
                         }
