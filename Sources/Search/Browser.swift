@@ -1752,6 +1752,8 @@ final class Browser: NSObject, ObservableObject {
             for history in Spaces.histories(of: profileID) { history.forget() }
             // The tabs Search closed by itself are pages you have been to.
             archive.clear()
+            // So is where Claude's tasks went (TaskLedger).
+            TaskLedger.removeAll()
         }
         // Where links went is a list of where you have been, too.
         let choices = LinkChooser.cleared(prefs.linkChoices, spaces: Set(forgotten))

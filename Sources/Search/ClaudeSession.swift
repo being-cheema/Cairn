@@ -72,6 +72,9 @@ final class ClaudeSession: ObservableObject {
     private let options: () -> ClaudeCode.Options
     /// The window the panel is in: where the run works.
     private let window: () -> Browser?
+    private let playbooks: () -> [Playbook]
+    /// Writes a task's record; true when it adds to one already written.
+    private let keep: @MainActor (TaskRecord, Bool) -> Void
     /// What lets this run, and only this one, in without a question
     /// (PanelRun); new with each run.
     private var pass = ""
@@ -107,13 +110,17 @@ final class ClaudeSession: ObservableObject {
          tool: URL? = nil,
          world: String? = Store.world,
          options: @escaping () -> ClaudeCode.Options = { ClaudeCode.Options() },
-         window: @escaping () -> Browser? = { nil }) {
+         window: @escaping () -> Browser? = { nil },
+         playbooks: @escaping () -> [Playbook] = { Playbooks.all() },
+         keep: @escaping @MainActor (TaskRecord, Bool) -> Void = { TaskLedger.save($0, amending: $1) }) {
         self.executable = executable
         self.verify = verify
         self.tool = tool
         self.world = world
         self.options = options
         self.window = window
+        self.playbooks = playbooks
+        self.keep = keep
         // Quitting is Stop too: the run's folder goes with it, rather than
         // being left in the temporary folder for good.
         quitting = NotificationCenter.default.addObserver(
@@ -130,14 +137,22 @@ final class ClaudeSession: ObservableObject {
     func submit() {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !running else { return }
+        // A playbook your message calls goes in with this Send (Playbooks).
+        // Any other leading "/" is said to be your words: Claude Code reads a
+        // message that begins with one as a command of its own.
+        let called = Playbooks.called(by: text, among: text.hasPrefix("/") ? playbooks() : [])
+        let words = called.map { Playbooks.message($0.book, words: $0.words) }
+            ?? (text.hasPrefix("/") ? "My message: " + text : text)
         if process == nil, !start() { return }
         problem = nil
         draft = ""
         let named = mentions
         mentions = []
         var turn = Turn(question: text)
-        turn.attached = named.map(\.label)
+        turn.attached = (called.map { ["Playbook: \($0.book.name)" + ($0.book.builtIn ? "" : " (yours)")] } ?? []) + named.map(\.label)
         turns.append(turn)
+        record = TaskRecord(prompt: AgentRules.scrubbed(text), model: options().model)
+        recorded = false
         seenTools = [:]
         streamed = false
         writing = false
@@ -147,14 +162,14 @@ final class ClaudeSession: ObservableObject {
         running = true
         // This Send is the consent for what the run does to answer it.
         AgentControl.shared.panelArm(pass: pass, true)
-        guard !named.isEmpty else { return write(text) }
+        guard !named.isEmpty else { return write(words) }
         // What was named is read now, once. Stopped meanwhile, nothing goes.
         let mine = generation
         Task { @MainActor [weak self] in
             let tabs = self?.browser?.tabs ?? []
             let attached = await Mentions.gather(named, among: tabs)
             guard let self, self.generation == mine, self.running else { return }
-            self.write(Mentions.message(text, with: attached))
+            self.write(Mentions.message(words, with: attached))
         }
     }
 
@@ -170,10 +185,49 @@ final class ClaudeSession: ObservableObject {
     /// A conversation from the start: the run ended, what was said forgotten.
     func newChat() {
         stop()
+        record = nil
         turns = []
         problem = nil
         draft = ""
         mentions = []
+    }
+
+    // MARK: - the ledger
+
+    /// What the turn in hand has done (TaskLedger). Written when it ends, and
+    /// again for what arrives after: its tabs may be handed over later.
+    private var record: TaskRecord?
+    private var recorded = false
+
+    private func noted(_ change: (inout TaskRecord) -> Void) {
+        guard var now = record else { return }
+        change(&now)
+        guard now != record else { return }
+        record = now
+        if recorded { keep(now, true) }
+    }
+
+    /// A site one of its tabs went to (AgentControl).
+    func visited(_ host: String) { noted { $0.visited(host) } }
+
+    /// A question held for you, and how it was answered (AgentControl).
+    func asked(reason: String, what: String, answer: String) {
+        noted { $0.asked(reason: reason, what: AgentRules.scrubbed(what), answer: answer) }
+    }
+
+    /// The turn has ended: its record goes to the disk.
+    private func conclude(stopped: Bool, failed: Bool) {
+        guard !recorded, var now = record else { return }
+        now.outcome = TaskRecord.outcome(stopped: stopped, failed: failed, approvals: now.approvals)
+        record = now
+        recorded = true
+        keep(now, false)
+    }
+
+    /// A new task seeded from an earlier one: in the box, for you to send.
+    func followUp(_ earlier: TaskRecord) {
+        newChat()
+        draft = earlier.followUp
     }
 
     /// A card for the turn in hand; false when there is no room or no turn.
@@ -187,6 +241,13 @@ final class ClaudeSession: ObservableObject {
     func left(_ tabs: [Tab.ID]) {
         guard let last = turns.indices.last else { return }
         turns[last].left += tabs.filter { !turns[last].left.contains($0) }
+        let open = tabs.compactMap { id in browser?.tabs.first { $0.id == id && !$0.shy } }
+        noted { record in
+            for tab in open {
+                guard let url = tab.pageAddress, ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { continue }
+                record.left(title: tab.title, url: AgentRules.url(url.absoluteString))
+            }
+        }
     }
 
     /// The window the panel is in, where its run works and asks.
@@ -363,6 +424,7 @@ final class ClaudeSession: ObservableObject {
                 turns[last].done = true
                 running = false
                 disarm()
+                conclude(stopped: false, failed: false)
             case .failed(let why):
                 // The program says its trouble twice, as words and as the
                 // result: once is enough.
@@ -395,6 +457,7 @@ final class ClaudeSession: ObservableObject {
         turns[last].done = true
         running = false
         disarm()
+        conclude(stopped: why == Self.stopped, failed: true)
     }
 
     /// Its own words, with what to do about the ones people meet.

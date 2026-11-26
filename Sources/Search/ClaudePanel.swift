@@ -20,6 +20,9 @@ struct ClaudePanel: View {
     /// The row of the "@" list the keys are on, and a list put away with esc.
     @State private var picked = 0
     @State private var dismissed: String?
+    /// The playbooks, read from their folder each time a "/" begins the box.
+    @State private var books: [Playbook] = []
+    @State private var showingHistory = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -78,6 +81,10 @@ struct ClaudePanel: View {
                 }
             }
             Spacer(minLength: 0)
+            Door(icon: "clock", help: "Task History") { showingHistory.toggle() }
+                .popover(isPresented: $showingHistory, arrowEdge: .bottom) {
+                    TaskHistory(session: session) { showingHistory = false }
+                }
             Door(icon: "square.and.pencil", help: "New Chat") { session.newChat() }
                 .opacity(session.turns.isEmpty && session.problem == nil ? 0.35 : 1)
                 .disabled(session.turns.isEmpty && session.problem == nil)
@@ -189,25 +196,31 @@ struct ClaudePanel: View {
     private var composer: some View {
         VStack(alignment: .leading, spacing: 6) {
             if !choices.isEmpty { MentionList(choices: choices, picked: min(picked, choices.count - 1)) { take($0) } }
+            if !plays.isEmpty { PlaybookList(books: plays, picked: min(picked, plays.count - 1)) { take($0) } }
             if !session.mentions.isEmpty { chips }
             HStack(alignment: .bottom, spacing: 8) {
-                TextField("", text: $session.draft, prompt: Text("Ask Claude… @ for a tab").foregroundStyle(Palette.muted), axis: .vertical)
+                TextField("", text: $session.draft, prompt: Text("Ask Claude… @ tab, / playbook").foregroundStyle(Palette.muted), axis: .vertical)
                     .textFieldStyle(.plain)
                     .font(.system(size: 13))
                     .foregroundStyle(Palette.ink)
                     .lineLimit(1...6)
                     .focused($typing)
                     .onSubmit {
-                        if choices.isEmpty { session.submit() } else { take(choices[min(picked, choices.count - 1)]) }
+                        if !choices.isEmpty { take(choices[min(picked, choices.count - 1)]) }
+                        else if !plays.isEmpty { take(plays[min(picked, plays.count - 1)]) }
+                        else { session.submit() }
                     }
                     .onKeyPress(.upArrow) { move(-1) }
                     .onKeyPress(.downArrow) { move(1) }
                     .onKeyPress(.escape) {
-                        guard !choices.isEmpty else { return .ignored }
+                        guard !choices.isEmpty || !plays.isEmpty else { return .ignored }
                         dismissed = session.draft
                         return .handled
                     }
-                    .onChange(of: session.draft) { _, _ in picked = 0 }
+                    .onChange(of: session.draft) { before, now in
+                        picked = 0
+                        if now.hasPrefix("/"), !before.hasPrefix("/") || books.isEmpty { books = Playbooks.all() }
+                    }
                     .disabled(session.running)
                     .padding(.vertical, 5)
                 send
@@ -251,9 +264,24 @@ struct ClaudePanel: View {
         return out
     }
 
+    /// What the "/" being typed may become.
+    private var plays: [Playbook] {
+        guard !session.running, session.draft != dismissed, let query = Playbooks.query(in: session.draft) else { return [] }
+        // A name typed in full is no longer being looked for: Return sends it.
+        if books.contains(where: { $0.name == query.lowercased() }) { return [] }
+        return Playbooks.matching(query, among: books)
+    }
+
+    /// Writes its name in the box. Nothing is sent: that is your Return.
+    private func take(_ book: Playbook) {
+        session.draft = "/" + book.name + " "
+        typing = true
+    }
+
     private func move(_ by: Int) -> KeyPress.Result {
-        guard !choices.isEmpty else { return .ignored }
-        picked = (min(picked, choices.count - 1) + by + choices.count) % choices.count
+        let count = choices.isEmpty ? plays.count : choices.count
+        guard count > 0 else { return .ignored }
+        picked = (min(picked, count - 1) + by + count) % count
         return .handled
     }
 

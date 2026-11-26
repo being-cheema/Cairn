@@ -58,6 +58,12 @@ and a public name pointing inside can still be fetched by a page's own script.
 Treat the approval card as a strong guard, not a proof. Claude can be wrong,
 and a page can try to talk it into things.
 
+**Playbooks.** Type `/` at the start of the panel's box for `/compare-tabs`,
+`/audit-a11y`, `/extract-data`, `/repro-check` and your own: Markdown files in
+`~/Library/Application Support/Cairn/Skills/`, with `name`, `description` and
+`argument_hint` frontmatter. A playbook is words added to your message when you
+press Send. It gives Claude no new tool or permission.
+
 **Not in this build:** the upstream's summarise-and-ask AI add-on is in the
 source but switched off (`AI.shipped`).
 
@@ -107,7 +113,8 @@ On purpose:
 | Cookies and site data | WebKit's own store for the app | The sites that set them. |
 | Extensions | `~/Library/Application Support/Cairn/Extensions/`, their data in WebKit's extension store | Each extension, within the permissions you accepted. |
 | Folder sync, if you turn it on | A `Cairn Sync` folder inside the folder you pick | Whoever can read that folder. |
-| What you ask Claude, and what it reads for you | Sent to Anthropic by your own Claude Code | Anthropic, under your account's terms. Nothing goes until you press Send or your agent asks. Cairn keeps no copy of the chat. |
+| What you ask Claude, and what it reads for you | Sent to Anthropic by your own Claude Code | Anthropic, under your account's terms. Nothing goes until you press Send or your agent asks. Cairn doesn't save Claude's replies. |
+| A record of each side-panel task: what you typed, the model, the sites, how approvals were answered, and the titles and addresses of tabs left to you | Files in `~/Library/Application Support/Cairn/Tasks/`, readable by your account alone, at most 200 | You. Delete them in the panel's Task History. Clearing all history deletes them too. |
 | Anything else | Nowhere. This project has no server. | — |
 
 A **private tab** (`⇧⌘N`) has its own cookie jar and leaves nothing behind when it closes.

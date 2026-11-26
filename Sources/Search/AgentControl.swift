@@ -571,6 +571,8 @@ final class AgentSession: ObservableObject, Identifiable {
     /// The person said no to a site change (AgentGate's `leave`): its tabs
     /// close when it ends, however it ends (AgentEnd.handsOver).
     fileprivate var declined = false
+    /// It is being ended: what resolves its question now is not your answer.
+    fileprivate var ending = false
     /// You signed in for it (Pass the Baton): from then on any no of yours
     /// closes its tabs when it ends, the account with them.
     fileprivate var usedBaton = false
@@ -1007,6 +1009,7 @@ final class AgentControl: ObservableObject {
         session.hello?(AgentRefusal(code: "stopped", message: "Stopped in \(Brand.name)").said)
         session.hello = nil
         // Nothing asked is left waiting on a session that has gone.
+        session.ending = true
         session.held?.resolve(.declined)
         let handsOver = how.handsOver(declined: session.declined)
         lastEnd = ["how": how.why, "handedOver": handsOver]
@@ -1409,6 +1412,11 @@ final class AgentControl: ObservableObject {
             session?.heldTime += ProcessInfo.processInfo.systemUptime - began
             session?.held = nil
             if verdict == .approved, let site = hold.site { session?.sites.insert(site) }
+            // For the panel's task record (TaskLedger).
+            if let session, session.panel {
+                session.browser?.claude.asked(reason: hold.reason.rawValue, what: hold.summary,
+                                              answer: session.ending ? "ended" : "\(verdict)")
+            }
             // What you approved may be a form, and sending it is asked about
             // again as it leaves (vet): this Approve answers that too.
             if verdict == .approved, hold.reason != .leave, hold.reason != .signIn {
@@ -1558,8 +1566,15 @@ final class AgentControl: ObservableObject {
     /// language, script's form.submit() included. It waits for you unless your
     /// Approve just covered it. What a script sends with fetch or XHR is no
     /// navigation, and WebKit asks nothing about it: that stays beyond this.
-    func vet(_ action: WKNavigationAction, on tab: Tab, _ done: @escaping @MainActor (Bool) -> Void) {
-        guard let session, session.own.contains(tab.id), let url = action.request.url else { return done(true) }
+    func vet(_ action: WKNavigationAction, on tab: Tab, _ allow: @escaping @MainActor (Bool) -> Void) {
+        guard let session, session.own.contains(tab.id), let url = action.request.url else { return allow(true) }
+        // Where the panel's task went, for its record (TaskLedger).
+        let toTab = action.targetFrame?.isMainFrame ?? true
+        let done: @MainActor (Bool) -> Void = { [weak session] allowed in
+            if allowed, toTab, let session, session.panel, ["http", "https"].contains(url.scheme?.lowercased() ?? ""),
+               let host = url.host() { session.browser?.claude.visited(host) }
+            allow(allowed)
+        }
         let screen = NavigationPolicyEngine.screen(url)
         switch screen {
         case .notWeb: return done(true)
