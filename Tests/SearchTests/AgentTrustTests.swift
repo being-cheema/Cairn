@@ -182,7 +182,7 @@ final class AgentTrustTests: XCTestCase {
 
     /// There is no switch to turn agents on any more: nothing in the prefs
     /// for one, and Settings › About › Developer keeps only the list of
-    /// agents you always allow, each with Forget.
+    /// agents you always allow, each with Revoke (AgentDrawer.swift).
     func testThereIsNoSwitchToTurnOn() throws {
         func source(_ name: String) throws -> String {
             try String(contentsOfFile: #filePath.replacingOccurrences(of: "Tests/SearchTests/AgentTrustTests.swift",
