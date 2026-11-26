@@ -1185,7 +1185,7 @@ struct FromTopLeft<Content: View>: View {
 /// the list itself is a small card under the sign-in box. A press on the
 /// card picks an account; anywhere else it is the page's, as if the box
 /// weren't there — the sign-in box itself above all.
-private final class AccountHost: NSHostingView<FromTopLeft<AccountList>> {
+final class AccountHost: NSHostingView<FromTopLeft<AccountList>> {
     /// The sign-in box, from the page's top-left (Browser.Suggesting.spot).
     var spot = CGRect.zero
     /// Where the card is drawn, from the host's top-left (AccountList.onFrame).
@@ -1209,6 +1209,49 @@ private final class AccountHost: NSHostingView<FromTopLeft<AccountList>> {
         // Only the card, where it really is.
         return RoundedRectangle(cornerRadius: 10, style: .continuous).path(in: card).contains(inside)
             ? super.hitTest(point) : nil
+    }
+}
+
+/// The accounts under a sign-in box over a page that isn't on a PaneStage:
+/// a site's sized pop-up (PopupWindowView).
+/// Drawn by SwiftUI over the page, they were under WebKit's page there, as
+/// they once were over the stage (#667): the list was up, nobody saw it,
+/// and a click under the box went to the page (idea 1107). It is a host of
+/// its own, laid over the page as large as it, taking a click only on its
+/// card.
+struct CardsOverPage: View {
+    @ObservedObject var browser: Browser
+    let tab: Tab.ID
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            if let asked = browser.suggesting, asked.tab == tab {
+                AccountsOver(browser: browser, asked: asked)
+            }
+        }
+    }
+}
+
+private struct AccountsOver: NSViewRepresentable {
+    let browser: Browser
+    let asked: Browser.Suggesting
+
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: AccountHost, context: Context) -> CGSize? {
+        guard let width = proposal.width, let height = proposal.height, width.isFinite, height.isFinite else { return nil }
+        return CGSize(width: width, height: height)
+    }
+
+    func makeNSView(context: Context) -> AccountHost {
+        let host = AccountHost(rootView: FromTopLeft(content: AccountList(browser: browser, asked: asked)))
+        host.sizingOptions = []
+        return host
+    }
+
+    func updateNSView(_ host: AccountHost, context: Context) {
+        var view = AccountList(browser: browser, asked: asked)
+        view.onFrame = { [weak host] in host?.card = $0 }
+        host.spot = asked.spot
+        host.rootView = FromTopLeft(content: view)
     }
 }
 

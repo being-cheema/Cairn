@@ -209,6 +209,6 @@ final class CardNamesTests: XCTestCase {
                 XCTAssertFalse(line.range(of: #"\bSearch (›|is|can|opens)|\b(in|on|with) Search\b"#, options: .regularExpression) != nil, line)
             }
         }
-        XCTAssertEqual(WhatsNew.notes.first?.version, "1.0.19")
+        XCTAssertEqual(WhatsNew.notes.first?.version, "1.0.21")
     }
 }

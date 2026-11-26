@@ -41,7 +41,12 @@ enum WhatsNew {
 
     /// Every switch worth meeting, the leading ones first, then oldest
     /// last. The card shows the leading ones still off, this version's, and
-    /// the older ones still off.
+    /// the older ones still off. Only switches that are off unless turned
+    /// on: the ones on for everyone who never touched them since 25 Nov 2026
+    /// (HTTPS first, video keys, smooth wheel, the loading line, unread
+    /// counts, swipe back closes, Home tiles, site styles, commands, Capture,
+    /// pin folders) left the card then, so turning one off isn't asked about
+    /// again.
     static let toggles: [Toggle] = [
         // Leading, in this order (see the top of this file).
         Toggle(title: "Sync with iCloud", detail: "Your tabs, pins and spaces on your iPhone and your other Macs, end-to-end encrypted.",
@@ -55,44 +60,62 @@ enum WhatsNew {
         Toggle(title: "AI on pages", detail: "Summarize a page or ask about it. Choose where it runs in Settings › AI.",
                since: "1.0.5", get: { $0.ai }, set: { $0.ai = $1 }),
     ] : []) + [
+        Toggle(title: "Double click to rename", detail: "Click on the tab you're on to rename it, as Rename in its menu does, instead of editing its address.",
+               since: "1.0.22", get: { $0.tabClickRenames }, set: { $0.tabClickRenames = $1 },
+               shown: { !$0.iconColumn }),
+
+        Toggle(title: "Backspace goes back", detail: "⌫ goes back a page and ⇧⌫ forward, when you aren't typing in a field.",
+               since: "1.0.21", get: { $0.backspaceGoesBack }, set: { $0.backspaceGoesBack = $1 }),
+
+        Toggle(title: "Hide the page behind the field", detail: "⌘T's and ⌘L's field over a plain ground, the page out of sight instead of dimmed.",
+               since: "1.0.21", get: { $0.fieldHidesPage }, set: { $0.fieldHidesPage = $1 }),
+
+        Toggle(title: "Return takes the top suggestion", detail: "Return goes to the place on top of the field's list as you type, as in Arc's command bar; ↑ lets go of it.",
+               since: "1.0.21", get: { $0.returnTakesTop }, set: { $0.returnTakesTop = $1 }),
+
         Toggle(title: "Links from pins open in a new tab", detail: "A link clicked in a pinned tab opens in a tab of its own, and the pin stays on its page.",
                since: "1.0.20", get: { $0.pinLinksOpenTabs }, set: { $0.pinLinksOpenTabs = $1 }),
+
+        Toggle(title: "Keep the window when its last tab closes", detail: "⌘W on the last, empty tab leaves it there, as in Arc; ⇧⌘W still closes the window.",
+               since: "1.0.20", get: { $0.keepWindowAfterLast }, set: { $0.keepWindowAfterLast = $1 }),
+
+        Toggle(title: "Clicking the tab you're on keeps its name", detail: "With the address bar always shown, the address is edited there or with ⌘L.",
+               since: "1.0.20", get: { $0.tabClickKeepsName }, set: { $0.tabClickKeepsName = $1 },
+               shown: { $0.addressLine && !$0.iconColumn && !$0.tabClickRenames }),
+
+        Toggle(title: "Fade scroll bars", detail: "Thin bars over the page that come up as it scrolls and fade when it stops, even with a mouse.",
+               since: "1.0.20", get: { $0.scrollbarsFade }, set: { $0.scrollbarsFade = $1 }),
+
+        Toggle(title: "Update ready, in the window", detail: "When a new version is waiting, \"Update ready\" and Restart at the foot of the sidebar, or a pill by the tabs. On; × hides it until the next one.",
+               since: "1.0.20", get: { $0.showsUpdateReady }, set: { $0.showsUpdateReady = $1 }),
+
+        Toggle(title: "Bookmarks bar only on new tabs", detail: "The bookmarks bar above a new tab only, gone once a page opens, as in Chrome and Edge.",
+               since: "1.0.20", get: { $0.bookmarksNewTabOnly }, set: { $0.bookmarksNewTabOnly = $1 },
+               shown: { $0.bookmarksBar && !$0.sideBookmarks }),
 
         Toggle(title: "Bookmarks bar in the sidebar", detail: "The bookmarks bar at the top of the sidebar, in every space.",
                since: "1.0.19", get: { $0.bookmarksInSidebar }, set: { $0.bookmarksInSidebar = $1 }),
         Toggle(title: "The field in the middle of the window", detail: "⌘T's and ⌘L's field centred on the window and higher up, as in Arc.",
                since: "1.0.19", get: { $0.fieldOnWindow }, set: { $0.fieldOnWindow = $1 }),
-        Toggle(title: "Smooth scrolling with a mouse wheel", detail: "Each notch glides, as in Chrome. A trackpad is left as it is.",
-               since: "1.0.19", get: { $0.wheelGlides }, set: { $0.wheelGlides = $1 }),
-        Toggle(title: "A loading line with the tabs hidden", detail: "A thin line along the page's top while it loads, with the tabs folded away.",
-               since: "1.0.19", get: { $0.showsLoadingLine }, set: { $0.showsLoadingLine = $1 }),
-        Toggle(title: "Click the tab you're on to edit its address", detail: "Without the site card; Site Information… stays on the right-click.",
-               since: "1.0.19", get: { $0.tabClickAddressOnly }, set: { $0.tabClickAddressOnly = $1 }),
+        Toggle(title: "Click the tab you're on to edit its address", detail: "Without the site card.",
+               since: "1.0.19", get: { $0.tabClickAddressOnly }, set: { $0.tabClickAddressOnly = $1 },
+               shown: { $0.iconColumn || !($0.tabClickRenames || $0.tabClickKeepsName && $0.addressLine) }),
         Toggle(title: "Touch ID before filling a password", detail: "Touch ID, or your Mac's password, before a saved password goes into a page.",
                since: "1.0.19", get: { $0.asksBeforeFilling }, set: { $0.asksBeforeFilling = $1 }),
         Toggle(title: "Icons only on the bookmarks bar", detail: "Each bookmark its site's icon, its name on hover. Folders keep their names.",
                since: "1.0.19", get: { $0.bookmarksIconsOnly }, set: { $0.bookmarksIconsOnly = $1 }),
-        Toggle(title: "Unread counts on pinned tabs", detail: "WhatsApp's or Discord's count as a badge on its pin.",
-               since: "1.0.19", get: { $0.showsPinCounts }, set: { $0.showsPinCounts = $1 }),
 
         Toggle(title: "Sidebar button", detail: "Beside the window's buttons, it hides the sidebar as ⌘S does.",
                since: "1.0.18", get: { $0.foldButton }, set: { $0.foldButton = $1 }),
         Toggle(title: "Narrow to icons", detail: "Pull the sidebar narrower and it becomes a strip of site icons.",
                since: "1.0.18", get: { $0.narrowsToIcons }, set: { $0.narrowsToIcons = $1 }),
 
-        Toggle(title: "Swipe back closes a link's tab", detail: "On the page a link opened, a swipe back closes the tab and takes you to the one you were on.",
-               since: "1.0.17", get: { $0.swipeBackCloses }, set: { $0.swipeBackCloses = $1 }),
-
         Toggle(title: "⌘T finds your open tabs", detail: "As you type in ⌘T's field, a matching open tab or pin comes first.",
                since: "1.0.17", get: { $0.arcTabPopup }, set: { $0.arcTabPopup = $1 },
                shown: { $0.floatingNewTab }),
-        Toggle(title: "Home bookmarks on a new tab", detail: "The sites of your bookmark folder called Home, as tiles.",
-               since: "1.0.17", get: { $0.homeGrid }, set: { $0.homeGrid = $1 }),
         Toggle(title: "One button per space", detail: "Every space beside the bookmarks, one click away.",
                since: "1.0.17", get: { $0.spaceButtons }, set: { $0.spaceButtons = $1 },
                shown: { $0.usesSpaces }),
-        Toggle(title: "Try HTTPS first", detail: "An http:// page loads over HTTPS where the site has it.",
-               since: "1.0.17", get: { $0.triesHTTPSFirst }, set: { $0.triesHTTPSFirst = $1 }),
 
         Toggle(title: "Always show the address bar", detail: "The page's full address stays in sight, to type in.",
                since: "1.0.16", get: { $0.addressLine }, set: { $0.addressLine = $1 }),
@@ -119,21 +142,11 @@ enum WhatsNew {
         Toggle(title: "Slide the column in and out", detail: "An eased slide for ⌘S and the column that hides.",
                since: "1.0.15", get: { $0.slidesColumn }, set: { $0.slidesColumn = $1 }),
 
-        Toggle(title: "Your own style for a site", detail: "Edit Site Style… in the View menu: your CSS for the site you're on, as Arc's Boosts.",
-               since: "1.0.14", get: { $0.sitesStyles }, set: { $0.sitesStyles = $1 }),
         Toggle(title: "Keep the card in full screen", detail: "The page keeps its room and rounded corners when the window fills the screen.",
                since: "1.0.14", get: { $0.cardsInFullScreen }, set: { $0.cardsInFullScreen = $1 },
                shown: { $0.sidebar && $0.cards }),
         Toggle(title: "⌘-click on a pin opens a new tab", detail: "As in Arc, or takes a page that wandered off into the loose tabs.",
                since: "1.0.14", get: { $0.pinCommandOpensTab }, set: { $0.pinCommandOpensTab = $1 }),
-
-        Toggle(title: "Commands in the address field", detail: "Type the name of any menu command or setting, as in Arc's Command Bar.",
-               since: "1.0.13", get: { $0.commandBar }, set: { $0.commandBar = $1 }),
-        Toggle(title: "Capture", detail: "View › Capture… takes a picture of part of a page, or all of it.",
-               since: "1.0.13", get: { $0.capturesPages }, set: { $0.capturesPages = $1 }),
-        Toggle(title: "Folders in pinned rows", detail: "Pinned rows in folders that fold, as in Arc.",
-               since: "1.0.13", get: { $0.pinFolders }, set: { $0.pinFolders = $1 },
-               shown: { $0.listsPins }),
 
         Toggle(title: "Send links to a space", detail: "Links to the sites you choose open in their space, with its sign-ins, as in Arc.",
                since: "1.0.11", get: { $0.sendsLinksToSpaces }, set: { $0.sendsLinksToSpaces = $1 },
@@ -200,6 +213,8 @@ enum WhatsNew {
     ]
 
     static let releases: [Release] = [
+        Release(version: "1.0.21"),
+        Release(version: "1.0.20"),
         Release(version: "1.0.19"),
         Release(version: "1.0.18"),
         Release(version: "1.0.17"),
@@ -281,6 +296,25 @@ enum WhatsNew {
 
     /// Newest first.
     static let notes: [Notes] = [
+        Notes(
+            version: "1.0.21", date: "26 November 2026",
+            headline: "Fixes and new ways from Search 1.0.20, 1.0.21 and after, the project \(Brand.name) is built from.",
+            new: [
+                "Rest the pointer on a pin to see a picture of its page, in Settings › Spaces & Pins.",
+                "Developer Mode, site by site: a bar with the whole address, Web Inspector and reloading without the cache. On for pages on this Mac.",
+                "Export Spaces writes every space, with its pins, folders and open tabs, to a file. Spaces can be brought over from Ardia, Yab and Dia.",
+                "Screenshots can appear in Downloads, copy-only captures, Paste and Go, and ⌥-click to hide every element like one.",
+                "Backspace can go back, Return can take the top suggestion, and a click on the tab you're on can rename it. All off unless turned on.",
+            ],
+            better: [
+                "Tabs and pins show site icons by default, and many switches that made sense are now on until you turn them off.",
+                "Much quicker with hundreds of tabs, and lighter in memory, at rest above all.",
+            ],
+            fixed: [
+                "YouTube signing you out, sign-in windows that wouldn't open, Open in Desktop App on SharePoint, and downloads that failed after Replace.",
+                "Floating video, Split View, swiping back, the folded sidebar, pinned tabs, Hide Elements and sleeping tabs each had fixes of their own.",
+            ]
+        ),
         Notes(
             version: "1.0.19", date: "26 November 2026",
             headline: "The first Cairn: Claude browses in tabs of its own, and you approve what matters.",
