@@ -333,4 +333,544 @@ final class AgentDevBridgeTests: XCTestCase {
             XCTAssertNotEqual(ClaudeCode.describe(tool: name), name.prefix(1).uppercased() + name.dropFirst().replacingOccurrences(of: "_", with: " "))
         }
     }
+
+    // MARK: - your click, and nothing else
+
+    private func clickable() -> (NSWindow, NSView) {
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 200, height: 100), styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        let view = NSView(frame: NSRect(x: 20, y: 20, width: 60, height: 20))
+        window.contentView?.addSubview(view)
+        return (window, view)
+    }
+
+    private func mouse(in window: NSWindow, at point: NSPoint, time: TimeInterval, type: NSEvent.EventType = .leftMouseUp,
+                       number: Int? = nil) -> NSEvent? {
+        NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: time,
+                           windowNumber: number ?? window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 0)
+    }
+
+    func testOnlyARealClickOnTheSwitchTurnsItOn() async throws {
+        try await withSite { browser, site in
+            let tab = try await userTab(browser, site.app)
+            let (window, view) = clickable()
+            defer { window.close() }
+            let bridge = DevBridge.shared
+            let shown = ProcessInfo.processInfo.systemUptime - 10
+            let now = ProcessInfo.processInfo.systemUptime
+            let inside = NSPoint(x: 30, y: 30)
+            let key = NSEvent.keyEvent(with: .keyDown, location: inside, modifierFlags: [], timestamp: now,
+                                       windowNumber: window.windowNumber, context: nil, characters: " ",
+                                       charactersIgnoringModifiers: " ", isARepeat: false, keyCode: 49)
+            XCTAssertFalse(bridge.enable(tab, event: nil, on: view, shownAt: shown), "an accessibility press has no event")
+            XCTAssertFalse(bridge.enable(tab, event: key, on: view, shownAt: shown), "a key")
+            XCTAssertFalse(bridge.enable(tab, event: mouse(in: window, at: inside, time: shown + 0.1), on: view, shownAt: shown),
+                           "as it appeared: meant for what was there before")
+            XCTAssertFalse(bridge.enable(tab, event: mouse(in: window, at: NSPoint(x: 150, y: 80), time: now), on: view, shownAt: shown),
+                           "beside it")
+            XCTAssertFalse(bridge.enable(tab, event: mouse(in: window, at: inside, time: now, number: window.windowNumber + 1),
+                                         on: view, shownAt: shown), "another window's")
+            XCTAssertFalse(bridge.enable(tab, event: mouse(in: window, at: inside, time: now), on: nil, shownAt: shown))
+            XCTAssertTrue(bridge.origins.isEmpty)
+            let real = try XCTUnwrap(mouse(in: window, at: inside, time: now))
+            XCTAssertTrue(bridge.enable(tab, event: real, on: view, shownAt: shown))
+            try await until("granted") { bridge.granted(from: tab) != nil }
+            bridge.turnOff(site.origin)
+            XCTAssertFalse(bridge.enable(tab, event: real, on: view, shownAt: shown), "one click, one use")
+            // The button in the window is a view that hears the mouse and
+            // nothing else.
+            let button = DevClickView { _, _, _ in XCTFail("pressed with no click") }
+            XCTAssertFalse(button.accessibilityPerformPress())
+            XCTAssertFalse(button.acceptsFirstResponder, "no key reaches it")
+        }
+    }
+
+    func testNoMenuItemKeyOrVerbTurnsItOn() {
+        XCTAssertFalse(Command.all.contains { $0.id.lowercased().contains("bridge") || $0.title.lowercased().contains("bridge") })
+    }
+
+    // MARK: - who can be granted, and every way it ends
+
+    private struct Site {
+        let app: String
+        let other: String
+        /// Stands for the public web: a test run lets 127.0.0.1 through.
+        let pub: String
+        let origin: DevOrigin
+        let main: LocalPageServer
+        let second: LocalPageServer
+    }
+
+    private static let appPage = #"""
+        <!doctype html><title>App</title>
+        <script>
+        console.error('boom: save failed token=abc123secret');
+        console.warn('careful', {password: 'pa55word'});
+        fetch('/missing?key=s3cretkey#hashpart77');
+        var x = new XMLHttpRequest(); x.open('POST', '/fail?sig=sig999'); x.send('card=4111111111111111');
+        setTimeout(function () { throw new Error('uncaught kaboom') }, 50);
+        </script>
+        <img src="/nope.png?sig=imgsig42" alt="">
+        <a id=out href="PUB/public">out</a>
+        <a href="/two">two</a>
+        <a href="PUB/bounce">bounce</a>
+        <a href="/two" target="_blank">window</a>
+        <label>Password <input type=password value="hunter2hunter2"></label>
+        <button style="position:absolute;left:10px;top:300px;width:120px;height:40px">Save</button>
+        <button style="position:absolute;left:20px;top:305px;width:120px;height:40px">Delete</button>
+        <div style="width:5000px;height:4px;background:#000">wide</div>
+        <div style="width:60px;white-space:nowrap;overflow:hidden">A long line of text that is cut off here</div>
+        <button onclick="fetch('OTHER/api?x=1', {mode:'no-cors'}).then(()=>document.title='reached',()=>document.title='stopped')">Call API</button>
+        """#
+
+    private func withSite(_ body: (Browser, Site) async throws -> Void) async throws {
+        let second = try LocalPageServer(["/api": .init(type: "text/plain", body: "ok")])
+        defer { second.stop() }
+        // The app's page names the other port and the "public" one, which is
+        // the same server by its other name: 127.0.0.1 is not the origin granted.
+        let probe = try LocalPageServer([:])
+        probe.stop()
+        let publicSite = try LocalPageServer([
+            "/public": .init(type: "text/html", body: "<title>Public</title><p>out here"),
+        ])
+        defer { publicSite.stop() }
+        let main = try LocalPageServer([
+            "/": .init(type: "text/html", body: Self.appPage
+                .replacingOccurrences(of: "PUB", with: "http://127.0.0.1:\(publicSite.port)")
+                .replacingOccurrences(of: "OTHER", with: "http://localhost:\(second.port)")),
+            "/two": .init(type: "text/html", body: "<title>Two</title><script>console.error('on two')</script>"),
+            "/fail": .init(status: "500 Internal Server Error", type: "text/plain", body: "no"),
+            "/delete": .init(type: "text/html", body: "<title>Deleted</title>"),
+        ])
+        defer { main.stop() }
+        let inward = try LocalPageServer([
+            "/links": .init(type: "text/html", body: "<title>Links</title><a href='http://localhost:\(main.port)/delete'>trap</a>"),
+            "/redirect": .init(status: "302 Found", type: "text/plain", body: "",
+                               location: "http://localhost:\(main.port)/delete"),
+        ])
+        defer { inward.stop() }
+        publicSite.put("/bounce", .init(status: "302 Found", type: "text/plain", body: "",
+                                        location: "http://localhost:\(main.port)/delete"))
+        Store.settings.set(["127.0.0.1"], forKey: "test.agentLocalHosts")
+        defer { Store.settings.removeObject(forKey: "test.agentLocalHosts") }
+        let browser = Browser()
+        Browsers.register(browser)
+        defer { Browsers.discard(browser) }
+        defer { AgentControl.shared.stopSession(); DevBridge.shared.revokeAll() }
+        DevBridge.shared.revokeAll()
+        let app = "http://localhost:\(main.port)"
+        try await body(browser, Site(app: app, other: "http://localhost:\(second.port)", pub: "http://127.0.0.1:\(inward.port)",
+                                     origin: try XCTUnwrap(DevOrigin(URL(string: app))), main: main, second: second))
+    }
+
+    private func until(_ what: String, _ check: () -> Bool) async throws {
+        for _ in 0..<200 {
+            if check() { return }
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+        XCTFail("never: \(what)")
+        throw CancellationError()
+    }
+
+    /// A tab of the person's own, loaded.
+    private func userTab(_ browser: Browser, _ address: String) async throws -> Tab {
+        let tab = browser.benchOpen(url(address + "/two"))
+        try await until("\(address) loaded") { tab.committed?.path == "/two" && !tab.loading }
+        return tab
+    }
+
+    private func grant(_ tab: Tab) async throws {
+        DevBridge.shared.enableForTest(tab)
+        try await until("granted") { DevBridge.shared.granted(from: tab) != nil }
+    }
+
+    func testWhoCanTurnItOn() async throws {
+        try await withSite { browser, site in
+            let bridge = DevBridge.shared
+            let tab = try await userTab(browser, site.app)
+            XCTAssertEqual(bridge.offer(for: tab), site.origin)
+            // Developer Mode, on for the host by hand or by itself, grants nothing.
+            DevMode.shared.localOverride = true
+            DevMode.shared.set(true, for: tab.pageAddress, shy: false)
+            defer { DevMode.shared.localOverride = nil }
+            XCTAssertTrue(DevMode.shared.isOn(tab))
+            XCTAssertTrue(bridge.origins.isEmpty)
+            let shy = browser.benchOpen(url(site.app + "/two"), shy: true)
+            let agent = browser.benchOpen(url(site.app + "/two"), agent: true)
+            try await until("both loaded") { shy.committed != nil }
+            for refused in [shy, agent] {
+                XCTAssertNil(bridge.offer(for: refused))
+                bridge.enableForTest(refused)
+            }
+            try await Task.sleep(nanoseconds: 300_000_000)
+            XCTAssertTrue(bridge.origins.isEmpty)
+            let (window, view) = clickable()
+            defer { window.close() }
+            let click = mouse(in: window, at: NSPoint(x: 30, y: 30), time: ProcessInfo.processInfo.systemUptime)
+            XCTAssertFalse(bridge.enable(shy, event: click, on: view, shownAt: 0))
+            // A name that doesn't lead to this Mac is not granted.
+            bridge.lookUp = { _ in [[192, 168, 1, 4]] }
+            defer { bridge.lookUp = { PrivateNetwork.lookUp($0) } }
+            bridge.enableForTest(tab)
+            try await Task.sleep(nanoseconds: 500_000_000)
+            XCTAssertNil(bridge.granted(from: tab))
+        }
+    }
+
+    func testEveryWayAGrantEnds() async throws {
+        try await withSite { browser, site in
+            let bridge = DevBridge.shared
+            var tab = try await userTab(browser, site.app)
+            try await grant(tab)
+            XCTAssertEqual(bridge.origins, [site.origin])
+            // Another page of the same origin keeps it.
+            tab.go(to: url(site.app + "/"))
+            try await until("moved within") { tab.committed?.path == "/" && !tab.loading }
+            XCTAssertEqual(bridge.origins, [site.origin])
+            // Leaving the origin, another port included.
+            tab.go(to: url(site.other + "/api"))
+            try await until("left") { tab.committed?.path == "/api" }
+            XCTAssertTrue(bridge.origins.isEmpty)
+            tab.go(to: url(site.app + "/two"))
+            try await until("back") { tab.committed?.path == "/two" }
+            XCTAssertTrue(bridge.origins.isEmpty, "coming back grants nothing again")
+
+            // Closing the tab.
+            try await grant(tab)
+            tab.close()
+            XCTAssertTrue(bridge.origins.isEmpty)
+            browser.close(tab)
+
+            // A pin put down with ⌘W: its view goes without close().
+            tab = try await userTab(browser, site.app)
+            try await grant(tab)
+            tab.rest()
+            XCTAssertTrue(bridge.origins.isEmpty)
+
+            // Put to sleep.
+            tab = try await userTab(browser, site.app)
+            try await grant(tab)
+            tab.sleep(picture: nil)
+            XCTAssertTrue(bridge.origins.isEmpty)
+
+            // Turned off, from any tab on that origin.
+            tab = try await userTab(browser, site.app)
+            let beside = try await userTab(browser, site.app)
+            try await grant(tab)
+            XCTAssertTrue(bridge.isOn(beside))
+            bridge.turnOff(site.origin)
+            XCTAssertTrue(bridge.origins.isEmpty)
+
+            // An agent stopped from the window.
+            try await grant(tab)
+            XCTAssertNotNil(AgentControl.shared.sessionForTest(in: browser))
+            AgentControl.shared.stopSession()
+            XCTAssertTrue(bridge.origins.isEmpty)
+        }
+    }
+
+    // MARK: - an agent's own tab, for real
+
+    /// One request as a connected agent would put it, approving what is held.
+    private func ask(_ request: [String: Any], approve: Bool = true) async throws -> [String: Any] {
+        var result: [String: Any]?
+        AgentControl.shared.askForTest(request) { result = $0 }
+        for _ in 0..<600 where result == nil {
+            try await Task.sleep(nanoseconds: 50_000_000)
+            if AgentControl.shared.session?.held != nil { AgentControl.shared.answerHeldForTest(approve: approve) }
+        }
+        return try XCTUnwrap(result, "no answer to \(request)")
+    }
+
+    private func code(_ out: [String: Any]) -> String? { (out["error"] as? [String: Any])?["code"] as? String }
+
+    private func text(_ out: [String: Any]) -> String {
+        String(decoding: (try? JSONSerialization.data(withJSONObject: out, options: [.withoutEscapingSlashes])) ?? Data(), as: UTF8.self)
+    }
+
+    private func start(_ browser: Browser) throws {
+        XCTAssertNotNil(AgentControl.shared.sessionForTest(in: browser))
+    }
+
+    private var ownTabs: [Tab] {
+        let own = AgentControl.shared.session?.own ?? []
+        return Browsers.all.flatMap { $0.tabs + $0.parkedTabs }.filter { own.contains($0.id) }
+    }
+
+    func testWithoutAGrantEverythingIsRefused() async throws {
+        try await withSite { browser, site in
+            try start(browser)
+            var out = try await ask(["do": "open", "url": site.app + "/"])
+            XCTAssertEqual(code(out), "private_address", text(out))
+            out = try await ask(["do": "open", "url": site.pub + "/links"])
+            let page = try XCTUnwrap(out["page"] as? String, text(out))
+            for verb in ["read_console", "read_network_errors", "assert_layout"] {
+                out = try await ask(["do": verb, "page": page])
+                XCTAssertEqual(code(out), "bridge_off", "\(verb): \(text(out))")
+            }
+            for verb in ["dev_console", "dev_network_errors"] {
+                out = try await ask(["do": verb])
+                XCTAssertEqual(code(out), "bridge_off", "\(verb): \(text(out))")
+            }
+            XCTAssertTrue(site.main.requests.isEmpty)
+        }
+    }
+
+    func testAnAgentReadsAGrantedSitesErrorsInItsOwnTabOnly() async throws {
+        try await withSite { browser, site in
+            let mine = try await userTab(browser, site.app)
+            try await grant(mine)
+            try start(browser)
+            var out = try await ask(["do": "open", "url": site.app + "/"])
+            let page = try XCTUnwrap(out["page"] as? String, text(out))
+            XCTAssertEqual(out["title"] as? String, "App", text(out))
+            let agent = try XCTUnwrap(ownTabs.first)
+            try await until("the page's errors") {
+                let log = DevBridge.shared.log(of: agent.id)
+                return log.console.count >= 3 && log.network.count >= 3
+            }
+            out = try await ask(["do": "read_console", "page": page])
+            var said = text(out)
+            for expected in ["boom: save failed", "careful", "uncaught kaboom"] { XCTAssertTrue(said.contains(expected), said) }
+            for secret in ["abc123secret", "pa55word", "hunter2"] { XCTAssertFalse(said.contains(secret), "\(secret): \(said)") }
+            out = try await ask(["do": "read_console", "page": page, "level": "warn"])
+            XCTAssertFalse(text(out).contains("boom"))
+            out = try await ask(["do": "read_network_errors", "page": page])
+            said = text(out)
+            for expected in ["/missing", "404", "/fail", "500", "nope.png", "POST"] { XCTAssertTrue(said.contains(expected), said) }
+            for secret in ["s3cretkey", "sig999", "imgsig42", "4111111111111111", "hashpart77"] {
+                XCTAssertFalse(said.contains(secret), "\(secret): \(said)")
+            }
+
+            out = try await ask(["do": "assert_layout", "page": page])
+            said = text(out)
+            XCTAssertNil(out["error"], said)
+            let sideways = out["horizontalOverflow"] as? [String: Any]
+            XCTAssertGreaterThan(sideways?["by"] as? Int ?? 0, 1000, said)
+            XCTAssertTrue(((out["overlaps"] as? [[String: Any]]) ?? []).contains { text($0).contains("Save") && text($0).contains("Delete") }, said)
+            XCTAssertTrue(((out["clipped"] as? [[String: Any]]) ?? []).contains { text($0).contains("A long line") }, said)
+            XCTAssertTrue(said.contains("boom"), "with the page's errors: \(said)")
+            XCTAssertFalse(said.contains("hunter2"), said)
+
+            // Both resources, from this run's eligible tabs.
+            out = try await ask(["do": "dev_console"])
+            XCTAssertTrue(text(out).contains("boom") && text(out).contains("\"page\":\"\(page)\""), text(out))
+            out = try await ask(["do": "dev_network_errors"])
+            XCTAssertTrue(text(out).contains("/missing"), text(out))
+
+            // Yours is never read: not by the bridge, and nothing of it is kept.
+            XCTAssertTrue(DevBridge.shared.log(of: mine.id).isEmpty)
+
+            // Same origin, followed.
+            out = try await ask(["do": "read", "page": page])
+            let two = try XCTUnwrap((out["nodes"] as? [[String: Any]])?.first { $0["name"] as? String == "two" }?["element"] as? String)
+            out = try await ask(["do": "click", "element": two])
+            XCTAssertEqual(out["title"] as? String, "Two", text(out))
+
+            // Another port is another grant: not opened, and not fetched.
+            out = try await ask(["do": "open", "url": site.other + "/api"])
+            XCTAssertEqual(code(out), "private_address", text(out))
+            out = try await ask(["do": "go", "page": page, "url": site.app + "/"])
+            out = try await ask(["do": "read", "page": page])
+            let call = try XCTUnwrap((out["nodes"] as? [[String: Any]])?.first { $0["name"] as? String == "Call API" }?["element"] as? String,
+                                     text(out))
+            _ = try await ask(["do": "click", "element": call])
+            try await until("the fetch settled") { agent.title == "stopped" || agent.title == "reached" }
+            XCTAssertEqual(agent.title, "stopped")
+            XCTAssertEqual(site.second.requests, [])
+        }
+    }
+
+    func testPublicPagesCannotTakeTheAgentIn() async throws {
+        try await withSite { browser, site in
+            try await grant(try await userTab(browser, site.app))
+            try start(browser)
+            var out = try await ask(["do": "open", "url": site.pub + "/links"])
+            let page = try XCTUnwrap(out["page"] as? String, text(out))
+            // A link.
+            out = try await ask(["do": "read", "page": page])
+            let trap = try XCTUnwrap((out["nodes"] as? [[String: Any]])?.first { $0["name"] as? String == "trap" }?["element"] as? String)
+            out = try await ask(["do": "click", "element": trap])
+            try await Task.sleep(nanoseconds: 1_000_000_000)
+            XCTAssertFalse(site.main.requests.contains("/delete"), "the link: \(site.main.requests)")
+            XCTAssertEqual(ownTabs.first?.committed?.path, "/links")
+            // A redirect, from the agent's own go.
+            out = try await ask(["do": "go", "page": page, "url": site.pub + "/redirect"])
+            try await Task.sleep(nanoseconds: 1_000_000_000)
+            XCTAssertFalse(site.main.requests.contains("/delete"), "\(site.main.requests)")
+            // From a public page, asked for: let in, with the old page gone first.
+            out = try await ask(["do": "go", "page": page, "url": site.app + "/two"])
+            XCTAssertEqual(out["title"] as? String, "Two", text(out))
+            XCTAssertFalse(site.main.requests.contains("/delete"), "\(site.main.requests)")
+            let agent = try XCTUnwrap(ownTabs.first)
+            XCTAssertEqual(agent.built?.backForwardList.backItem?.url.absoluteString, "about:blank",
+                           "the public page was put away before the load into the local site")
+            // The app's own link out, to something that sends it straight
+            // back: WebKit names the app as where that came from.
+            out = try await ask(["do": "go", "page": page, "url": site.app + "/"])
+            out = try await ask(["do": "read", "page": page])
+            let bounce = try XCTUnwrap((out["nodes"] as? [[String: Any]])?.first { $0["name"] as? String == "bounce" }?["element"] as? String,
+                                       text(out))
+            _ = try await ask(["do": "click", "element": bounce])
+            try await Task.sleep(nanoseconds: 1_000_000_000)
+            XCTAssertFalse(site.main.requests.contains("/delete"), "\(site.main.requests)")
+        }
+    }
+
+    func testForgedAndStrayMessagesAreDropped() async throws {
+        try await withSite { browser, site in
+            let mine = try await userTab(browser, site.app)
+            try await grant(mine)
+            try start(browser)
+            _ = try await ask(["do": "open", "url": site.app + "/two"])
+            let agent = try XCTUnwrap(ownTabs.first)
+            let web = try XCTUnwrap(agent.built)
+            let bridge = DevBridge.shared
+            let body = #"{"k":"console","level":"error","message":"forged-one"}"#
+            let port = site.origin.port
+            @MainActor func heard(_ from: Tab, _ web: WKWebView?, main: Bool = true, host: String = "localhost", port: Int) -> Bool {
+                bridge.receive(body, for: from, web: web, mainFrame: main, source: DevSource(scheme: "http", host: host, port: port))
+            }
+            XCTAssertFalse(heard(agent, web, main: false, port: port), "a frame")
+            XCTAssertFalse(heard(agent, web, port: port + 1), "another origin")
+            XCTAssertFalse(heard(agent, web, host: "127.0.0.1", port: port))
+            XCTAssertFalse(heard(agent, mine.built, port: port), "another view")
+            XCTAssertFalse(heard(mine, mine.built, port: port), "the person's tab is never read")
+            XCTAssertFalse(bridge.log(of: agent.id).console.contains { $0.message == "forged-one" })
+            // What the page itself sends is the page's word, and is only data.
+            XCTAssertTrue(heard(agent, web, port: port))
+            bridge.turnOff(site.origin)
+            XCTAssertFalse(heard(agent, web, port: port), "turned off")
+        }
+    }
+
+    func testTurningItOffShutsTheAgentOut() async throws {
+        try await withSite { browser, site in
+            let mine = try await userTab(browser, site.app)
+            try await grant(mine)
+            try start(browser)
+            var out = try await ask(["do": "open", "url": site.app + "/"])
+            let page = try XCTUnwrap(out["page"] as? String)
+            let agent = try XCTUnwrap(ownTabs.first)
+            try await until("errors") { !DevBridge.shared.log(of: agent.id).isEmpty }
+            browser.close(mine)
+            XCTAssertTrue(DevBridge.shared.origins.isEmpty)
+            XCTAssertTrue(DevBridge.shared.log(of: agent.id).isEmpty)
+            XCTAssertFalse(DevBridge.shared.isDressed(agent.id), "its exceptions came off")
+            out = try await ask(["do": "read_console", "page": page])
+            XCTAssertEqual(code(out), "bridge_off", text(out))
+            try await until("its page is gone") { agent.committed?.absoluteString == "about:blank" }
+            out = try await ask(["do": "read", "page": page])
+            XCTAssertFalse(text(out).contains("Call API"), text(out))
+            out = try await ask(["do": "go", "page": page, "url": site.app + "/"])
+            XCTAssertEqual(code(out), "private_address", text(out))
+        }
+    }
+
+    func testTheTabYouGrantedFromIsNeverRead() async throws {
+        try await withSite { browser, site in
+            let mine = try await userTab(browser, site.app)
+            XCTAssertNotNil(AgentControl.shared.sessionForTest(in: browser, seesTabs: true))
+            @MainActor func listed() async throws -> String {
+                let out = try await ask(["do": "tabs"])
+                return try XCTUnwrap((out["tabs"] as? [[String: Any]])?.first { ($0["url"] as? String)?.hasSuffix("/two") == true }?["page"] as? String)
+            }
+            let page = try await listed()
+            try await grant(mine)
+            for request in [["do": "read", "page": page], ["do": "wait_for", "page": page, "title": "Two"]] {
+                let out = try await ask(request)
+                XCTAssertEqual(code(out), "not_yours", text(out))
+            }
+            for verb in ["read_console", "read_network_errors", "assert_layout"] {
+                let out = try await ask(["do": verb, "page": page])
+                XCTAssertEqual(code(out), "not_yours", text(out))
+            }
+        }
+    }
+
+    func testAPopupIsDressedOnItsOwnControllerAndAnotherPortNeedsItsOwnGrant() async throws {
+        try await withSite { browser, site in
+            let mine = try await userTab(browser, site.app)
+            try await grant(mine)
+            try start(browser)
+            let out = try await ask(["do": "open", "url": site.app + "/"])
+            let page = try XCTUnwrap(out["page"] as? String)
+            let agent = try XCTUnwrap(ownTabs.first)
+            @MainActor func element(_ name: String) async throws -> String {
+                let out = try await ask(["do": "read", "page": page])
+                return try XCTUnwrap((out["nodes"] as? [[String: Any]])?.first { $0["name"] as? String == name }?["element"] as? String, text(out))
+            }
+            // A window its page opens: the agent's too, with rules and
+            // listeners of its own, not its opener's.
+            _ = try await ask(["do": "click", "element": try await element("window")])
+            try await until("the window") { ownTabs.count == 2 }
+            let popup = try XCTUnwrap(ownTabs.first { $0 !== agent })
+            try await until("it loaded and was heard") { DevBridge.shared.log(of: popup.id).console.contains { $0.message.contains("on two") } }
+            XCTAssertFalse(popup.contentController === agent.contentController)
+            XCTAssertTrue(DevBridge.shared.isDressed(popup.id))
+            XCTAssertFalse(DevBridge.shared.isDressed(mine.id))
+            // The API on another port: its own grant, from a tab of its own.
+            let api = browser.benchOpen(url(site.other + "/api"))
+            try await until("the api tab") { api.committed?.path == "/api" }
+            try await grant(api)
+            XCTAssertEqual(DevBridge.shared.origins.count, 2)
+            try await Task.sleep(nanoseconds: 1_000_000_000)
+            _ = try await ask(["do": "go", "page": page, "url": site.app + "/"])
+            _ = try await ask(["do": "click", "element": try await element("Call API")])
+            try await until("the fetch settled") { agent.title == "stopped" || agent.title == "reached" }
+            XCTAssertEqual(agent.title, "reached")
+            // And off again with that tab, the app's grant staying.
+            browser.close(api)
+            XCTAssertEqual(DevBridge.shared.origins, [site.origin])
+            try await Task.sleep(nanoseconds: 1_000_000_000)
+            _ = try await ask(["do": "go", "page": page, "url": site.app + "/"])
+            let asked = site.second.requests.count
+            _ = try await ask(["do": "click", "element": try await element("Call API")])
+            try await until("the fetch settled") { agent.title == "stopped" || agent.title == "reached" }
+            XCTAssertEqual(agent.title, "stopped")
+            XCTAssertEqual(site.second.requests.count, asked)
+        }
+    }
+
+    func testOnceYouHaveHadTheTabNothingMoreIsRead() async throws {
+        try await withSite { browser, site in
+            try await grant(try await userTab(browser, site.app))
+            try start(browser)
+            var out = try await ask(["do": "open", "url": site.app + "/"])
+            let page = try XCTUnwrap(out["page"] as? String)
+            let agent = try XCTUnwrap(ownTabs.first)
+            try await until("errors") { !DevBridge.shared.log(of: agent.id).isEmpty }
+            // Handed over to sign in, and handed back.
+            out = try await ask(["do": "wait_for_sign_in", "page": page])
+            XCTAssertEqual(out["resumed"] as? Bool, true, text(out))
+            XCTAssertTrue(DevBridge.shared.log(of: agent.id).isEmpty, "cleared")
+            for request in [["do": "read_console", "page": page], ["do": "read_network_errors", "page": page],
+                            ["do": "assert_layout", "page": page], ["do": "dev_console"], ["do": "dev_network_errors"]] {
+                out = try await ask(request)
+                XCTAssertEqual(code(out), "bridge_off", text(out))
+            }
+            // And nothing more is taken, from a page loaded afterwards either.
+            out = try await ask(["do": "go", "page": page, "url": site.app + "/two"])
+            try await Task.sleep(nanoseconds: 600_000_000)
+            XCTAssertTrue(DevBridge.shared.log(of: agent.id).isEmpty)
+        }
+    }
+
+    func testATaskHandedOverIsReadNoMore() async throws {
+        try await withSite { browser, site in
+            try await grant(try await userTab(browser, site.app))
+            try start(browser)
+            _ = try await ask(["do": "open", "url": site.app + "/"])
+            let agent = try XCTUnwrap(ownTabs.first)
+            try await until("errors") { !DevBridge.shared.log(of: agent.id).isEmpty }
+            _ = try await ask(["do": "bye"])
+            try await until("ended") { AgentControl.shared.session == nil }
+            XCTAssertTrue(DevBridge.shared.log(of: agent.id).isEmpty)
+            XCTAssertFalse(DevBridge.shared.isDressed(agent.id))
+            agent.reload()
+            try await Task.sleep(nanoseconds: 1_000_000_000)
+            XCTAssertTrue(DevBridge.shared.log(of: agent.id).isEmpty, "yours now")
+            XCTAssertEqual(DevBridge.shared.origins, [site.origin], "your grant is yours to keep")
+        }
+    }
 }

@@ -11,6 +11,8 @@ final class LocalPageServer {
         var body: String
         var withoutLength = false
         var slowly = false
+        /// Where a redirect (with a 3xx status) goes.
+        var location: String? = nil
     }
 
     private let socket: Int32
@@ -19,7 +21,7 @@ final class LocalPageServer {
     private var asked: [String] = []
     private var sentBodies: [String: Int] = [:]
     private var stopped = false
-    private let pages: [String: Page]
+    private var pages: [String: Page]
     let port: UInt16
 
     private let acceptQueue = DispatchQueue(label: "search.page-fixture.accept")
@@ -84,6 +86,13 @@ final class LocalPageServer {
         return sentBodies[path] ?? 0
     }
 
+    /// A page added once the server runs, for one that names another's port.
+    func put(_ path: String, _ page: Page) {
+        lock.lock()
+        pages[path] = page
+        lock.unlock()
+    }
+
     func stop() {
         lock.lock()
         let first = !stopped
@@ -121,17 +130,32 @@ final class LocalPageServer {
         guard let header = String(data: data, encoding: .utf8),
               let target = header.components(separatedBy: "\r\n").first?.split(separator: " ").dropFirst().first
         else { return }
+        // A request's body is read too: closing on bytes still unread resets
+        // the connection, and a POST then looks like no answer at all.
+        let sent = header.components(separatedBy: "\r\n")
+            .first { $0.lowercased().hasPrefix("content-length:") }
+            .flatMap { Int($0.dropFirst(15).trimmingCharacters(in: .whitespaces)) } ?? 0
+        if let end = data.range(of: Data("\r\n\r\n".utf8))?.upperBound {
+            var have = data.count - end
+            while have < min(sent, 64 * 1024) {
+                let count = recv(client, &buffer, buffer.count, 0)
+                guard count > 0 else { break }
+                have += count
+            }
+        }
         let path = URLComponents(string: "http://fixture\(target)")?.path ?? String(target)
         lock.lock()
         asked.append(path)
+        let known = pages[path]
         lock.unlock()
 
-        let page = pages[path] ?? Page(status: "404 Not Found", type: "text/html",
+        let page = known ?? Page(status: "404 Not Found", type: "text/html",
                                        body: "<!doctype html><title>Not found</title><p>Nothing here</p>")
         let body = Data(page.body.utf8)
         let head = "HTTP/1.1 \(page.status)\r\n"
             + "Content-Type: \(page.type)\r\n"
             + (page.withoutLength ? "" : "Content-Length: \(body.count)\r\n")
+            + (page.location.map { "Location: \($0)\r\n" } ?? "")
             + "Connection: close\r\n\r\n"
         guard send(client, Data(head.utf8)) else { return }
         if !page.slowly {

@@ -30,7 +30,7 @@ enum Web {
     @MainActor static func release(_ controller: WKUserContentController) {
         for name in [ScrollRelay.name, VeilRelay.name, FormRelay.name, ImageRelay.name, MediaKeys.name,
                      StoreRelay.name, PasskeyRelay.name, MiddleRelay.name, IconRelay.name, PopupGestureRelay.name, DuskRelay.name,
-                     TranslateRelay.name, PageDrafts.name, MeetPiPRelay.name] {
+                     TranslateRelay.name, PageDrafts.name, MeetPiPRelay.name, DevScripts.handler] {
             controller.removeScriptMessageHandler(forName: name, contentWorld: world)
             controller.removeScriptMessageHandler(forName: name, contentWorld: .page)
         }
@@ -454,6 +454,8 @@ final class Tab: ObservableObject, Identifiable {
             held = nil
             address = url
         }
+        // Left for another origin: a Dev Bridge grant made here ends.
+        DevBridge.shared.committed(self)
     }
 
     /// An address the tab shows, and reports to extensions, without loading
@@ -830,6 +832,7 @@ final class Tab: ObservableObject, Identifiable {
     var translateLanguages: Set<String> = []
     var translateOnWake: (url: URL, to: String)?
     private let translateRelay = TranslateRelay()
+    private let devRelay = DevRelay()
     private let passkeyRelay = PasskeyRelay()
     private let hovered = HoveredLink()
     private let ears = AudioWatch()
@@ -1178,6 +1181,8 @@ final class Tab: ObservableObject, Identifiable {
         controller.add(translateRelay, contentWorld: Web.world, name: TranslateRelay.name)
         meetPiP.tab = self
         controller.add(meetPiP, contentWorld: Web.world, name: MeetPiPRelay.name)
+        devRelay.tab = self
+        controller.add(devRelay, contentWorld: Web.world, name: DevScripts.handler)
         PopupGestureRelay.install(on: controller)
         Shield.shared.protect(controller)
         built = web
@@ -1449,6 +1454,9 @@ final class Tab: ObservableObject, Identifiable {
         // Only while a developer tools package has a tool open on this tab
         // (DevToolsPackages.swift).
         scripts += DevToolsPackages.scripts(for: self)
+        // The Dev Bridge's listeners: an agent's own tab, on an origin you
+        // turned it on for, and nowhere else (DevBridgeLive.swift).
+        scripts += DevBridge.shared.scripts(for: self, to: url ?? pageAddress)
         // The same scripts as the document before's, the usual case, are
         // left where they are: taken out and put back, every one was sent to
         // the page's process again on every link followed.
@@ -2446,6 +2454,9 @@ final class Tab: ObservableObject, Identifiable {
     /// back-forward cache. The tab keeps its address; `web` builds again the
     /// next time anyone asks for it.
     private func discard() {
+        // A Dev Bridge grant made from this tab goes with its view: closed, a
+        // pin put down or asleep alike.
+        DevBridge.shared.viewGone(self)
         loadGeneration &+= 1
         seekingTwin = false
         sent = nil

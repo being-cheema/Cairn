@@ -492,9 +492,243 @@ enum DevReport {
         return answer(entries, omitted: omitted, dropped: logs.reduce(0) { $0 + $1.1.droppedConsole })
     }
 
+    /// assert_layout's answer: the page's findings with its own words
+    /// redacted and marked, and its errors and failed requests beside them.
+    static func layout(_ found: [String: Any], page: String, log: DevLog) -> [String: Any] {
+        func clean(_ value: Any) -> Any {
+            if let text = value as? String { return Quarantine.label(String(DevScrub.text(text).prefix(120))) }
+            if let list = value as? [Any] { return list.prefix(20).map(clean) }
+            if let object = value as? [String: Any] { return object.mapValues(clean) }
+            return value
+        }
+        let by = (found["by"] as? NSNumber)?.intValue ?? 0
+        var out: [String: Any] = ["page": page, "viewport": found["viewport"] ?? [],
+                                  "overlaps": clean(found["overlaps"] ?? []), "clipped": clean(found["clipped"] ?? []),
+                                  "untrusted": untrusted, "limits": limits]
+        out["horizontalOverflow"] = ["by": by, "elements": by > 1 ? clean(found["past"] ?? []) : []] as [String: Any]
+        var errors = console([(page, log)], level: "error")["entries"] as? [[String: Any]] ?? []
+        errors = Array(errors.suffix(10))
+        out["consoleErrors"] = errors
+        out["networkErrors"] = Array((network([(page, log)])["entries"] as? [[String: Any]] ?? []).suffix(10))
+        return out
+    }
+
     static func network(_ logs: [(String, DevLog)]) -> [String: Any] {
         let all = logs.flatMap { page, log in log.network.map { (page, $0) } }.sorted { $0.1.at < $1.1.at }
         let (entries, omitted) = fitted(all) { line($0, $1) }
         return answer(entries, omitted: omitted, dropped: logs.reduce(0) { $0 + $1.1.droppedNetwork })
     }
+}
+
+// MARK: - the scripts
+
+/// The wrappers put into a granted page of an agent's tab, and the layout
+/// check. The wrappers stand in the page's own world, as they must to hear
+/// its console and its requests, so the page can reach round them: what they
+/// send is the page's word and nothing more (DevMessage).
+enum DevScripts {
+    /// Heard in Cairn's own world, which alone can reach the app: the page
+    /// is never shown a message handler. `event` is made anew each launch.
+    static func relay(event: String) -> String {
+        """
+        (function () {
+          document.addEventListener(\(PageScripts.json(event)), function (e) {
+            var said = e.detail;
+            if (typeof said === 'string' && said.length <= \(DevMessage.longest))
+              window.webkit.messageHandlers.\(DevScripts.handler).postMessage(said);
+          }, true);
+        })();
+        """
+    }
+
+    static let handler = "cairnDev"
+    /// What one document may send: a page that logs in a loop is heard this
+    /// far and no further.
+    static let mostMessages = 500
+
+    static func capture(event: String) -> String {
+        """
+        (function () {
+          var NAME = \(PageScripts.json(event)), MOST = \(mostMessages), sent = 0;
+          var send = EventTarget.prototype.dispatchEvent.bind(document), Said = CustomEvent, write = JSON.stringify;
+          function cut(s, n) { s = String(s); return s.length > n ? s.slice(0, n) : s; }
+          function out(o) {
+            if (sent >= MOST) return;
+            sent++;
+            try { send(new Said(NAME, { detail: write(o) })); } catch (e) {}
+          }
+          function words(v) {
+            try {
+              if (typeof v === 'string') return cut(v, 4000);
+              if (v instanceof Error) return cut(v.name + ': ' + v.message, 4000);
+              if (v === null || typeof v !== 'object') return cut(v, 4000);
+              return cut(write(v), 1000);
+            } catch (e) { return '[unprintable]'; }
+          }
+          function stackOf(v) { try { return v && v.stack ? cut(v.stack, 4000) : ''; } catch (e) { return ''; } }
+          function whole(u) { try { return cut(new URL(u, document.baseURI).href, 4000); } catch (e) { return cut(u, 4000); } }
+          ['error', 'warn'].forEach(function (level) {
+            var real = console[level];
+            console[level] = function () {
+              try {
+                var args = Array.prototype.slice.call(arguments, 0, 10), first = null;
+                for (var i = 0; i < args.length && !first; i++) if (args[i] instanceof Error) first = args[i];
+                out({ k: 'console', level: level === 'warn' ? 'warning' : 'error',
+                      message: cut(args.map(words).join(' '), 8000), stack: stackOf(first || new Error()) });
+              } catch (e) {}
+              return real.apply(this, arguments);
+            };
+          });
+          window.addEventListener('error', function (e) {
+            var el = e.target;
+            if (el && el !== window && el.tagName) {
+              var src = el.currentSrc || el.src || el.href;
+              if (typeof src === 'string' && src) out({ k: 'net', kind: 'resource', method: 'GET', url: whole(src),
+                                                        element: el.tagName.toLowerCase() });
+              return;
+            }
+            out({ k: 'console', level: 'exception', message: cut(e.message || words(e.error), 4000),
+                  source: e.filename ? cut(e.filename, 4000) : '', line: e.lineno, column: e.colno, stack: stackOf(e.error) });
+          }, true);
+          window.addEventListener('unhandledrejection', function (e) {
+            out({ k: 'console', level: 'exception', message: 'Unhandled rejection: ' + words(e.reason), stack: stackOf(e.reason) });
+          });
+          function failed(kind, method, url, status, since, why) {
+            var o = { k: 'net', kind: kind, method: cut(method || 'GET', 16), url: url, ms: Math.round(performance.now() - since) };
+            if (status) o.status = status;
+            if (why) o.failure = cut(why, 200);
+            out(o);
+          }
+          var realFetch = window.fetch;
+          if (realFetch) window.fetch = function (input, init) {
+            var since = performance.now(), method = 'GET', url = '';
+            try {
+              var request = input && typeof input === 'object' && 'url' in input ? input : null;
+              method = String((init && init.method) || (request && request.method) || 'GET').toUpperCase();
+              url = whole(request ? request.url : input);
+            } catch (e) {}
+            // Passed on as it came, so a rejection the page never handles is
+            // still reported as one.
+            return realFetch.apply(this, arguments).then(function (answer) {
+              if (answer.status >= 400) failed('fetch', method, url, answer.status, since, '');
+              return answer;
+            }, function (error) {
+              if (!error || error.name !== 'AbortError') failed('fetch', method, url, 0, since, words(error));
+              throw error;
+            });
+          };
+          var XHR = window.XMLHttpRequest && XMLHttpRequest.prototype;
+          if (XHR) {
+            var about = new WeakMap(), open = XHR.open, dispatch = XHR.send;
+            XHR.open = function (method, url) {
+              try {
+                var known = about.get(this);
+                var now = { method: String(method).toUpperCase(), url: whole(url), watched: known ? known.watched : false };
+                about.set(this, now);
+              } catch (e) {}
+              return open.apply(this, arguments);
+            };
+            XHR.send = function () {
+              var xhr = this, of = about.get(xhr);
+              if (of) {
+                of.since = performance.now();
+                of.aborted = false;
+                if (!of.watched) {
+                  of.watched = true;
+                  xhr.addEventListener('abort', function () { var now = about.get(xhr); if (now) now.aborted = true; });
+                  xhr.addEventListener('loadend', function () {
+                    var now = about.get(xhr);
+                    if (!now || now.aborted) return;
+                    if (xhr.status >= 400) failed('xhr', now.method, now.url, xhr.status, now.since, '');
+                    else if (xhr.status === 0) failed('xhr', now.method, now.url, 0, now.since, 'network error');
+                  });
+                }
+              }
+              return dispatch.apply(this, arguments);
+            };
+          }
+        })();
+        """
+    }
+
+    /// assert_layout's look at the page, from Cairn's own world: it measures
+    /// and changes nothing. Controls are named by their tag and their own
+    /// words, never by what is typed in them.
+    static let layout = #"""
+    (function () {
+      var MOST = 15;
+      function quiet(el) {
+        if (el.isContentEditable) return true;
+        return /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) && !/^(submit|button|reset)$/i.test(el.type || '');
+      }
+      function words(el) {
+        var said = el.getAttribute('aria-label') || el.getAttribute('title') || '';
+        if (!said && !quiet(el)) {
+          if (el.tagName === 'INPUT') said = el.value;
+          else {
+            var walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT), node;
+            while (said.length < 80 && (node = walk.nextNode())) {
+              var at = node.parentElement;
+              if (at && !/^(SCRIPT|STYLE|NOSCRIPT|TEXTAREA|SELECT)$/.test(at.tagName) && !at.isContentEditable) said += node.data;
+            }
+          }
+        }
+        return String(said).replace(/\s+/g, ' ').trim().slice(0, 80);
+      }
+      function named(el) {
+        var s = el.tagName.toLowerCase();
+        if (el.id) s += '#' + el.id.slice(0, 40);
+        else if (typeof el.className === 'string' && el.className.trim()) s += '.' + el.className.trim().split(/\s+/).slice(0, 2).join('.').slice(0, 60);
+        return s;
+      }
+      function about(el) { return { element: named(el), text: words(el) }; }
+      function shown(el, r) {
+        return r.width > 1 && r.height > 1 && (!el.checkVisibility || el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }));
+      }
+      var root = document.documentElement, wide = root.clientWidth;
+      var by = Math.max(root.scrollWidth, document.body ? document.body.scrollWidth : 0) - wide;
+      var all = Array.prototype.slice.call(document.body ? document.body.querySelectorAll('*') : [], 0, 4000);
+      var past = [], clipped = [], controls = [];
+      all.forEach(function (el) {
+        var r = el.getBoundingClientRect();
+        if (!shown(el, r)) return;
+        if (by > 1 && past.length < MOST && r.right + scrollX > wide + 1 &&
+            !past.some(function (p) { return p.contains(el); })) past.push(el);
+        if (el.matches('a[href],button,input:not([type=hidden]),select,textarea,summary,[role=button],[role=link]') &&
+            controls.length < 300 && getComputedStyle(el).pointerEvents !== 'none') controls.push([el, r]);
+        if (clipped.length >= MOST || quiet(el)) return;
+        if (!Array.prototype.some.call(el.childNodes, function (n) { return n.nodeType === 3 && n.data.trim(); })) return;
+        var style = getComputedStyle(el);
+        var across = /hidden|clip/.test(style.overflowX) && el.scrollWidth > el.clientWidth + 1;
+        var down = /hidden|clip/.test(style.overflowY) && el.scrollHeight > el.clientHeight + 1;
+        if (across || down) clipped.push({ el: el, axis: across && down ? 'both' : across ? 'x' : 'y',
+                                           ellipsis: style.textOverflow === 'ellipsis' });
+      });
+      var overlaps = [];
+      for (var i = 0; i < controls.length && overlaps.length < MOST; i++) {
+        for (var j = i + 1; j < controls.length && overlaps.length < MOST; j++) {
+          var a = controls[i][0], b = controls[j][0], p = controls[i][1], q = controls[j][1];
+          if (a.contains(b) || b.contains(a)) continue;
+          var left = Math.max(p.left, q.left), right = Math.min(p.right, q.right);
+          var top = Math.max(p.top, q.top), bottom = Math.min(p.bottom, q.bottom);
+          var area = Math.max(0, right - left) * Math.max(0, bottom - top);
+          var smaller = Math.min(p.width * p.height, q.width * q.height);
+          if (!smaller || area / smaller < 0.25) continue;
+          var x = (left + right) / 2, y = (top + bottom) / 2;
+          if (x >= 0 && y >= 0 && x < innerWidth && y < innerHeight) {
+            var hit = document.elementFromPoint(x, y);
+            // Something else over both is not these two covering each other.
+            if (hit && !a.contains(hit) && !b.contains(hit)) continue;
+          }
+          overlaps.push({ a: about(a), b: about(b), covered: Math.round(100 * area / smaller) });
+        }
+      }
+      return JSON.stringify({
+        viewport: [innerWidth, innerHeight], by: Math.max(0, Math.round(by)),
+        past: past.map(about),
+        overlaps: overlaps,
+        clipped: clipped.map(function (c) { var o = about(c.el); o.axis = c.axis; if (c.ellipsis) o.ellipsis = true; return o; })
+      });
+    })()
+    """#
 }

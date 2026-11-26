@@ -48,6 +48,8 @@ final class AgentWorkspaceCoordinator {
         let tab = browser.benchOpen(url, agent: true, store: store)
         own.insert(tab.id)
         PrivateNetworkRules.add(to: tab)
+        // The exceptions for a local site you turned the Dev Bridge on for.
+        DevBridge.shared.dress(tab)
         return tab
     }
 
@@ -59,6 +61,7 @@ final class AgentWorkspaceCoordinator {
         own.insert(tab.id)
         tab.inYourHands = batonWithYou
         PrivateNetworkRules.add(to: tab)
+        DevBridge.shared.dress(tab)
         return true
     }
 
@@ -83,6 +86,7 @@ final class AgentWorkspaceCoordinator {
                 tab.agentWorking = false
                 tab.inYourHands = false
                 if let web = tab.built { AgentOverlayView.remove(from: web) }
+                DevBridge.shared.release(tab)
                 PrivateNetworkRules.remove(from: tab)
                 released.append((browser, tab))
             }
@@ -99,7 +103,10 @@ final class AgentWorkspaceCoordinator {
     func close() {
         guard store != nil else { return }
         for browser in Browsers.all {
-            for tab in browser.tabs + browser.parkedTabs where own.contains(tab.id) { browser.closeTaskTab(tab) }
+            for tab in browser.tabs + browser.parkedTabs where own.contains(tab.id) {
+                DevBridge.shared.release(tab)
+                browser.closeTaskTab(tab)
+            }
         }
         own = []
         store = nil

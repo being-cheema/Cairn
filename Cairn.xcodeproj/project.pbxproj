@@ -233,6 +233,8 @@
 		A6F600000000000000000003 /* HostBlock.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6F600000000000000010003 /* HostBlock.swift */; };
 		A6F600000000000000000002 /* PagePerception.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6F600000000000000010002 /* PagePerception.swift */; };
 		A6F600000000000000000001 /* Quarantine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6F600000000000000010001 /* Quarantine.swift */; };
+		DEB100000000000000000003 /* ElementPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEB100000000000000010003 /* ElementPicker.swift */; };
+		DEB100000000000000000002 /* DevBridgeLive.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEB100000000000000010002 /* DevBridgeLive.swift */; };
 		DEB100000000000000000001 /* DevBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEB100000000000000010001 /* DevBridge.swift */; };
 		A50000000000000000000102 /* VaultedSites.swift in Sources */ = {isa = PBXBuildFile; fileRef = A50000000000000000000101 /* VaultedSites.swift */; };
 		A50000000000000000000202 /* PageMarkdown.swift in Sources */ = {isa = PBXBuildFile; fileRef = A50000000000000000000201 /* PageMarkdown.swift */; };
@@ -453,6 +455,8 @@
 		A6F600000000000000010003 /* HostBlock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HostBlock.swift; path = Sources/Search/HostBlock.swift; sourceTree = SOURCE_ROOT; };
 		A6F600000000000000010002 /* PagePerception.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PagePerception.swift; path = Sources/Search/PagePerception.swift; sourceTree = SOURCE_ROOT; };
 		A6F600000000000000010001 /* Quarantine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Quarantine.swift; path = Sources/Search/Quarantine.swift; sourceTree = SOURCE_ROOT; };
+		DEB100000000000000010003 /* ElementPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ElementPicker.swift; path = Sources/Search/ElementPicker.swift; sourceTree = SOURCE_ROOT; };
+		DEB100000000000000010002 /* DevBridgeLive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DevBridgeLive.swift; path = Sources/Search/DevBridgeLive.swift; sourceTree = SOURCE_ROOT; };
 		DEB100000000000000010001 /* DevBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DevBridge.swift; path = Sources/Search/DevBridge.swift; sourceTree = SOURCE_ROOT; };
 		A50000000000000000000101 /* VaultedSites.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = VaultedSites.swift; path = Sources/Search/VaultedSites.swift; sourceTree = SOURCE_ROOT; };
 		A50000000000000000000201 /* PageMarkdown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PageMarkdown.swift; path = Sources/Search/PageMarkdown.swift; sourceTree = SOURCE_ROOT; };
@@ -676,6 +680,8 @@
 				A6F600000000000000010003 /* HostBlock.swift */,
 				A6F600000000000000010002 /* PagePerception.swift */,
 				A6F600000000000000010001 /* Quarantine.swift */,
+				DEB100000000000000010003 /* ElementPicker.swift */,
+				DEB100000000000000010002 /* DevBridgeLive.swift */,
 				DEB100000000000000010001 /* DevBridge.swift */,
 				A50000000000000000000101 /* VaultedSites.swift */,
 				A50000000000000000000201 /* PageMarkdown.swift */,
@@ -1061,6 +1067,8 @@
 				A6F600000000000000000003 /* HostBlock.swift in Sources */,
 				A6F600000000000000000002 /* PagePerception.swift in Sources */,
 				A6F600000000000000000001 /* Quarantine.swift in Sources */,
+				DEB100000000000000000003 /* ElementPicker.swift in Sources */,
+				DEB100000000000000000002 /* DevBridgeLive.swift in Sources */,
 				DEB100000000000000000001 /* DevBridge.swift in Sources */,
 				A50000000000000000000102 /* VaultedSites.swift in Sources */,
 				A50000000000000000000202 /* PageMarkdown.swift in Sources */,

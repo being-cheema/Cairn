@@ -580,6 +580,10 @@ final class AgentSession: ObservableObject, Identifiable {
     /// You signed in for it (Pass the Baton): from then on any no of yours
     /// closes its tabs when it ends, the account with them.
     fileprivate var usedBaton = false
+    /// Its tabs have been in your hands: the Dev Bridge gives it nothing more,
+    /// handed back or not, since what you typed or signed into may be in what
+    /// the page logs.
+    fileprivate var devSealed = false
 
     /// The name the window gives it: the panel's own run is Claude.
     var shownName: String { panel ? "Claude" : client }
@@ -1029,6 +1033,8 @@ final class AgentControl: ObservableObject {
         let handsOver = how.handsOver(declined: session.declined)
         lastEnd = ["how": how.why, "handedOver": handsOver]
         if handsOver { handOverTaskTabs(session) } else { closeTaskTabs(session) }
+        // Your Stop turns the Dev Bridge off as well.
+        if stopped, was == .allowed { DevBridge.shared.revokeAll() }
         session.consent.end()
         // What was said last goes if the socket takes it now; nothing waits.
         flush(session)
@@ -1511,6 +1517,8 @@ final class AgentControl: ObservableObject {
     private func passBaton(_ tab: Tab, _ session: AgentSession, then: @escaping (HeldAction.Answer) -> Void) {
         guard session.held == nil else { return then(.declined) }
         let host = tab.pageAddress?.host()?.lowercased() ?? "this page"
+        session.devSealed = true
+        DevBridge.shared.seal(session.workspace.openTabs)
         session.workspace.passBaton(toYou: true)
         bringForward(tab, for: session)
         let hold = AgentGate.Hold(reason: .signIn, summary: "Sign in on \(host)", site: host)
@@ -1602,7 +1610,11 @@ final class AgentControl: ObservableObject {
         }
         // With the tab in your hands to sign in, where it goes is your own
         // business; the agent still can't read a blocked site afterwards.
-        let screen = NavigationPolicyEngine.screen(url, vaulted: session.workspace.batonWithYou ? [] : nil)
+        // Into a local site you turned the Dev Bridge on for, by a way it
+        // lets in (DevChain); asked of every navigation, since it follows
+        // where the tab is on its way to.
+        let local = DevBridge.shared.admits(action, on: tab)
+        let screen = NavigationPolicyEngine.screen(url, vaulted: session.workspace.batonWithYou ? [] : nil, bridged: local != nil)
         switch screen {
         case .notWeb: return done(true)
         case .blockedByPerson: return done(keptByPerson(url, session, mainFrame: toTab))
@@ -1644,7 +1656,16 @@ final class AgentControl: ObservableObject {
                 }
             }
         }
-        guard case .lookUp(let host) = screen else { return send() }
+        guard case .lookUp(let host) = screen else {
+            guard let local else { return send() }
+            // Its name still has to lead to this Mac.
+            DevBridge.shared.confirm(local) { [weak self, weak session] here in
+                guard let self, let session, self.session === session else { return done(false) }
+                if !here { return done(self.keptFrom(url, session)) }
+                send()
+            }
+            return
+        }
         PrivateNetwork.resolvesPrivately(host) { [weak self, weak session] inside in
             guard let self, let session, self.session === session else { return done(false) }
             if inside { return done(self.keptFrom(url, session)) }
@@ -1701,7 +1722,7 @@ final class AgentControl: ObservableObject {
 
     /// An allowed session with no socket, in a test run, for the unit tests
     /// to put verbs to as a connected agent would (AgentReplayTests).
-    func sessionForTest(in browser: Browser) -> AgentSession? {
+    func sessionForTest(in browser: Browser, seesTabs: Bool = false) -> AgentSession? {
         guard Store.testing, session == nil else { return nil }
         let made = AgentSession(fd: -1, program: "test")
         made.client = "test"
@@ -1709,7 +1730,7 @@ final class AgentControl: ObservableObject {
         made.greeted = true
         made.working = true
         made.consent.hello()
-        made.consent.answer(allow: true, seesTabs: false)
+        made.consent.answer(allow: true, seesTabs: seesTabs)
         session = made
         return made
     }
@@ -1843,6 +1864,105 @@ final class AgentControl: ObservableObject {
     func adopted(_ tab: Tab, from opener: Tab) {
         guard let session, session.workspace.adopt(tab, from: opener) else { return }
         if session.newTabs.count < 20 { session.newTabs.append(tab.id) }
+    }
+
+    // MARK: the Dev Bridge
+
+    /// Whether the bridge listens to a tab: this run's own, which has never
+    /// been in your hands.
+    func devRecords(_ tab: Tab) -> Bool {
+        guard let session, session.consent.state == .allowed, session.own.contains(tab.id),
+              !session.devSealed, !session.workspace.batonWithYou else { return false }
+        return !tab.inYourHands && !tab.shy
+    }
+
+    static func bridgeOff(_ message: String = "The Dev Bridge isn't on for this page",
+                          hint: String = "Only the person can turn it on, from the site card or the developer bar, on their own tab of "
+                              + "that local site. Then open it in a tab of your own. Say so in your reply.") -> AgentRefusal {
+        AgentRefusal(code: "bridge_off", message: message, hint: hint)
+    }
+
+    /// Why nothing of the bridge's can be read now, whatever the tab.
+    private func devOpen(_ session: AgentSession) throws {
+        if DevBridge.shared.origins.isEmpty { throw Self.bridgeOff() }
+        if session.devSealed || session.workspace.batonWithYou {
+            throw Self.bridgeOff("The person has had your tab, so the Dev Bridge gives this task nothing more",
+                                 hint: "Say so in your reply. A new task starts afresh.")
+        }
+    }
+
+    /// The granted origin a tab's page may be read from, or nil.
+    private func devOrigin(of tab: Tab, _ session: AgentSession) -> DevOrigin? {
+        guard devRecords(tab), !Self.isVaulted(tab), let origin = DevOrigin(tab.committed),
+              DevBridge.shared.isGranted(origin) else { return nil }
+        return origin
+    }
+
+    private func devTab(_ request: [String: Any], _ session: AgentSession, _ browser: Browser) throws -> (Tab, DevOrigin) {
+        try devOpen(session)
+        let tab = try self.tab(request, session, browser, .drive)
+        guard let origin = devOrigin(of: tab, session) else { throw Self.bridgeOff() }
+        return (tab, origin)
+    }
+
+    /// An agent's own tab still holding a page from this Mac or a private
+    /// network that no grant covers now: the bridge was turned off under it.
+    /// Nothing of it is read or touched.
+    private static func isShut(_ tab: Tab, _ session: AgentSession) -> Bool {
+        guard session.own.contains(tab.id), !session.workspace.batonWithYou, let url = tab.committed,
+              PrivateNetwork.refuses(url) else { return false }
+        return !(DevOrigin(url).map(DevBridge.shared.isGranted) ?? false)
+    }
+
+    /// Before `navigate` takes a tab into a granted origin from some other
+    /// page, that page is put away: left running, it could send the tab
+    /// somewhere in the origin while the load asked for is on its way, and
+    /// WebKit names it as the source of both.
+    private func entering(_ url: URL, in tab: Tab, _ session: AgentSession, _ answer: @escaping ([String: Any]) -> Void,
+                          _ go: @escaping () -> Void) {
+        @MainActor func start() {
+            guard live(session) else { return answer(AgentRefusal(code: "stopped", message: "Stopped in \(Brand.name)").said) }
+            DevBridge.shared.expect(url, on: tab)
+            go()
+        }
+        guard let origin = DevOrigin(url), DevBridge.shared.isGranted(origin) else { return start() }
+        DevBridge.shared.ready { [weak tab] in
+            guard let tab else { return }
+            guard let here = tab.committed, ["http", "https"].contains(here.scheme?.lowercased() ?? ""),
+                  DevOrigin(here) != origin, let blank = URL(string: "about:blank") else { return start() }
+            tab.go(to: blank)
+            let limit = Date().addingTimeInterval(5)
+            @MainActor func look() {
+                if tab.committed?.absoluteString == "about:blank" { return start() }
+                guard Date() < limit else {
+                    return answer(AgentRefusal(code: "not_ready", message: "The page before wouldn't close: not done",
+                                               hint: "Open the address in a new tab with open_tab.").said)
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { look() }
+            }
+            look()
+        }
+    }
+
+    private func assertLayout(_ request: [String: Any], _ session: AgentSession, _ browser: Browser,
+                              _ answer: @escaping ([String: Any]) -> Void) throws {
+        let (tab, origin) = try devTab(request, session, browser)
+        let handle = session.handle(for: tab)
+        holdingStill(tab, session) { [weak self] _ in
+            self?.page(tab, session, DevScripts.layout) { [weak self] result in
+                guard let self else { return }
+                switch result {
+                case .failure(let refusal): answer(refusal.said)
+                case .success(let found):
+                    // Asked again now it is done: it may have been turned off,
+                    // or the page moved on, while the page was looked at.
+                    guard self.devOrigin(of: tab, session) == origin else { return answer(Self.bridgeOff().said) }
+                    var out = DevReport.layout(found, page: handle, log: DevBridge.shared.log(of: tab.id))
+                    out["origin"] = origin.said
+                    answer(out)
+                }
+            }
+        }
     }
 
     // MARK: Fast Macros
@@ -2137,13 +2257,17 @@ final class AgentControl: ObservableObject {
                         guard list != nil else {
                             return answer(AgentRefusal(code: "internal", message: "Couldn't set up the network rules: nothing was opened").said)
                         }
-                        let tab = session.workspace.open(url, in: browser)
-                        if let site = AgentGate.site(url) { session.sites.insert(site) }
-                        self.work(on: tab, session)
-                        PageRoom.shared.house(tab)
-                        self.settle(tab, session, timeout: request["timeout"] as? Double ?? 20) { out in
-                            self.record(MacroStep(kind: .open, tab: 0, url: url.absoluteString), on: tab, session, if: out)
-                            answer(out)
+                        DevBridge.shared.ready { [weak self] in
+                            guard let self, self.live(session) else { return answer(AgentRefusal(code: "stopped", message: "Stopped in \(Brand.name)").said) }
+                            let tab = session.workspace.open(url, in: browser)
+                            DevBridge.shared.expect(url, on: tab)
+                            if let site = AgentGate.site(url) { session.sites.insert(site) }
+                            self.work(on: tab, session)
+                            PageRoom.shared.house(tab)
+                            self.settle(tab, session, timeout: request["timeout"] as? Double ?? 20) { out in
+                                self.record(MacroStep(kind: .open, tab: 0, url: url.absoluteString), on: tab, session, if: out)
+                                answer(out)
+                            }
                         }
                     }
                 }
@@ -2160,11 +2284,13 @@ final class AgentControl: ObservableObject {
                 func go() {
                     guard self.live(session) else { return answer(AgentRefusal(code: "stopped", message: "Stopped in \(Brand.name)").said) }
                     if let site = AgentGate.site(url) { session.sites.insert(site) }
-                    tab.go(to: url)
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
-                        self?.settle(tab, session, timeout: request["timeout"] as? Double ?? 20) { out in
-                            self?.record(MacroStep(kind: .go, tab: 0, url: url.absoluteString), on: tab, session, if: out)
-                            answer(out)
+                    self.entering(url, in: tab, session, answer) { [weak self] in
+                        tab.go(to: url)
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+                            self?.settle(tab, session, timeout: request["timeout"] as? Double ?? 20) { out in
+                                self?.record(MacroStep(kind: .go, tab: 0, url: url.absoluteString), on: tab, session, if: out)
+                                answer(out)
+                            }
                         }
                     }
                 }
@@ -2279,8 +2405,25 @@ final class AgentControl: ObservableObject {
                 try waitFor(request, session, browser, answer)
             case .shot:
                 try shot(request, session, browser, answer)
-            case .readConsole, .readNetworkErrors, .assertLayout, .devConsole, .devNetworkErrors:
-                throw AgentRefusal(code: "bridge_off", message: "The Dev Bridge is off")
+            case .readConsole, .readNetworkErrors:
+                let (tab, origin) = try devTab(request, session, browser)
+                let handle = session.handle(for: tab)
+                let logs = [(handle, DevBridge.shared.log(of: tab.id))]
+                var out = known == .readConsole ? DevReport.console(logs, level: request["level"] as? String)
+                    : DevReport.network(logs)
+                out["page"] = handle
+                out["origin"] = origin.said
+                answer(out)
+            case .devConsole, .devNetworkErrors:
+                try devOpen(session)
+                // This run's own tabs that may be read, and no other's.
+                let logs = session.workspace.openTabs.compactMap { tab -> (String, DevLog)? in
+                    devOrigin(of: tab, session) == nil ? nil : (session.handle(for: tab), DevBridge.shared.log(of: tab.id))
+                }.sorted { $0.0 < $1.0 }
+                guard !logs.isEmpty else { throw Self.bridgeOff() }
+                answer(known == .devConsole ? DevReport.console(logs, level: nil) : DevReport.network(logs))
+            case .assertLayout:
+                try assertLayout(request, session, browser, answer)
             case .bye:
                 answer(["bye": true])
                 DispatchQueue.main.async { [weak self] in self?.end(session, .bye) }
@@ -2294,7 +2437,8 @@ final class AgentControl: ObservableObject {
 
     /// The address an `open` or `go` names, or why it isn't one.
     private static func destination(_ request: [String: Any]) throws -> URL {
-        switch NavigationPolicyEngine.destination(request["url"] as? String ?? "") {
+        switch NavigationPolicyEngine.destination(request["url"] as? String ?? "",
+                                                  bridged: { DevBridge.shared.isGranted($0) }) {
         case .success(let url): return url
         case .failure(.notWeb): throw badAddress
         case .failure(.blockedByPerson):
@@ -2321,8 +2465,15 @@ final class AgentControl: ObservableObject {
         }
         let refusal = found.map { AgentRules.refusal(for: $0, own: session.own.contains($0.id), consent: session.consent, use: use) }
             ?? "stale_page"
+        // The tab you turned the Dev Bridge on from is never read: it may be
+        // signed in, and it is yours.
+        if refusal == nil, use == .read, let found, !session.own.contains(found.id), DevBridge.shared.granted(from: found) != nil {
+            throw AgentRefusal(code: "not_yours", message: "That tab is the person's, with the Dev Bridge turned on from it: it isn't read",
+                               hint: "Open the address in a tab of your own with open_tab.")
+        }
         switch refusal {
         case nil:
+            if !closing, let found, Self.isShut(found, session) { throw Self.bridgeOff() }
             // One already open, or handed over, on a site you closed since or
             // before: nothing of it is read or touched. Closing one of its
             // own is still allowed.
@@ -2375,12 +2526,14 @@ final class AgentControl: ObservableObject {
         // Asked again here and when the answer comes: the page may have moved
         // since the tab was looked up.
         guard evenVaulted || !Self.isVaulted(tab) else { return done(.failure(Self.blockedByPerson())) }
+        guard !Self.isShut(tab, session) else { return done(.failure(Self.bridgeOff())) }
         web.evaluateJavaScript(script, in: nil, in: Web.world) { [weak self] result in
             guard let self, live(session) else {
                 done(.failure(AgentRefusal(code: "stopped", message: "Stopped in \(Brand.name)")))
                 return
             }
             guard evenVaulted || !Self.isVaulted(tab) else { return done(.failure(Self.blockedByPerson())) }
+            guard !Self.isShut(tab, session) else { return done(.failure(Self.bridgeOff())) }
             switch result {
             case .failure(let error):
                 done(.failure(AgentRefusal(code: "page", message: error.localizedDescription)))
