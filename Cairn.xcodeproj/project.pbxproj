@@ -218,6 +218,8 @@
 		E4C2786B9086A18EA1020E87 /* IPhoneAsk.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FD176F37B4544CCB9EDC841 /* IPhoneAsk.swift */; };
 		E58C224827CC979B5BC5F173 /* FullScreenEscape.swift in Sources */ = {isa = PBXBuildFile; fileRef = 580DA494D5F4E469E98BD657 /* FullScreenEscape.swift */; };
 		E5CF896F2F0E502555C6BE2D /* AgentGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8379674D042E25B77B4480E7 /* AgentGate.swift */; };
+		A6F600000000000000000009 /* SpacePageSize.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6F600000000000000010009 /* SpacePageSize.swift */; };
+		A6F600000000000000000008 /* TabTriage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6F600000000000000010008 /* TabTriage.swift */; };
 		A6F600000000000000000007 /* ReadingMemory.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6F600000000000000010007 /* ReadingMemory.swift */; };
 		A6F600000000000000000006 /* MemoryIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6F600000000000000010006 /* MemoryIndex.swift */; };
 		A6F600000000000000000005 /* FastMacros.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6F600000000000000010005 /* FastMacros.swift */; };
@@ -419,6 +421,8 @@
 		82911EA0E31E67F7D9E2AC5D /* SettingsIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SettingsIndex.swift; path = Sources/Search/SettingsIndex.swift; sourceTree = SOURCE_ROOT; };
 		82E59D50C2200C467315D4F9 /* ImageMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ImageMenu.swift; path = Sources/Search/ImageMenu.swift; sourceTree = SOURCE_ROOT; };
 		8379674D042E25B77B4480E7 /* AgentGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AgentGate.swift; path = Sources/Search/AgentGate.swift; sourceTree = SOURCE_ROOT; };
+		A6F600000000000000010009 /* SpacePageSize.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SpacePageSize.swift; path = Sources/Search/SpacePageSize.swift; sourceTree = SOURCE_ROOT; };
+		A6F600000000000000010008 /* TabTriage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TabTriage.swift; path = Sources/Search/TabTriage.swift; sourceTree = SOURCE_ROOT; };
 		A6F600000000000000010007 /* ReadingMemory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ReadingMemory.swift; path = Sources/Search/ReadingMemory.swift; sourceTree = SOURCE_ROOT; };
 		A6F600000000000000010006 /* MemoryIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MemoryIndex.swift; path = Sources/Search/MemoryIndex.swift; sourceTree = SOURCE_ROOT; };
 		A6F600000000000000010005 /* FastMacros.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = FastMacros.swift; path = Sources/Search/FastMacros.swift; sourceTree = SOURCE_ROOT; };
@@ -623,6 +627,8 @@
 				BB9127E55C232A51DE422327 /* AgentBanner.swift */,
 				5A3B2EDD8D3157B85CF50D9B /* AgentControl.swift */,
 				8379674D042E25B77B4480E7 /* AgentGate.swift */,
+				A6F600000000000000010009 /* SpacePageSize.swift */,
+				A6F600000000000000010008 /* TabTriage.swift */,
 				A6F600000000000000010007 /* ReadingMemory.swift */,
 				A6F600000000000000010006 /* MemoryIndex.swift */,
 				A6F600000000000000010005 /* FastMacros.swift */,
@@ -989,6 +995,8 @@
 				38FA09E06371716F9CE55373 /* AgentBanner.swift in Sources */,
 				01744E61AC11FE472BB499F1 /* AgentControl.swift in Sources */,
 				E5CF896F2F0E502555C6BE2D /* AgentGate.swift in Sources */,
+				A6F600000000000000000009 /* SpacePageSize.swift in Sources */,
+				A6F600000000000000000008 /* TabTriage.swift in Sources */,
 				A6F600000000000000000007 /* ReadingMemory.swift in Sources */,
 				A6F600000000000000000006 /* MemoryIndex.swift in Sources */,
 				A6F600000000000000000005 /* FastMacros.swift in Sources */,

@@ -289,6 +289,7 @@ struct Command: Identifiable {
         Command("tabs.search", "Search Tabs…", .tabs, KeyCombo("k")) { browser in
             browser.searchTabsKey()
         },
+        Command("tabs.triage", "Triage Tabs…", .tabs, KeyCombo("k", shift: true)) { $0.triaging = true },
         // ⌥⌘N, Chrome's on the Mac: ⌃⌘S is the Mac's own Show Sidebar, and
         // sits beside ⌘S, which folds the tabs away.
         Command("tabs.split", "Split Current Page", .tabs, KeyCombo("n", option: true)) { browser in

@@ -43,6 +43,9 @@ struct Space: Codable, Identifiable, Equatable {
     /// How strongly its colour or gradient washes the chrome (see
     /// SpaceStrength); nil, as every space from before has, for Subtle.
     var strength: SpaceStrength? = nil
+    /// The size its pages are laid out at (see SpacePageSize.swift); nil, as
+    /// every space from before has, for the whole window.
+    var pageSize: String? = nil
 
     var profileID: UUID { profile ?? Profile.personalID }
 

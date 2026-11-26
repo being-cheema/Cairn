@@ -845,6 +845,8 @@ final class Browser: NSObject, ObservableObject {
     /// The tab it is over.
     weak var snapTab: Tab?
     /// True while the list of what is hidden here is up.
+    /// Tabs › Triage Tabs… (TabTriage).
+    @Published var triaging = false
     @Published var reviewing = false {
         didSet { if !reviewing { stopPeeking() } }
     }
