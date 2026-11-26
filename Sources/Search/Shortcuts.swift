@@ -239,6 +239,7 @@ struct Command: Identifiable {
         Command("edit.findNext", "Find Next", .edit, KeyCombo("g")) { $0.look(forward: true) },
         Command("edit.findPrevious", "Find Previous", .edit, KeyCombo("g", shift: true)) { $0.look(forward: false) },
         Command("edit.copyCleanLink", "Copy Clean Link", .edit, KeyCombo("c", shift: true, option: true)) { $0.copyCleanLink() },
+        Command("edit.copyImageText", "Copy Text from Image/Video", .edit, KeyCombo("o", shift: true)) { $0.copyTextFromPage() },
 
         Command("view.sidebar", "Show Tabs in Sidebar", .view, KeyCombo("s", shift: true)) { $0.toggleSidebar() },
         Command("view.fold", "Hide Sidebar or Tab Bar", .view, KeyCombo("s")) { $0.toggleFold() },

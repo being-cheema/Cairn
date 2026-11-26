@@ -185,7 +185,7 @@ enum PageScripts {
         els.push(el); nodes.push(n);
       }
       globalThis[key] = { snap: snap, els: els };
-      var out = { url: location.href, title: document.title, nodes: nodes, nodesTruncated: cut,
+      var out = { url: location.href, title: document.title, kind: document.contentType, nodes: nodes, nodesTruncated: cut,
         nodeOffset: nodeOffset, nextNodeOffset: cut ? nodeOffset + nodes.length : null,
         viewport: { width: vw, height: vh, scrollY: Math.round(scrollY),
           scrollHeight: document.documentElement ? document.documentElement.scrollHeight : 0 } };

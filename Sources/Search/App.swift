@@ -152,6 +152,9 @@ struct SearchApp: App {
                 Button("Copy Clean Link") { browser.copyCleanLink() }
                     .shortcut("edit.copyCleanLink")
                     .disabled(browser.active?.isBlank ?? true)
+                Button("Copy Text from Image/Video") { browser.copyTextFromPage() }
+                    .shortcut("edit.copyImageText")
+                    .disabled(!(browser.active?.isWeb ?? false))
                 Divider()
                 Button("Find on Page…") { browser.openFind() }
                     .shortcut("edit.find")
