@@ -243,14 +243,9 @@ enum AIPage {
 
     // MARK: - the reading
 
-    /// Read-only: the page is looked at and nothing on it is changed.
-    static let script = """
-    (function () {
-      var seen = 0, limit = 40000;
-      var skip = { SCRIPT: 1, STYLE: 1, NOSCRIPT: 1, TEMPLATE: 1, IFRAME: 1, FRAME: 1, OBJECT: 1, EMBED: 1,
-                   INPUT: 1, TEXTAREA: 1, SELECT: 1, OPTION: 1, SVG: 1, CANVAS: 1, VIDEO: 1, AUDIO: 1, HEAD: 1 };
-      var width = document.documentElement.scrollWidth, height = document.documentElement.scrollHeight;
-
+    /// What a person could see, for every reader of a page's words: this
+    /// one, and what you selected (Mentions). Wants `width`, the page's.
+    static let seeing = """
       // Whether a person could see this element, and so everything in it.
       function shown(el) {
         if (el.hidden || el.getAttribute('aria-hidden') === 'true' || el.inert) return false;
@@ -275,6 +270,34 @@ enum AIPage {
         return true;
       }
 
+      // Colours, for text written in the colour of what is behind it.
+      function rgb(value) {
+        var m = /^rgba?\\(([\\d.]+),\\s*([\\d.]+),\\s*([\\d.]+)(?:,\\s*([\\d.]+))?\\)/.exec(value || '');
+        return m ? { r: +m[1], g: +m[2], b: +m[3], a: m[4] === undefined ? 1 : +m[4] } : null;
+      }
+      function light(c) {
+        function one(v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }
+        return 0.2126 * one(c.r) + 0.7152 * one(c.g) + 0.0722 * one(c.b);
+      }
+      function unreadable(color, behind) {
+        var c = rgb(color);
+        if (!c || !behind) return false;
+        if (c.a < 0.3) return true;
+        var a = light(c), b = light(behind);
+        return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05) < 1.25;
+      }
+    """
+
+    /// Read-only: the page is looked at and nothing on it is changed.
+    static let script = """
+    (function () {
+      var seen = 0, limit = 40000;
+      var skip = { SCRIPT: 1, STYLE: 1, NOSCRIPT: 1, TEMPLATE: 1, IFRAME: 1, FRAME: 1, OBJECT: 1, EMBED: 1,
+                   INPUT: 1, TEXTAREA: 1, SELECT: 1, OPTION: 1, SVG: 1, CANVAS: 1, VIDEO: 1, AUDIO: 1, HEAD: 1 };
+      var width = document.documentElement.scrollWidth, height = document.documentElement.scrollHeight;
+
+    \(seeing)
+
       function prose(el) {
         var paragraphs = el.querySelectorAll('p');
         if (paragraphs.length < 2) return 0;
@@ -298,23 +321,6 @@ enum AIPage {
       // boxes of links — which would take the place of the article's end.
       var clutter = 'nav, footer, aside, [role="navigation"], [role="contentinfo"], [role="complementary"], ' +
         '.reflist, .references, .mw-references-wrap, .refbegin, .navbox, .vertical-navbox, .catlinks, #references';
-
-      // Colours, for text written in the colour of what is behind it.
-      function rgb(value) {
-        var m = /^rgba?\\(([\\d.]+),\\s*([\\d.]+),\\s*([\\d.]+)(?:,\\s*([\\d.]+))?\\)/.exec(value || '');
-        return m ? { r: +m[1], g: +m[2], b: +m[3], a: m[4] === undefined ? 1 : +m[4] } : null;
-      }
-      function light(c) {
-        function one(v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }
-        return 0.2126 * one(c.r) + 0.7152 * one(c.g) + 0.0722 * one(c.b);
-      }
-      function unreadable(color, behind) {
-        var c = rgb(color);
-        if (!c || !behind) return false;
-        if (c.a < 0.3) return true;
-        var a = light(c), b = light(behind);
-        return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05) < 1.25;
-      }
 
       var out = [], links = [];
       // `behind`: the colour behind this node, or null where a picture is

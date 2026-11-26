@@ -88,11 +88,68 @@ enum Mentions {
         }.prefix(8))
     }
 
+    /// The words you selected that you could see. Only those: a page can put
+    /// text you never saw inside the stretch you dragged over. What you are
+    /// writing in its editor is in, if you selected it.
+    static let selectionScript = """
+    (function () {
+      var picked = window.getSelection();
+      if (!picked || !picked.rangeCount) return '';
+      var width = document.documentElement.scrollWidth;
+
+    \(AIPage.seeing)
+
+      // The colour behind an element: the first painted of it and its
+      // parents, null over a picture, white where nothing is painted.
+      function ground(el) {
+        for (var up = el; up && up.nodeType === 1; up = up.parentElement) {
+          var s = getComputedStyle(up);
+          if (s.backgroundImage && s.backgroundImage !== 'none') return null;
+          var painted = rgb(s.backgroundColor);
+          if (painted && painted.a > 0.5) return painted;
+        }
+        return { r: 255, g: 255, b: 255, a: 1 };
+      }
+      function visible(node) {
+        var parent = node.parentElement;
+        if (!parent || /^(SCRIPT|STYLE|NOSCRIPT|TEMPLATE)$/.test(parent.tagName)) return false;
+        var alpha = 1;
+        for (var up = parent; up && up !== document.documentElement; up = up.parentElement) {
+          if (!shown(up)) return false;
+          alpha *= parseFloat(getComputedStyle(up).opacity);
+        }
+        if (alpha < 0.1) return false;
+        var s = getComputedStyle(parent), behind = ground(parent), fill = rgb(s.webkitTextFillColor);
+        return !unreadable(s.color, behind) && !(fill && fill.a < 0.3);
+      }
+
+      var out = '', block = null;
+      for (var i = 0; i < picked.rangeCount; i++) {
+        var range = picked.getRangeAt(i), root = range.commonAncestorContainer;
+        var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        var node = root.nodeType === 3 ? root : walker.nextNode(), seen = 0;
+        for (; node && seen < 40000; node = root.nodeType === 3 ? null : walker.nextNode(), seen++) {
+          if (!range.intersectsNode(node) || !visible(node)) continue;
+          var from = node === range.startContainer ? range.startOffset : 0;
+          var to = node === range.endContainer ? range.endOffset : node.nodeValue.length;
+          var words = node.nodeValue.slice(from, to).replace(/\\s+/g, ' ');
+          if (!words) continue;
+          var box = node.parentElement;
+          while (box.parentElement && /^inline/.test(getComputedStyle(box).display)) box = box.parentElement;
+          if (block && box !== block && words.trim()) out += '\\n';
+          if (words.trim()) block = box;
+          out += words;
+        }
+      }
+      return out.replace(/[ \\t]*\\n[ \\t\\n]*/g, '\\n').replace(/ {2,}/g, ' ');
+    })()
+    """
+
     /// What is selected in a page, read where the page's scripts can't reach.
     @MainActor static func selection(in tab: Tab) async -> String? {
         guard mayName(tab), let web = tab.built else { return nil }
         let value: Any? = await withCheckedContinuation { done in
-            web.evaluateJavaScript("String(window.getSelection())", in: nil, in: Web.world) { done.resume(returning: try? $0.get()) }
+            web.evaluateJavaScript(selectionScript, in: nil, in: Web.world) { done.resume(returning: try? $0.get()) }
         }
         let text = (value as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         return text.isEmpty ? nil : String(text.prefix(longest))
