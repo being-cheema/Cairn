@@ -125,13 +125,25 @@ struct Artifact: Equatable, Identifiable {
     /// For your clipboard. What came from a page can't break out of its
     /// cell or become a link: Markdown's marks are escaped.
     var markdown: String {
-        func plain(_ text: String) -> String {
+        func escaped(_ text: Substring) -> String {
             var out = ""
             for character in text {
                 if "\\`*_[]<>|".contains(character) { out.append("\\") }
                 out.append(character)
             }
             return out
+        }
+        // A bare address would be made a link wherever this is pasted: set
+        // as code, which never is. A sentence's own full stop stays outside.
+        func plain(_ text: String) -> String {
+            var out = "", rest = Substring(text)
+            while let found = rest.range(of: #"(?i)\b(https?://|www\.)[^\s`|<>]+"#, options: .regularExpression) {
+                var end = found.upperBound
+                while end > found.lowerBound, ".,;:!?)".contains(rest[rest.index(before: end)]) { end = rest.index(before: end) }
+                out += escaped(rest[..<found.lowerBound]) + "`" + rest[found.lowerBound..<end] + "`"
+                rest = rest[end...]
+            }
+            return out + escaped(rest)
         }
         func from(_ source: Source?) -> String { source.map { " (\($0.address))" } ?? "" }
         var out = "## \(plain(title))\n\n"
@@ -266,7 +278,9 @@ struct ArtifactCard: View {
                     .background(Palette.wash, in: Capsule())
             }
             .buttonStyle(.plain)
-            .help(source.address)
+            // Claude points at the tab; the browser writes where that tab
+            // was. Neither proves the words came from there.
+            .help("The page Claude named as the source: \(source.address)")
         }
     }
 }

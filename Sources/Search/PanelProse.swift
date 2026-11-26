@@ -143,7 +143,11 @@ enum PanelProse {
             // Where it pointed, unless the words already say.
             if let link {
                 let host = link.host()?.lowercased() ?? link.scheme ?? ""
-                if !host.isEmpty, !words.lowercased().contains(host) { out += AttributedString(" (\(host))") }
+                // Named whole: "banana.com" doesn't say a.co.
+                let whole = "(?<![a-z0-9.\\-])" + NSRegularExpression.escapedPattern(for: host) + "(?![a-z0-9\\-]|\\.[a-z0-9])"
+                if !host.isEmpty, words.lowercased().range(of: whole, options: .regularExpression) == nil {
+                    out += AttributedString(" (\(host))")
+                }
             }
             link = nil
             words = ""

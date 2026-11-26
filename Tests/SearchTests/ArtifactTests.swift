@@ -49,7 +49,7 @@ final class ArtifactTests: XCTestCase {
                                "rows": [[["text": "a | b <img> [c](d)", "source_page": "p1"]]]]).get()
         let text = made.markdown
         XCTAssertTrue(text.contains(#"a \| b \<img\> \[c\](d) (https://a.example/x)"#), text)
-        XCTAssertTrue(text.hasPrefix(#"## A \[x\](https://evil.example)"#), text)
+        XCTAssertTrue(text.hasPrefix(#"## A \[x\](`https://evil.example`)"#), text)
     }
 
     func testAChecklist() throws {
