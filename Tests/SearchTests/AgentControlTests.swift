@@ -86,7 +86,8 @@ final class AgentControlTests: XCTestCase {
 
     func testOnlyTheWeb() {
         XCTAssertEqual(AgentRules.address("https://example.com/a?b=1")?.absoluteString, "https://example.com/a?b=1")
-        XCTAssertEqual(AgentRules.address("http://127.0.0.1:8080/")?.host, "127.0.0.1")
+        XCTAssertEqual(AgentRules.address("http://example.com:8080/")?.port, 8080)
+        XCTAssertNil(AgentRules.address("http://127.0.0.1:8080/"), "this Mac: AgentNetworkTests")
         XCTAssertEqual(AgentRules.address("example.com")?.absoluteString, "https://example.com")
         for refused in ["file:///etc/passwd", "search://settings", "search://passwords", "javascript:alert(1)",
                         "data:text/html,hi", "about:blank", "webkit-extension://abc/popup.html",

@@ -39,6 +39,11 @@ PAGES = {
     "/pay": '<h1>Pay</h1><form action="/paid" method="post"><label>Number <input name="n" autocomplete="cc-number"></label><button>Go</button></form>',
     "/login": '<h1>In</h1><form action="/signed" method="post"><label>Name <input name="u"></label><label>Secret <input type="password" name="p"></label><button>Continue</button></form>',
     "/search": '<h1>Find</h1><form action="/found" method="get"><label>Query <input name="q"></label><button>Go</button></form>',
+    "/script": '<h1>Script</h1><form id="f" action="/scripted" method="post"><input type="hidden" name="a" value="1"></form>'
+               '<button type="button" onclick="document.getElementById(\'f\').submit()">Weiter</button>',
+    "/inside": '<h1>Inside</h1><p id="s">waiting</p><script>fetch("http://localhost:PORT/fetched", {mode: "no-cors"})'
+               '.then(() => s.textContent = "reached", () => s.textContent = "stopped")</script>',
+    "/later": '<h1>Later</h1><script>setInterval(() => fetch("http://localhost:PORT/later-fetched", {mode: "no-cors"}).catch(() => {}), 500)</script>',
     "/plain": '<h1>Plain</h1><button type="button" onclick="document.title=\'clicked\'">Show more</button>',
 }
 
@@ -54,8 +59,13 @@ class Page(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = self.path.split("?")[0]
+        if path == "/redirect":
+            self.send_response(302)
+            self.send_header("Location", f"http://localhost:{self.server.server_port}/redirected")
+            self.send_header("Content-Length", "0")
+            return self.end_headers()
         if path in PAGES:
-            return self.respond(PAGES[path])
+            return self.respond(PAGES[path].replace("PORT", str(self.server.server_port)))
         HITS.append(("GET", self.path))
         self.respond("<p>result</p>")
 
@@ -153,6 +163,7 @@ def main():
     a = None
     try:
         sv.setup(**{"agents": True})
+        subprocess.run(["defaults", "write", sv.SUITE, "test.agentLocalHosts", "-array", "127.0.0.1"], check=True)
         sv.launch()
         a = Client()
         n = a.call("open_tab", url=f"{BASE}/post")
@@ -249,6 +260,46 @@ def main():
         go("/plain")
         x, err = a.tool("click", element=node(read(), "button", "Show more")["element"])
         t.ok("a plain button is not held", not err and agents().get("held") == "", x)
+
+        # ---- a button that gives nothing away, whose script sends the form:
+        # only what leaves shows it
+        del HITS[:]
+        go("/script")
+        n = a.call("click", element=node(read(), "button", "Weiter")["element"])
+        t.ok("a script's form.submit() is held as it leaves", until(lambda: agents().get("heldReason") == "submit"), agents())
+        time.sleep(1.0)
+        t.ok("nothing of it is sent while it waits", hits() == [], HITS)
+        agents("decline")
+        a.result(n)
+        time.sleep(0.8)
+        t.ok("declined: the script's form is not sent", hits() == [], HITS)
+        go("/script")
+        n = a.call("click", element=node(read(), "button", "Weiter")["element"])
+        t.ok("held again", until(lambda: agents().get("held")))
+        agents("approve")
+        a.result(n)
+        t.ok("approved: the script's form is sent once", until(lambda: len(hits()) == 1), HITS)
+
+        # ---- this Mac and the network around it ("localhost" is not among
+        # the hosts a test run lets through; 127.0.0.1 is)
+        del HITS[:]
+        x, err = a.tool("navigate", page="p1", url=f"http://localhost:{srv.server_port}/direct")
+        t.ok("a private address is refused", err and code(x) == "private_address", x)
+        x, err = a.tool("open_tab", url="http://192.168.1.1/")
+        t.ok("and not opened", err and code(x) == "private_address", x)
+        x, err = a.tool("navigate", page="p1", url=f"{BASE}/redirect")
+        t.ok("a redirect inside is not followed, and said", "localhost" in " ".join(x.get("blocked", [])), x)
+        go("/inside")
+        t.ok("a page's own fetch inside is stopped", until(lambda: "stopped" in json.dumps(read())), read())
+        t.ok("nothing reached it", not any(h[1].startswith(("/direct", "/redirected", "/fetched")) for h in HITS), HITS)
+
+        # ---- handed to you, the tab is yours, and so is your own network
+        go("/later")
+        time.sleep(1.5)
+        reached = lambda: any(h[1].startswith("/later-fetched") for h in HITS)
+        t.ok("while the agent has it, its fetches inside are stopped", not reached(), HITS)
+        a.tool("disconnect")
+        t.ok("handed over, the same page reaches your own network again", until(reached), (agents(), HITS))
     finally:
         if a:
             a.close()

@@ -110,6 +110,7 @@ def main():
     try:
         sv.setup(sidebar=True)
         subprocess.run(["defaults", "write", sv.SUITE, "test.claudeHosts", "-array", "127.0.0.1"], check=True)
+        subprocess.run(["defaults", "write", sv.SUITE, "test.agentLocalHosts", "-array", "127.0.0.1"], check=True)
         sv.launch()
         a = sv.page("a")
         sv.cmd({"do": "go", "id": a, "url": f"{SITE}/set"}); time.sleep(1.0)

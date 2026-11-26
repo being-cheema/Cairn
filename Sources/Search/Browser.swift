@@ -8379,6 +8379,22 @@ extension Browser: WKNavigationDelegate, WKUIDelegate {
         preferences: WKWebpagePreferences,
         decisionHandler: @escaping (WKNavigationActionPolicy, WKWebpagePreferences) -> Void
     ) {
+        // A tab an agent has asks first (AgentControl.vet): a private address
+        // or a form on its way out waits or stops here.
+        if let tab = tab(for: webView), tab.agent {
+            AgentControl.shared.vet(action, on: tab) { [weak self] allowed in
+                guard allowed, let self else { return decisionHandler(.cancel, preferences) }
+                self.settlePolicy(webView, action, preferences, decisionHandler)
+            }
+        } else {
+            settlePolicy(webView, action, preferences, decisionHandler)
+        }
+    }
+
+    private func settlePolicy(
+        _ webView: WKWebView, _ action: WKNavigationAction, _ preferences: WKWebpagePreferences,
+        _ decisionHandler: @escaping (WKNavigationActionPolicy, WKWebpagePreferences) -> Void
+    ) {
         decide(webView, action) { [weak self] policy in
             // Revoke before WebKit can run the old document's unload handlers.
             // A nil target is a new window, not this tab leaving its document.

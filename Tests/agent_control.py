@@ -228,6 +228,7 @@ def main():
     clients = []
     try:
         sv.setup(agents=True)
+        subprocess.run(["defaults", "write", sv.SUITE, "test.agentLocalHosts", "-array", "127.0.0.1"], check=True)
         # A notification grant you gave the test site before, which the
         # agent's tab never gets (M1).
         subprocess.run(["defaults", "write", sv.SUITE, f"capture.{BASE}|notifications", "-bool", "true"])

@@ -154,6 +154,7 @@ def main():
     a = None
     try:
         sv.setup(**{"agents": True})
+        subprocess.run(["defaults", "write", sv.SUITE, "test.agentLocalHosts", "-array", "127.0.0.1"], check=True)
         sv.launch()
         a = Client()
         n = a.call("open_tab", url=f"{BASE}/dialog")

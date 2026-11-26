@@ -162,6 +162,13 @@ enum AgentGate {
         return hold(click: asSubmit, on: page, sites: [], rules: Rules(commits: true, leaves: false))
     }
 
+    /// A document on its way out with something in it: a form sent, however
+    /// it was started (AgentControl.vet). Said with the host alone.
+    static func hold(sending method: String, to url: URL) -> Hold? {
+        guard !["GET", "HEAD", "OPTIONS"].contains(method.uppercased()) else { return nil }
+        return Hold(reason: .submit, summary: "Send a form: this page is sending data to \(url.host()?.lowercased() ?? "a site")")
+    }
+
     /// An address the agent would take a tab to.
     static func hold(address url: URL, sites: Set<String>, rules: Rules,
                      registrable: (String) -> String = Vault.registrable) -> Hold? {
