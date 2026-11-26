@@ -24,6 +24,20 @@ final class AgentWorkspaceCoordinator {
     private(set) var own: Set<Tab.ID> = []
     /// The task's store; nil before the first tab and after the task ends.
     private(set) var store: WKWebsiteDataStore?
+    /// Its tabs are in your hands, to sign in (Pass the Baton).
+    private(set) var batonWithYou = false
+
+    private var tabs: [Tab] { Browsers.all.flatMap(\.tabs).filter { own.contains($0.id) } }
+
+    /// The task's tabs put in your hands, or taken back. All of them: a
+    /// sign-in often opens a window of its own.
+    func passBaton(toYou: Bool) {
+        batonWithYou = toYou
+        for tab in tabs { tab.inYourHands = toYou }
+    }
+
+    /// The task's tabs still open, with their pages.
+    var openTabs: [Tab] { tabs }
 
     /// A new tab of the task's, in its store, kept to the public web
     /// (PrivateNetworkRules, which must be ready first).
@@ -42,6 +56,7 @@ final class AgentWorkspaceCoordinator {
     func adopt(_ tab: Tab, from opener: Tab) -> Bool {
         guard own.contains(opener.id) else { return false }
         own.insert(tab.id)
+        tab.inYourHands = batonWithYou
         PrivateNetworkRules.add(to: tab)
         return true
     }
@@ -63,12 +78,14 @@ final class AgentWorkspaceCoordinator {
         for browser in Browsers.all {
             for tab in browser.tabs where own.contains(tab.id) {
                 tab.agentWorking = false
+                tab.inYourHands = false
                 PrivateNetworkRules.remove(from: tab)
                 released.append((browser, tab))
             }
         }
         own = []
         store = nil
+        batonWithYou = false
         return released
     }
 

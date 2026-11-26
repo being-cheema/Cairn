@@ -60,7 +60,7 @@ struct ClaudePanel: View {
                     .foregroundStyle(Palette.ink)
                 PanelHeld(claude: session) { waiting in
                     if waiting {
-                        Text("Waiting for your approval")
+                        Text("Waiting for you")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(Palette.accent)
                             .lineLimit(1)
@@ -435,7 +435,8 @@ struct PanelWaiting: View {
             return "Claude wants to go to \(hold.site ?? "another site"), a site this task hasn't used yet." + answer
         case .pay: return "Claude wants to pay for something." + answer
         case .send: return "Claude wants to send something." + answer
-        case .signIn: return "Claude wants to sign in somewhere." + answer
+        case .signIn:
+            return "Sign in on \(hold.site ?? "the page") yourself, then press Resume on the card at the foot of the page."
         case .submit: return "Claude wants to submit a form." + answer
         }
     }

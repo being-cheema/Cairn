@@ -571,6 +571,9 @@ final class AgentSession: ObservableObject, Identifiable {
     /// The person said no to a site change (AgentGate's `leave`): its tabs
     /// close when it ends, however it ends (AgentEnd.handsOver).
     fileprivate var declined = false
+    /// You signed in for it (Pass the Baton): from then on any no of yours
+    /// closes its tabs when it ends, the account with them.
+    fileprivate var usedBaton = false
 
     /// The name the window gives it: the panel's own run is Claude.
     var shownName: String { panel ? "Claude" : client }
@@ -1384,6 +1387,8 @@ final class AgentControl: ObservableObject {
     static let holdFor: TimeInterval = 300
     /// How long after an Approve the send it was for may take to leave.
     static let grantFor: TimeInterval = 10
+    /// How long you have to sign in and hand the tab back.
+    static let batonFor: TimeInterval = 900
     weak var approveButton: NSView?
     weak var declineButton: NSView?
 
@@ -1394,7 +1399,8 @@ final class AgentControl: ObservableObject {
     /// Puts `hold` to you in the window and calls `then` once with the
     /// answer: yours, or none within `holdFor`, or the session going. The
     /// agent's call waits for it, and gets the result, or why not.
-    private func ask(_ hold: AgentGate.Hold, _ session: AgentSession, then: @escaping (HeldAction.Answer) -> Void) {
+    private func ask(_ hold: AgentGate.Hold, _ session: AgentSession, within patience: TimeInterval = AgentControl.holdFor,
+                     then: @escaping (HeldAction.Answer) -> Void) {
         var answered = false
         let began = ProcessInfo.processInfo.systemUptime
         let held = HeldAction(hold: hold, since: began) { [weak session] verdict in
@@ -1405,17 +1411,93 @@ final class AgentControl: ObservableObject {
             if verdict == .approved, let site = hold.site { session?.sites.insert(site) }
             // What you approved may be a form, and sending it is asked about
             // again as it leaves (vet): this Approve answers that too.
-            if verdict == .approved, hold.reason != .leave {
+            if verdict == .approved, hold.reason != .leave, hold.reason != .signIn {
                 session?.sendGrant = ProcessInfo.processInfo.systemUptime + Self.grantFor
             }
             then(verdict)
         }
         session.held = held
         Self.log.notice("held for your click: \(hold.reason.rawValue, privacy: .public)")
-        DispatchQueue.main.asyncAfter(deadline: .now() + Self.holdFor) { [weak session] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + patience) { [weak session] in
             if let session, session.held === held { held.resolve(.timedOut) }
         }
     }
+
+    // MARK: Pass the Baton
+
+    // Signing in is yours. A sign-in the agent comes to — one it asks for
+    // (wait_for_sign_in), or a button of one it goes to press — hands you its
+    // tab: your saved passwords and passkeys work there as in any tab of
+    // yours, and the agent's call waits. Nothing it sends is answered until
+    // you give the tab back, one request at a time (pump). What is then in
+    // the page's boxes is sealed from it for good (PageScripts.seal). The
+    // account stays in the task's own store: yours is never touched.
+
+    /// Puts `tab` in your hands and calls `then` with how it came back:
+    /// approved is your Resume.
+    private func passBaton(_ tab: Tab, _ session: AgentSession, then: @escaping (HeldAction.Answer) -> Void) {
+        guard session.held == nil else { return then(.declined) }
+        let host = tab.pageAddress?.host()?.lowercased() ?? "this page"
+        session.workspace.passBaton(toYou: true)
+        bringForward(tab, for: session)
+        let hold = AgentGate.Hold(reason: .signIn, summary: "Sign in on \(host)", site: host)
+        ask(hold, session, within: Self.batonFor) { [weak self, weak session] verdict in
+            guard let self, let session else { return then(.declined) }
+            // Taken back and sealed before the agent hears anything, and
+            // however it ended: a wait that ran out may leave a box typed in.
+            session.workspace.passBaton(toYou: false)
+            guard self.live(session) else { return then(.declined) }
+            let tabs = session.workspace.openTabs
+            if verdict == .approved {
+                session.usedBaton = true
+                for each in tabs { if let site = AgentGate.site(each.pageAddress) { session.sites.insert(site) } }
+            }
+            self.seal(tabs, session) { then(verdict) }
+        }
+    }
+
+    private func seal(_ tabs: [Tab], _ session: AgentSession, then: @escaping () -> Void) {
+        guard let tab = tabs.first else { return then() }
+        page(tab, session, PageScripts.seal()) { [weak self, weak session] _ in
+            guard let self, let session else { return then() }
+            self.seal(Array(tabs.dropFirst()), session, then: then)
+        }
+    }
+
+    /// To the tab you are to sign in on, when that takes nothing from under
+    /// your hands; otherwise the card's Show the Page does it.
+    private func bringForward(_ tab: Tab, for session: AgentSession) {
+        guard let browser = session.browser else { return }
+        let active = activeForTest ?? (NSApp.isActive && browser.window?.isKeyWindow == true)
+        let sinceKey = activeForTest != nil ? .infinity
+            : CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .keyDown)
+        if AgentEnd.landsOnResult(panel: session.panel, windowActive: active, editingAddress: browser.editing, sinceKey: sinceKey) {
+            browser.select(tab)
+        }
+    }
+
+    /// The card's Show the Page: any click, it answers nothing.
+    func showWaitingTab() {
+        guard let session, session.held != nil, let browser = session.browser else { return }
+        let wanted = session.workspace.openTabs.first { $0.id == session.lastWorked } ?? session.workspace.openTabs.last
+        if let wanted { browser.select(wanted) }
+    }
+
+    /// A sign-in held at a gate becomes yours to do: the agent's button is
+    /// not pressed for it. True when that is what was done.
+    private func handsOverSignIn(_ hold: AgentGate.Hold, _ tab: Tab, _ session: AgentSession,
+                                 _ answer: @escaping ([String: Any]) -> Void) -> Bool {
+        guard hold.reason == .signIn else { return false }
+        passBaton(tab, session) { verdict in
+            answer(verdict == .approved ? Self.resumed : Self.declined(hold, verdict))
+        }
+        return true
+    }
+
+    private static let resumed: [String: Any] = [
+        "resumed": true, "pressed": false,
+        "note": "The person had the tab to sign in and has handed it back. Nothing was pressed for you. Read the page again; what they typed stays hidden.",
+    ]
 
     // MARK: what its tabs load
 
@@ -1450,6 +1532,8 @@ final class AgentControl: ObservableObject {
                 session.sendGrant = 0
                 done(true)
             case .ask(let hold):
+                // In your hands, what is sent is what you are sending.
+                if session.workspace.batonWithYou { return done(true) }
                 // One question at a time: a second send while one waits is dropped.
                 guard session.held == nil else { return done(false) }
                 self.ask(hold, session) { [weak self, weak session] verdict in
@@ -1491,7 +1575,7 @@ final class AgentControl: ObservableObject {
     /// as Stop for its tabs, which close when it ends (AgentEnd.handsOver).
     /// Only theirs: a question left unanswered, or the session going, is not.
     private func heardNo(to held: HeldAction, in session: AgentSession) {
-        if held.hold.reason == .leave { session.declined = true }
+        if held.hold.reason == .leave || session.usedBaton { session.declined = true }
     }
 
     /// For the bench's `agents`, in a test run.
@@ -1669,6 +1753,15 @@ final class AgentControl: ObservableObject {
                 throw AgentRefusal(code: "said_hello", message: "Already said")
             case .status:
                 answer(["allowed": true, "seesTabs": session.consent.seesTabs, "client": session.client])
+            case .waitForSignIn:
+                let tab = try self.tab(request, session, browser, .drive)
+                PageRoom.shared.house(tab)
+                passBaton(tab, session) { verdict in
+                    if verdict == .approved { return answer(Self.resumed) }
+                    answer(AgentRefusal(code: verdict == .timedOut ? "no_answer" : "declined",
+                                        message: verdict == .timedOut ? "The person didn't hand the tab back in time" : "The person didn't sign in",
+                                        hint: "Say so in your reply. Don't ask again unless they tell you to.").said)
+                }
             case .tabs:
                 tabs(session, browser, answer)
             case .open:
@@ -1767,6 +1860,7 @@ final class AgentControl: ObservableObject {
                     // Space only acts on a button.
                     if key.characters == " " { target.enter = target.submits }
                     guard let hold = AgentGate.hold(enter: target, on: tab.pageAddress, rules: rules) else { return press() }
+                    if self.handsOverSignIn(hold, tab, session, answer) { return }
                     self.ask(hold, session) { verdict in
                         guard verdict == .approved else { return answer(Self.declined(hold, verdict)) }
                         // Still what was asked about.
@@ -2007,6 +2101,7 @@ final class AgentControl: ObservableObject {
                 guard let hold = AgentGate.hold(click: target, on: tab.pageAddress, sites: session.sites, rules: self.rules(browser)) else {
                     return press(seen)
                 }
+                if self.handsOverSignIn(hold, tab, session, answer) { return }
                 self.ask(hold, session) { verdict in
                     guard verdict == .approved else { return answer(Self.declined(hold, verdict)) }
                     // Asked about this element: it must still be it, and
@@ -2063,6 +2158,7 @@ final class AgentControl: ObservableObject {
                 var target = AgentGate.Target(probed["gate"]) ?? AgentGate.Target()
                 target.enter = true
                 guard let hold = AgentGate.hold(enter: target, on: tab.pageAddress, rules: rules) else { return submit() }
+                if self.handsOverSignIn(hold, tab, session, answer) { return }
                 self.ask(hold, session) { verdict in
                     guard verdict == .approved else { return answer(Self.declined(hold, verdict)) }
                     touch("probe", nil) { again in

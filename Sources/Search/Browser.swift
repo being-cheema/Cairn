@@ -1063,6 +1063,13 @@ final class Browser: NSObject, ObservableObject {
         }
         lowering?.cancel()
         field = (tab.id, spot, passwords, name, code)
+        // Nothing of yours is offered to an agent's tab: its caret got
+        // there by the agent's click, and one click of yours on the list
+        // would put your password into a page the agent is working.
+        if tab.keptFromYou {
+            if suggesting?.tab == tab.id { suggesting = nil }
+            return
+        }
         guard tab.id == activeID, pickedInto != tab.id,
               let host = curtain.host(of: tab.pageAddress)
         else { return }
@@ -1089,7 +1096,7 @@ final class Browser: NSObject, ObservableObject {
         // setup key, each offering its code now. Never in a private or an
         // agent's tab, never over plain http (as for a password).
         if code {
-            guard prefs.fillsPasswords, !tab.shy, !tab.agent else { suggesting = nil; return }
+            guard prefs.fillsPasswords, !tab.shy else { suggesting = nil; return }
             let withCode = Vault.kept(matching: host, wide: wide).filter { !inTheClear || $0.clear }.filter {
                 Vault.item(of: $0)?.extras.totp.flatMap(TOTP.key(from:)) != nil
             }
@@ -1127,7 +1134,7 @@ final class Browser: NSObject, ObservableObject {
         }()
         // A sign-up's or a change-password form's box: a strong password, made
         // here. Never in a private tab, never on a page sent in the clear.
-        let suggests = fill == .fresh && prefs.suggestsPasswords && !tab.shy && !tab.agent && !inTheClear
+        let suggests = fill == .fresh && prefs.suggestsPasswords && !tab.shy && !inTheClear
         guard !known.isEmpty || !passkeys.isEmpty || !contacts.isEmpty || suggests else {
             suggesting = nil
             return
@@ -1205,7 +1212,7 @@ final class Browser: NSObject, ObservableObject {
         guard Date().timeIntervalSince(list.shown) > 0.5 else { return }
         suggesting = nil
         guard curtain.host(of: tab.pageAddress) == list.host, tab.pageAddress?.scheme?.lowercased() == "https",
-              !tab.shy, !tab.agent
+              !tab.shy, !tab.keptFromYou
         else { return }
         pickedInto = tab.id
         let password = PasswordGenerator.make(PasswordGenerator.Options.saved)
@@ -1224,7 +1231,7 @@ final class Browser: NSObject, ObservableObject {
         // The tab may have gone somewhere else while the list was up: a
         // redirect, a script. What was offered for one site is never put
         // into another's page.
-        guard curtain.host(of: tab.pageAddress) == list.host,
+        guard !tab.keptFromYou, curtain.host(of: tab.pageAddress) == list.host,
               (tab.pageAddress?.scheme?.lowercased() == "http") == list.clear
         else { return }
         pickedInto = tab.id
@@ -1238,7 +1245,8 @@ final class Browser: NSObject, ObservableObject {
         // Asked for Touch ID first, when Settings says so (idea 993): the
         // secret is not even read until the owner has said yes, and a
         // cancel fills nothing.
-        guard prefs.asksBeforeFilling else {
+        // Into a tab that is an agent's otherwise, always.
+        guard prefs.asksBeforeFilling || tab.agent else {
             fill(login, into: tab, host: list.host, clear: list.clear)
             return
         }
@@ -1273,7 +1281,7 @@ final class Browser: NSObject, ObservableObject {
         guard let list = suggesting, let tab = tabs.first(where: { $0.id == list.tab }), let web = tab.built else { return }
         guard Date().timeIntervalSince(list.shown) > 0.5 else { return }
         suggesting = nil
-        guard curtain.host(of: tab.pageAddress) == list.host,
+        guard !tab.keptFromYou, curtain.host(of: tab.pageAddress) == list.host,
               (tab.pageAddress?.scheme?.lowercased() == "http") == list.clear
         else { return }
         pickedInto = tab.id
@@ -9443,11 +9451,11 @@ extension Browser: WKNavigationDelegate, WKUIDelegate {
         // as its delegate but no card of its own, and its question would come
         // up over this window and outlive it: refused.
         func owner() -> Tab? { anyTab(for: webView) ?? (peekTab?.built === webView ? peekTab : nil) }
-        guard let asker = owner(), !asker.agent else { return completionHandler(false) }
+        guard let asker = owner(), !asker.keptFromYou else { return completionHandler(false) }
         guard !domain.isEmpty, !current.isEmpty, domain != current else { return completionHandler(false) }
         ask(from: webView, show: { [weak self, weak webView] in
             guard let self, !permissionBusy, let webView,
-                  let tab = owner(), !tab.agent,
+                  let tab = owner(), !tab.keptFromYou,
                   // Still the site that asked: a question held for a tab
                   // behind is asked when you go to it, and the tab may have
                   // gone elsewhere meanwhile.

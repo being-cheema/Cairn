@@ -42,7 +42,7 @@ private struct AgentSessionBar: View {
         if session.browser === browser, session.consent.state == .asking {
             AgentQuestion(session: session)
         } else if session.browser === browser, session.consent.state == .allowed, let held = session.held {
-            AgentApproval(session: session, held: held)
+            if held.hold.reason == .signIn { AgentBatonCard(session: session, held: held) } else { AgentApproval(session: session, held: held) }
         }
     }
 }
@@ -406,6 +406,74 @@ struct AgentApproval: View {
         .shadow(color: .black.opacity(0.12), radius: 20, y: 6)
         .padding(.horizontal, 16)
     }
+}
+
+/// The tab is yours, to sign in (Pass the Baton): said by the browser, with
+/// Resume, pressed only by a fresh click of yours (AgentControl.answerHeld),
+/// as Approve is. Cancel is Stop: the task's tabs close and the account with
+/// them.
+struct AgentBatonCard: View {
+    @ObservedObject var session: AgentSession
+    let held: HeldAction
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 10) {
+                ArtPicture(name: "approval", size: 44)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(verbatim: AgentBatonCard.title(client: session.shownName, own: session.panel))
+                        .font(.system(size: 12.5, weight: .medium))
+                        .foregroundStyle(Palette.ink)
+                    Text(verbatim: AgentBatonCard.detail(held.hold))
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Palette.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(AgentBatonCard.footnote)
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(Palette.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            HStack(spacing: 12) {
+                Button { AgentControl.shared.showWaitingTab() } label: {
+                    Text("Show the Page").padding(.horizontal, 8).padding(.vertical, 6).contentShape(Rectangle())
+                }
+                Spacer(minLength: 8)
+                Button { AgentControl.shared.stopSession() } label: {
+                    Text("Cancel Task").padding(.horizontal, 8).padding(.vertical, 6).contentShape(Rectangle())
+                }
+                Button { AgentControl.shared.answerHeld(approve: true, event: NSApp.currentEvent) } label: {
+                    Text("Resume")
+                        .foregroundStyle(Palette.ground)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Palette.accent, in: Capsule())
+                        .background(ClickSpot { AgentControl.shared.approveButton = $0 })
+                }
+            }
+            .font(.system(size: 12))
+            .foregroundStyle(Palette.ink)
+            .buttonStyle(.plain)
+        }
+        .frame(maxWidth: 420, alignment: .leading)
+        .padding(16)
+        .background(Palette.ground, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Palette.accent.opacity(0.55), lineWidth: 1))
+        .shadow(color: .black.opacity(0.12), radius: 20, y: 6)
+        .padding(.horizontal, 16)
+    }
+
+    static func title(client: String, own: Bool) -> String {
+        "\(own ? client : "“\(client)”") is paused for you to sign in"
+    }
+
+    static func detail(_ hold: AgentGate.Hold) -> String {
+        "Sign in on \(hold.site ?? "the page") yourself, with your saved password or passkey, then press Resume. What you type stays hidden from it."
+    }
+
+    /// What Resume gives, said before it is given.
+    static let footnote = "After Resume it can use this account in its own tab. Approval is still asked before it pays, sends or posts, "
+        + "though not for what a page sends in the background."
 }
 
 extension AgentApproval {

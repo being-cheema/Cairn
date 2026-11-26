@@ -425,6 +425,28 @@ enum PageScripts {
         """#, [])
     }
 
+    /// Every box of the page's that holds something, shadow roots included,
+    /// marked secret for as long as the page lives (`secret`): after you have
+    /// had the page, so that nothing you typed or filled is read back, even
+    /// from a code box that doesn't say it is one.
+    static func seal() -> String {
+        call(#"""
+        (function () {
+          var roots = [document], sealed = 0;
+          while (roots.length) {
+            var root = roots.shift();
+            Array.prototype.forEach.call(root.querySelectorAll('input,textarea'), function (el) {
+              if (/^(checkbox|radio|submit|button|reset|image|file|range|color)$/i.test(el.type || '')) return;
+              if (el.value || (el.type || '').toLowerCase() === 'password') { SECRETS.add(el); sealed++; }
+            });
+            var all = root.querySelectorAll('*');
+            for (var i = 0; i < all.length; i++) if (all[i].shadowRoot) roots.push(all[i].shadowRoot);
+          }
+          return JSON.stringify({ ok: true, sealed: sealed });
+        })
+        """#, [])
+    }
+
     static func check(_ condition: [String: Any]) -> String {
         call(checkBody, [condition])
     }

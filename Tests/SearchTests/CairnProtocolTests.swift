@@ -46,7 +46,7 @@ final class CairnProtocolTests: XCTestCase {
     func testEveryToolSendsAVerbAndDeclaresWhatItPasses() throws {
         let names = MCPTools.all.map(\.name)
         XCTAssertEqual(Set(names).count, names.count)
-        XCTAssertEqual(names.count, 14)
+        XCTAssertEqual(names.count, 15)
         for tool in MCPTools.all {
             XCTAssertTrue(tool.passes.allSatisfy { tool.properties[$0] != nil || $0 == "selector" }, tool.name)
             XCTAssertTrue(tool.required.allSatisfy { tool.properties[$0] != nil }, tool.name)

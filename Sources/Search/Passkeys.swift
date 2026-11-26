@@ -271,6 +271,14 @@ final class Passkeys: NSObject {
         // key isn't one of those: a request only a key can answer (see
         // forSecurityKey) still goes ahead, offered the key alone.
         let kind = body["kind"] as? String ?? ""
+        // Never for an agent's tab (Tab.keptFromYou): its click on "Sign in
+        // with a passkey" would bring up Touch ID, and your finger there
+        // would sign the agent in. One from under a field waits, offered
+        // nothing, as any other that may not ask.
+        if let web = caller.web, Passkeys.keptFromAgents(web) {
+            if kind == "get", body["conditional"] as? Bool == true { return answer(Passkeys.failure("Wait", "")) }
+            return refuse(answer, "NotAllowedError", "The operation either timed out or was not allowed.")
+        }
         let keysOnly = !FormRelay.passkeysOffered
         if keysOnly {
             // One from under the field is never refused: it waits.
@@ -683,6 +691,11 @@ final class Passkeys: NSObject {
     /// tab's committed address. WKWebView.url moves as soon as a navigation
     /// starts, while the page before and its frames can still ask; one that
     /// belongs to no tab keeps its own url.
+    /// Whether a page's view is in an agent's tab that you aren't holding.
+    @MainActor static func keptFromAgents(_ web: WKWebView) -> Bool {
+        Browsers.all.contains { $0.tabs.contains { $0.built === web && $0.keptFromYou } }
+    }
+
     @MainActor static func committed(_ web: WKWebView?) -> URL? {
         guard let web else { return nil }
         if let tab = PopupGestureRelay.tab(for: web) { return tab.committed }

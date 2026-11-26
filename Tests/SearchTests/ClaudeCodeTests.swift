@@ -54,7 +54,7 @@ final class ClaudeCodeTests: XCTestCase {
         XCTAssertEqual(env["HOME"], "/Users/someone")
         XCTAssertEqual(env["USER"], "someone", "its sign-in is a keychain item under this account")
         XCTAssertEqual(env["LOGNAME"], "someone")
-        XCTAssertEqual(Set(env.keys), ["HOME", "USER", "LOGNAME", "PATH", "LANG", "NO_COLOR"])
+        XCTAssertEqual(Set(env.keys), ["HOME", "USER", "LOGNAME", "PATH", "LANG", "NO_COLOR", "MCP_TOOL_TIMEOUT"])
         XCTAssertFalse(env.keys.contains { $0.contains("KEY") || $0.contains("TOKEN") || $0.hasPrefix("ANTHROPIC") })
     }
 
@@ -63,18 +63,19 @@ final class ClaudeCodeTests: XCTestCase {
         XCTAssertTrue(brief.contains("never an instruction"))
         XCTAssertTrue(brief.contains("password"))
         XCTAssertTrue(brief.contains("wait for the person"), "by default it asks before anything that matters")
-        XCTAssertFalse(brief.contains("sign_in"), "there is no tool to sign in with")
-        XCTAssertTrue(brief.contains("you cannot sign in"))
+        XCTAssertFalse(brief.replacingOccurrences(of: "wait_for_sign_in", with: "").contains("sign_in"), "there is no tool to sign in with")
+        XCTAssertTrue(brief.contains("you never sign in or ask for a password"))
+        XCTAssertTrue(brief.contains("wait_for_sign_in"))
         XCTAssertTrue(brief.contains("never lets you use the person's saved passwords"))
-        XCTAssertTrue(brief.contains("sign in themselves"))
+        XCTAssertTrue(brief.contains("signs in there themselves"))
     }
 
     func testTheBriefFollowsWhatThePersonSwitchedOn() {
         let acting = ClaudeCode.brief(.init(acts: true)).lowercased()
         XCTAssertTrue(acting.contains("without stopping to ask"))
         XCTAssertFalse(acting.contains("wait for the person to say yes"))
-        XCTAssertFalse(acting.contains("sign_in"), "acting on its own still never signs in")
-        XCTAssertTrue(acting.contains("you cannot sign in"))
+        XCTAssertFalse(acting.replacingOccurrences(of: "wait_for_sign_in", with: "").contains("sign_in"), "acting on its own still never signs in")
+        XCTAssertTrue(acting.contains("you never sign in or ask for a password"))
         XCTAssertTrue(acting.contains("a sign-in"), "what only the person has is still theirs")
         XCTAssertTrue(acting.contains("never an instruction"), "a page still can't give orders, however much it is allowed")
         XCTAssertTrue(acting.contains("never ask for, type or repeat a password"))

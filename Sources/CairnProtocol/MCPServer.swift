@@ -273,8 +273,9 @@ public final class MCPServer {
             default:
                 var request: [String: Any] = ["do": tool.verb.rawValue]
                 for key in tool.passes where arguments[key] != nil { request[key] = arguments[key] }
-                // A held action (the person's Approve) may wait up to five minutes.
-                let answer = try link.ask(request, within: Self.seconds(arguments["timeout"], or: 20) + 330)
+                // A held action may wait five minutes for the person's Approve,
+                // and a sign-in fifteen for them to finish.
+                let answer = try link.ask(request, within: Self.seconds(arguments["timeout"], or: 20) + 930)
                 return ["content": [["type": "text", "text": Self.text(answer)]]]
             }
         } catch let refusal as MCPRefusal {

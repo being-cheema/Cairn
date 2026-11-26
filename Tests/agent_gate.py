@@ -44,6 +44,11 @@ PAGES = {
     "/inside": '<h1>Inside</h1><p id="s">waiting</p><script>fetch("http://localhost:PORT/fetched", {mode: "no-cors"})'
                '.then(() => s.textContent = "reached", () => s.textContent = "stopped")</script>',
     "/later": '<h1>Later</h1><script>setInterval(() => fetch("http://localhost:PORT/later-fetched", {mode: "no-cors"}).catch(() => {}), 500)</script>',
+    # A box that doesn't say what it is, filled as a person would, and a
+    # page that asks for a passkey on its own.
+    "/code": '<h1>Code</h1><form action="/signed" method="post"><label>Reply <input name="r" value="482913"></label><label>Secret <input type="password" name="p"></label><button>Continue</button></form>',
+    "/passkey": '<h1>Passkey</h1><script>navigator.credentials.get({publicKey:{challenge:new Uint8Array(16),userVerification:"required"}})'
+                '.then(()=>document.title="signed",e=>document.title="refused "+e.name)</script>',
     "/plain": '<h1>Plain</h1><button type="button" onclick="document.title=\'clicked\'">Show more</button>',
 }
 
@@ -292,6 +297,36 @@ def main():
         go("/inside")
         t.ok("a page's own fetch inside is stopped", until(lambda: "stopped" in json.dumps(read())), read())
         t.ok("nothing reached it", not any(h[1].startswith(("/direct", "/redirected", "/fetched")) for h in HITS), HITS)
+
+        # ---- Pass the Baton: a sign-in is yours to do
+        del HITS[:]
+        go("/code")
+        before = json.dumps(read())
+        t.ok("before: an ordinary box is read", "482913" in before, before[:300])
+        n = a.call("wait_for_sign_in", page="p1")
+        t.ok("it can ask to be signed in", until(lambda: agents().get("heldReason") == "signIn"), agents())
+        agents("decline")
+        x, err = a.result(n)
+        t.ok("not signed in: it is told", err and code(x) == "declined", x)
+        n = a.call("click", element=node(read(), "button", "Continue")["element"])
+        t.ok("a sign-in button hands you the tab", until(lambda: agents().get("heldReason") == "signIn"), agents())
+        agents("pressApprove")
+        time.sleep(0.5)
+        t.ok("Resume with no click behind it is ignored", agents().get("heldReason") == "signIn", agents())
+        agents("approve")
+        x, err = a.result(n)
+        t.ok("resumed: the agent is told, and nothing was pressed", not err and x.get("resumed") is True and x.get("pressed") is False, x)
+        time.sleep(0.8)
+        t.ok("resumed: its button was not pressed for it", hits() == [], HITS)
+        after = json.dumps(read())
+        t.ok("what was in the boxes is hidden from then on", "482913" not in after, after[:600])
+
+        # ---- no passkey for an agent's tab
+        asked = lambda: sv.cmd({"do": "passkeys"}).get("asked")
+        had = asked()
+        go("/passkey")
+        t.ok("a page in an agent's tab is refused a passkey", until(lambda: "refused NotAllowedError" in json.dumps(read())), read())
+        t.ok("and no question came up", asked() == had, (had, asked()))
 
         # ---- handed to you, the tab is yours, and so is your own network
         go("/later")

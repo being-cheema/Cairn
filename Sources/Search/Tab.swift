@@ -779,6 +779,12 @@ final class Tab: ObservableObject, Identifiable {
     /// A bench tab a coding agent opened (AgentControl): marked as its own
     /// in the row, and kept to the web.
     var agent = false
+    /// You have it for now, to sign in (AgentControl's Pass the Baton).
+    var inYourHands = false
+    /// An agent's tab, and not in your hands: nothing of yours goes into it
+    /// (saved passwords, codes, passkeys, your contact card), and what its
+    /// page asks of you is answered for you.
+    var keptFromYou: Bool { agent && !inYourHands }
 
     /// The tab whose page opened this one, when a script did. Sign-in flows
     /// hand you back to it when they are done.
