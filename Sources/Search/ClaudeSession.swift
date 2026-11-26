@@ -41,6 +41,8 @@ final class ClaudeSession: ObservableObject {
         case notInstalled
         case notSigned
         case noServer
+        /// Something you attached can't go (Mentions.notSent).
+        case notSent(String)
     }
 
     @Published private(set) var turns: [Turn] = []
@@ -174,10 +176,23 @@ final class ClaudeSession: ObservableObject {
         let mine = generation
         Task { @MainActor [weak self] in
             let tabs = self?.browser?.tabs ?? []
-            let attached = await Mentions.gather(named, among: tabs, words: text)
+            let got = await Mentions.collect(named, among: tabs, words: text)
             guard let self, self.generation == mine, self.running else { return }
-            self.write(Mentions.message(words, with: attached))
+            guard got.missing.isEmpty else { return self.takeBack(text, named, without: got.missing) }
+            self.write(Mentions.message(words, with: got.attached))
         }
+    }
+
+    /// Nothing went: your words go back in the box, with what can still go
+    /// attached, for you to send again.
+    private func takeBack(_ text: String, _ named: [Mention], without missing: [Mention]) {
+        if !turns.isEmpty { turns.removeLast() }
+        record = nil
+        running = false
+        disarm()
+        if draft.isEmpty { draft = text }
+        mentions = named.filter { !missing.contains($0) }
+        problem = .notSent(Mentions.notSent(missing))
     }
 
     private func write(_ text: String) {

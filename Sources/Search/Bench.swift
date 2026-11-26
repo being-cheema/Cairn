@@ -3743,7 +3743,7 @@ final class Bench {
             // "@" names it.
             case "mention":
                 if let tab = browser.active, Mentions.mayName(tab) {
-                    browser.claude.mention(.tab(tab.id, label: Mentions.label(tab)))
+                    browser.claude.mention(.tab(tab.id, label: Mentions.label(tab), page: Mentions.page(tab)))
                 }
             case "program":
                 browser.claude.stop()

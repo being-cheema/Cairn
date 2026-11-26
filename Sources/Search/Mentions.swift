@@ -12,7 +12,7 @@ import WebKit
 // with it. A private tab is never offered, and never read.
 
 enum Mention: Equatable, Identifiable {
-    case tab(Tab.ID, label: String)
+    case tab(Tab.ID, label: String, page: String? = nil)
     /// What you had selected when you picked it, kept as it was then.
     case selection(String, from: String)
     /// What the last page showed when you ran a saved macro (FastMacros).
@@ -23,7 +23,7 @@ enum Mention: Equatable, Identifiable {
 
     var id: String {
         switch self {
-        case .tab(let id, _): return "tab-\(id)"
+        case .tab(let id, _, _): return "tab-\(id)"
         case .selection(let text, let from): return "selection-\(from)-\(text.hashValue)"
         case .macroResult(let text, let name): return "macro-\(name)-\(text.hashValue)"
         case .memory: return "memory"
@@ -33,7 +33,7 @@ enum Mention: Equatable, Identifiable {
     /// What its chip says.
     var label: String {
         switch self {
-        case .tab(_, let label): return "@" + label
+        case .tab(_, let label, _): return "@" + label
         case .selection(let text, _): return "@Selected text (\(text.count) characters)"
         case .macroResult(_, let name): return "@Macro result: \(name)"
         case .memory: return "@memory"
@@ -107,25 +107,56 @@ enum Mentions {
         let addressed: Bool
     }
 
-    /// Reads what was named, as the tabs are now. A tab since closed or no
-    /// longer one that may be named is left out.
+    /// The page a tab is on, as the one you named: a jump within it is the
+    /// same page.
+    @MainActor static func page(_ tab: Tab) -> String? {
+        guard let url = tab.pageAddress, var parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
+        parts.fragment = nil
+        return parts.string
+    }
+
+    /// What was read, and what you named that can't go.
+    struct Collected {
+        var attached: [Attached] = []
+        var missing: [Mention] = []
+    }
+
+    /// Why nothing went: a message never leaves without something you put
+    /// in it.
+    static func notSent(_ missing: [Mention]) -> String {
+        "Not sent: \(missing.map(\.label).joined(separator: ", ")) changed, closed, went to sleep or couldn't be read "
+            + "since you attached it. Attach it again, or send without it."
+    }
+
     @MainActor static func gather(_ mentions: [Mention], among tabs: [Tab], words: String = "",
                                   memory: ReadingMemory? = nil) async -> [Attached] {
-        var out: [Attached] = []
+        await collect(mentions, among: tabs, words: words, memory: memory).attached
+    }
+
+    /// Reads what was named, as the tabs are now. A tab since closed, gone to
+    /// another page, or no longer one that may be named is missing.
+    @MainActor static func collect(_ mentions: [Mention], among tabs: [Tab], words: String = "",
+                                   memory: ReadingMemory? = nil) async -> Collected {
+        var out = Collected()
         for mention in mentions.prefix(most) {
             switch mention {
             case .selection(let text, let from):
-                out.append(Attached(title: "Selected text from \(from)", address: "", text: text,
-                                    addressed: AIPage.addressesAI(text)))
+                out.attached.append(Attached(title: "Selected text from \(from)", address: "", text: text,
+                                             addressed: AIPage.addressesAI(text)))
             case .memory:
-                out += (memory ?? .shared).attached(for: words)
+                out.attached += (memory ?? .shared).attached(for: words)
             case .macroResult(let text, let name):
-                out.append(Attached(title: "The last page of my macro \(name)", address: "", text: String(text.prefix(longest + 600)),
-                                    addressed: AIPage.addressesAI(text)))
-            case .tab(let id, _):
-                guard let tab = tabs.first(where: { $0.id == id }), mayName(tab), let read = await AIPage.read(tab),
-                      // It may have moved while it was read.
-                      mayName(tab), !VaultedSites.blocks(read.url, in: VaultedSites.current) else { continue }
+                out.attached.append(Attached(title: "The last page of my macro \(name)", address: "",
+                                             text: String(text.prefix(longest + 600)), addressed: AIPage.addressesAI(text)))
+            case .tab(let id, _, let named):
+                // The page you named, before it is read and still afterwards:
+                // never another under the same label.
+                func asNamed(_ tab: Tab) -> Bool { mayName(tab) && (named == nil || page(tab) == named) }
+                guard let tab = tabs.first(where: { $0.id == id }), asNamed(tab), let read = await AIPage.read(tab),
+                      asNamed(tab), !VaultedSites.blocks(read.url, in: VaultedSites.current) else {
+                    out.missing.append(mention)
+                    continue
+                }
                 var address = ""
                 if let url = read.url, var parts = URLComponents(url: url, resolvingAgainstBaseURL: false) {
                     parts.query = nil
@@ -134,8 +165,8 @@ enum Mentions {
                     parts.password = nil
                     address = String((parts.string ?? "").prefix(300))
                 }
-                out.append(Attached(title: read.title, address: address, text: String(read.text.prefix(longest)),
-                                    addressed: read.addressed))
+                out.attached.append(Attached(title: read.title, address: address, text: String(read.text.prefix(longest)),
+                                             addressed: read.addressed))
             }
         }
         return out

@@ -330,6 +330,8 @@ enum AIPage {
           return;
         }
         if (node.nodeType !== 1 || skip[node.tagName.toUpperCase()]) return;
+        // What you are writing in the page's own editor is typed text too.
+        if (node.isContentEditable) return;
         if (node.tagName === 'BR') { out.push('\\n'); return; }
         if (node !== root && node.matches && node.matches(clutter)) return;
         if (!shown(node)) return;

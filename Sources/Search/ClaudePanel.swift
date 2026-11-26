@@ -188,6 +188,8 @@ struct ClaudePanel: View {
             return "The claude program on this Mac isn't signed by Anthropic, so it isn't started."
         case .noServer:
             return "This copy of \(Brand.name) has no cairn-mcp to give Claude Code, so there is nothing for it to use."
+        case .notSent(let why):
+            return why
         }
     }
 
@@ -295,7 +297,7 @@ struct ClaudePanel: View {
         case .memory:
             session.mention(.memory)
         case .tab(let tab, _):
-            session.mention(.tab(tab.id, label: Mentions.label(tab)))
+            session.mention(.tab(tab.id, label: Mentions.label(tab), page: Mentions.page(tab)))
         case .selection(let tab):
             Task { @MainActor in
                 if let text = await Mentions.selection(in: tab) {
