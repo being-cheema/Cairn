@@ -7,7 +7,7 @@ every fix and every addition gets its line the day it is merged. When a
 version ships, the section takes its number and date, its gist becomes the
 paragraph in `NOTES.md` (what Settings and the updater show), and the list
 is what gets posted as the update. What is planned but not done yet lives
-in [ROADMAP.md](ROADMAP.md).
+in [ROADMAP-upstream.md](docs/history/ROADMAP-upstream.md).
 
 ## Unreleased
 

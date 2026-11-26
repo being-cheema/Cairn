@@ -1,6 +1,6 @@
 import Foundation
 
-/// A passkey Cairn keeps itself (see SPEC-passkeys.md): what a list needs to
+/// A passkey Cairn keeps itself (see docs/history/SPEC-passkeys.md): what a list needs to
 /// show, and what a sign-in needs to find it. The private key is never here;
 /// it stays in the keychain item (PasskeyStore) and is read only to sign.
 struct PasskeyRecord: Identifiable, Equatable {

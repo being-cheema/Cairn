@@ -2,7 +2,7 @@ import Foundation
 import XCTest
 @testable import Search
 
-/// Sync with iCloud (ICloudSync.swift), against SYNC.md in Search-iOS: the
+/// Sync with iCloud (ICloudSync.swift), against docs/SYNC.md in Search-iOS: the
 /// JSON both apps read, latest wins, joining merges, no echo, what never
 /// goes up. CloudKit itself never runs here: the engine is a stand-in that
 /// keeps what would be sent and hands over what iCloud "has", and this Mac
@@ -208,7 +208,7 @@ final class ICloudSyncTests: XCTestCase {
         XCTAssertEqual(prefs.customSuggest, "https://kept.example/?q=%s", "a record without one leaves it as it was")
     }
 
-    // MARK: - SYNC.md's examples, as written there (its "…" ids made whole)
+    // MARK: - docs/SYNC.md's examples, as written there (its "…" ids made whole)
 
     private static let examples: [(key: String, json: String)] = [
         ("device.6F1C0000-0000-4000-8000-000000000001",
@@ -284,7 +284,7 @@ final class ICloudSyncTests: XCTestCase {
         XCTAssertNotNil(Look(rawValue: settings.look!))
     }
 
-    /// SYNC.md's engine and look values are exactly the Mac's.
+    /// docs/SYNC.md's engine and look values are exactly the Mac's.
     func testEngineAndLookValuesMatchTheContract() {
         XCTAssertEqual(Engine.allCases.map(\.rawValue), ["google", "duckduckgo", "bing", "ecosia", "startpage", "kagi", "brave", "qwant", "custom"])
         XCTAssertEqual(Look.allCases.map(\.rawValue), ["light", "dark", "system"])
