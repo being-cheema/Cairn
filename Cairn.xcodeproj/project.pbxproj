@@ -230,6 +230,9 @@
 		31F24CD34C5210B479611A48 /* Screenshots.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57BDF4DD774520339F2E7A31 /* Screenshots.swift */; };
 		A779A2BFD001CA715DC53E20 /* SpacesExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 489976FE977DCF66AA3F9099 /* SpacesExport.swift */; };
 		A01A2CEBE5B81E385F4FA90E /* SplitControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2464EEBEC4952DD2B887BCC6 /* SplitControls.swift */; };
+		AA12896F2F0E502555C6BE2D /* TaskHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA12674D042E25B77B4480E7 /* TaskHistory.swift */; };
+		AA11896F2F0E502555C6BE2D /* TaskLedger.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11674D042E25B77B4480E7 /* TaskLedger.swift */; };
+		AA10896F2F0E502555C6BE2D /* Playbooks.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10674D042E25B77B4480E7 /* Playbooks.swift */; };
 		B3C0896F2F0E502555C6BE2D /* Artifact.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3C0674D042E25B77B4480E7 /* Artifact.swift */; };
 		B3B0896F2F0E502555C6BE2D /* Mentions.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3B0674D042E25B77B4480E7 /* Mentions.swift */; };
 		B3A0896F2F0E502555C6BE2D /* PanelProse.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3A0674D042E25B77B4480E7 /* PanelProse.swift */; };
@@ -419,6 +422,9 @@
 		57BDF4DD774520339F2E7A31 /* Screenshots.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Screenshots.swift; path = Sources/Search/Screenshots.swift; sourceTree = SOURCE_ROOT; };
 		489976FE977DCF66AA3F9099 /* SpacesExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SpacesExport.swift; path = Sources/Search/SpacesExport.swift; sourceTree = SOURCE_ROOT; };
 		2464EEBEC4952DD2B887BCC6 /* SplitControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SplitControls.swift; path = Sources/Search/SplitControls.swift; sourceTree = SOURCE_ROOT; };
+		AA12674D042E25B77B4480E7 /* TaskHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TaskHistory.swift; path = Sources/Search/TaskHistory.swift; sourceTree = SOURCE_ROOT; };
+		AA11674D042E25B77B4480E7 /* TaskLedger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TaskLedger.swift; path = Sources/Search/TaskLedger.swift; sourceTree = SOURCE_ROOT; };
+		AA10674D042E25B77B4480E7 /* Playbooks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Playbooks.swift; path = Sources/Search/Playbooks.swift; sourceTree = SOURCE_ROOT; };
 		B3C0674D042E25B77B4480E7 /* Artifact.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Artifact.swift; path = Sources/Search/Artifact.swift; sourceTree = SOURCE_ROOT; };
 		B3B0674D042E25B77B4480E7 /* Mentions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Mentions.swift; path = Sources/Search/Mentions.swift; sourceTree = SOURCE_ROOT; };
 		B3A0674D042E25B77B4480E7 /* PanelProse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PanelProse.swift; path = Sources/Search/PanelProse.swift; sourceTree = SOURCE_ROOT; };
@@ -611,6 +617,9 @@
 				57BDF4DD774520339F2E7A31 /* Screenshots.swift */,
 				489976FE977DCF66AA3F9099 /* SpacesExport.swift */,
 				2464EEBEC4952DD2B887BCC6 /* SplitControls.swift */,
+				AA12674D042E25B77B4480E7 /* TaskHistory.swift */,
+				AA11674D042E25B77B4480E7 /* TaskLedger.swift */,
+				AA10674D042E25B77B4480E7 /* Playbooks.swift */,
 				B3C0674D042E25B77B4480E7 /* Artifact.swift */,
 				B3B0674D042E25B77B4480E7 /* Mentions.swift */,
 				B3A0674D042E25B77B4480E7 /* PanelProse.swift */,
@@ -965,6 +974,9 @@
 				31F24CD34C5210B479611A48 /* Screenshots.swift in Sources */,
 				A779A2BFD001CA715DC53E20 /* SpacesExport.swift in Sources */,
 				A01A2CEBE5B81E385F4FA90E /* SplitControls.swift in Sources */,
+				AA12896F2F0E502555C6BE2D /* TaskHistory.swift in Sources */,
+				AA11896F2F0E502555C6BE2D /* TaskLedger.swift in Sources */,
+				AA10896F2F0E502555C6BE2D /* Playbooks.swift in Sources */,
 				B3C0896F2F0E502555C6BE2D /* Artifact.swift in Sources */,
 				B3B0896F2F0E502555C6BE2D /* Mentions.swift in Sources */,
 				B3A0896F2F0E502555C6BE2D /* PanelProse.swift in Sources */,

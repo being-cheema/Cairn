@@ -9,6 +9,8 @@ final class ClaudeSessionTests: XCTestCase {
     private var record: URL { root.appendingPathComponent("record") }
 
     override func setUpWithError() throws {
+        // A turn that ends writes its record (TaskLedger): never in a real folder.
+        TestWorld.enter()
         root = FileManager.default.temporaryDirectory.appendingPathComponent("claude-session-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
     }

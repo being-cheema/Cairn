@@ -61,6 +61,8 @@ final class ClaudePanelWordsTests: XCTestCase {
     private var root: URL!
 
     override func setUpWithError() throws {
+        // A turn that ends writes its record (TaskLedger): never in a real folder.
+        TestWorld.enter()
         root = FileManager.default.temporaryDirectory.appendingPathComponent("claude-words-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
     }
