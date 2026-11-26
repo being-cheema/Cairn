@@ -354,6 +354,8 @@ struct SiteCard: View {
     /// One step in: the connection, said in full.
     @State private var deeper: Bool
     @State private var showingPermissions = false
+    /// One step in: Inspect Style (PageStyle).
+    @State private var showingStyle = false
     @ObservedObject private var notifications = SiteNotifications.shared
     /// Whether this Mac trusts the site's certificate. Unknown until it has
     /// been asked, off the main thread: asking can go to the network.
@@ -369,7 +371,9 @@ struct SiteCard: View {
 
     var body: some View {
         Group {
-            if showingPermissions {
+            if showingStyle {
+                SiteStyleCard(tab: tab) { showingStyle = false }
+            } else if showingPermissions {
                 permissions
             } else if deeper, let safety {
                 security(safety)
@@ -412,6 +416,9 @@ struct SiteCard: View {
             blocker
             if let url = tab.pageAddress, ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
                 Row("Site Permissions", submenu: true) { showingPermissions = true }
+            }
+            if tab.built != nil, ["http", "https"].contains(tab.pageAddress?.scheme?.lowercased() ?? "") {
+                Row("Inspect Style", submenu: true) { showingStyle = true }
             }
             sound
             agents
