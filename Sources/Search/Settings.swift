@@ -370,6 +370,9 @@ struct SettingsPanel: View {
             }
         case .privacy:
             groups(of: page)
+            GroupBlock(title: "Reading Memory", icon: "book") {
+                ReadingMemorySettings()
+            }
             GroupBlock(title: "Proxy", icon: "network") {
                 ProxySettings()
             }

@@ -532,6 +532,8 @@ final class History: ObservableObject {
 
     func forget(_ key: String) {
         if loading != nil { duringLoad.append { $0.forget(key) } }
+        // And what was kept of the page's words.
+        MainActor.assumeIsolated { ReadingMemory.shared.forget(historyKey: key) }
         // Its page's icon is a trace of the visit too.
         if let url = visits[key].flatMap({ URL(string: $0.url) }) { Favicons.shared.forget(url) }
         visits[key] = nil

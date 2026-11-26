@@ -174,7 +174,7 @@ final class ClaudeSession: ObservableObject {
         let mine = generation
         Task { @MainActor [weak self] in
             let tabs = self?.browser?.tabs ?? []
-            let attached = await Mentions.gather(named, among: tabs)
+            let attached = await Mentions.gather(named, among: tabs, words: text)
             guard let self, self.generation == mine, self.running else { return }
             self.write(Mentions.message(words, with: attached))
         }
