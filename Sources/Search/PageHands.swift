@@ -155,7 +155,7 @@ enum PageScripts {
     """#
 
     private static let readBody = #"""
-    (function (key, snap, most, longest, withText, nodeOffset, viewportOnly, textOffset, since) {
+    (function (key, snap, most, longest, withText, nodeOffset, viewportOnly, textOffset, since, withStructured) {
       // For a read compared with the one before (PageDiff): in the same
       // document an element keeps its number, so its handle stays good. A
       // new document has no list kept, and gets a number never used for
@@ -207,6 +207,7 @@ enum PageScripts {
         out.nextTextOffset = out.textTruncated ? textOffset + longest : null;
         out.text = text.slice(textOffset, textOffset + longest);
       }
+      if (withStructured) out.structured = structuredRaw();
       return JSON.stringify(out);
     })
     """#
@@ -413,15 +414,17 @@ enum PageScripts {
     }
 
     static func call(_ body: String, _ args: [Any]) -> String {
-        helpers + FormReceipt.script + body + "(" + args.map(json).joined(separator: ", ") + ")"
+        helpers + FormReceipt.script + StructuredData.script + body + "(" + args.map(json).joined(separator: ", ") + ")"
     }
 
     /// The page's visible controls and headings, with the element list kept
     /// under `key` for touch.
     /// `since` names an earlier read to keep the numbering of (PageDiff).
     static func read(key: String, snap: Int, most: Int, longest: Int, text: Bool,
-                     nodeOffset: Int = 0, viewportOnly: Bool = false, textOffset: Int = 0, since: Int? = nil) -> String {
-        call(readBody, [key, snap, most, longest, text, nodeOffset, viewportOnly, textOffset, since.map { $0 as Any } ?? NSNull()])
+                     nodeOffset: Int = 0, viewportOnly: Bool = false, textOffset: Int = 0, since: Int? = nil,
+                     structured: Bool = false) -> String {
+        call(readBody, [key, snap, most, longest, text, nodeOffset, viewportOnly, textOffset, since.map { $0 as Any } ?? NSNull(),
+                        structured])
     }
 
     /// One look at whether the page is holding still (PageSettle): how often

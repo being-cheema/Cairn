@@ -1619,8 +1619,8 @@ final class AgentControl: ObservableObject {
                 // is up so that nothing waits on the page to ask it. Only
                 // the page's own form: a frame's isn't looked into.
                 if fromMain, toMain, let held = session.held {
-                    self.page(tab, session, PageScripts.sending(to: url.absoluteString)) { [weak session] result in
-                        guard let session, session.held === held, case .success(let out) = result else { return }
+                    self.page(tab, session, PageScripts.sending(to: url.absoluteString)) { result in
+                        guard session.held === held, case .success(let out) = result else { return }
                         session.receiptIsLate = true
                         session.receipt = FormReceipt(out["receipt"])
                     }
@@ -2167,8 +2167,9 @@ final class AgentControl: ObservableObject {
             guard let self else { return }
             self.page(tab, session, PageScripts.read(key: Self.key, snap: snap, most: most, longest: longest, text: asked.text,
                                                      nodeOffset: nodeOffset, viewportOnly: asked.viewportOnly,
-                                                     textOffset: textOffset, since: last?.snap)) { [weak session] result in
-                guard let session else { return }
+                                                     textOffset: textOffset, since: last?.snap,
+                                                     // Never from a tab of yours: what isn't on screen stays there.
+                                                     structured: session.own.contains(tab.id))) { result in
                 switch result {
                 case .failure(let refusal): answer(refusal.said)
                 case .success(var out):
@@ -2190,6 +2191,9 @@ final class AgentControl: ObservableObject {
                     }
                     out["page"] = handle
                     out["url"] = AgentRules.url(out["url"] as? String ?? "")
+                    // Cut and cleaned here (StructuredData), or not sent at all.
+                    let structured = out.removeValue(forKey: "structured")
+                    if own, let block = StructuredData.block(structured) { out["structured"] = block }
                     if !still { out["unsettled"] = "The page was still changing after \(PageSettle.longest) s: this is it as it was then." }
                     if wantsDiff {
                         if !own {
