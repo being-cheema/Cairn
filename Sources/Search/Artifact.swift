@@ -17,6 +17,8 @@ struct Artifact: Equatable, Identifiable {
         let tab: Tab.ID
         let site: String
         let address: String
+        /// The address as a read of it is kept (SourceSnapshots).
+        var page: String { MarginNotes.page(URL(string: address)) }
     }
 
     struct Cell: Equatable {
@@ -36,6 +38,13 @@ struct Artifact: Equatable, Identifiable {
     var columns: [String] = []
     var rows: [[Cell]] = []
     var sections: [Section] = []
+    /// What had been read of the pages it names, as it was when the card was
+    /// made (ClaimCheck). In memory with the chat; no part of the card's
+    /// words, its Markdown or its comparison.
+    var evidence: [SourceSnapshots.Key: SourceSnapshots.Page] = [:]
+
+    /// Every source a part of it names.
+    var sources: [Source] { rows.flatMap { $0.compactMap(\.source) } + sections.compactMap(\.source) }
 
     static func == (a: Artifact, b: Artifact) -> Bool {
         a.kind == b.kind && a.title == b.title && a.columns == b.columns && a.rows == b.rows && a.sections == b.sections
@@ -128,6 +137,8 @@ struct ArtifactCard: View {
     let artifact: Artifact
     let browser: Browser?
     @State private var copied = false
+    /// What Check Against Sources found, once asked.
+    @State private var findings: [ClaimCheck.Finding]?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -144,6 +155,15 @@ struct ArtifactCard: View {
                 }
             }
             if artifact.kind == .table { table } else { list }
+            if let findings {
+                Text(verbatim: ClaimCheck.summary(findings))
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(Palette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if !artifact.sources.isEmpty {
+                Quick("Check Against Sources") { findings = ClaimCheck.check(artifact) }
+                    .help("Looks for each part's words in the text read from its source. A text match, not a fact check.")
+            }
         }
         .padding(11)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -158,12 +178,13 @@ struct ArtifactCard: View {
                     ForEach(Array(artifact.columns.enumerated()), id: \.offset) { _, column in words(column, .semibold) }
                 }
                 Rectangle().fill(Palette.hairline).frame(height: 1).gridCellUnsizedAxes(.horizontal)
-                ForEach(Array(artifact.rows.enumerated()), id: \.offset) { _, row in
+                ForEach(Array(artifact.rows.enumerated()), id: \.offset) { at, row in
                     GridRow {
-                        ForEach(Array(row.enumerated()), id: \.offset) { _, cell in
+                        ForEach(Array(row.enumerated()), id: \.offset) { column, cell in
                             VStack(alignment: .leading, spacing: 3) {
                                 words(cell.text, .regular)
                                 badge(cell.source)
+                                flag(at, column)
                             }
                         }
                     }
@@ -174,7 +195,7 @@ struct ArtifactCard: View {
 
     private var list: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ForEach(Array(artifact.sections.enumerated()), id: \.offset) { _, section in
+            ForEach(Array(artifact.sections.enumerated()), id: \.offset) { number, section in
                 HStack(alignment: .firstTextBaseline, spacing: 7) {
                     if artifact.kind == .checklist {
                         Image(systemName: "square").font(.system(size: 10)).foregroundStyle(Palette.muted)
@@ -183,9 +204,22 @@ struct ArtifactCard: View {
                         if !section.heading.isEmpty { words(section.heading, .semibold, wide: false) }
                         if !section.body.isEmpty { words(section.body, .regular, wide: false) }
                         badge(section.source)
+                        flag(number, 0)
                     }
                 }
             }
+        }
+    }
+
+    /// What the check found for one part; the ones to look at stand out.
+    @ViewBuilder
+    private func flag(_ row: Int, _ column: Int) -> some View {
+        if let finding = findings?.first(where: { $0.row == row && $0.column == column }) {
+            Text(verbatim: finding.words)
+                .font(.system(size: 10, weight: finding.verdict == .found ? .regular : .semibold))
+                .foregroundStyle(finding.verdict == .found ? Palette.muted : Palette.accent)
+                .frame(maxWidth: 170, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

@@ -2189,6 +2189,12 @@ final class AgentControl: ObservableObject {
                         if node["role"] as? String == "iframe", let named = node["name"] as? String { node["name"] = AgentRules.scrubbed(named) }
                         return node
                     }
+                    // What the panel's run reads is kept, in memory, for
+                    // checking its cards against (ClaimCheck).
+                    if own, session.panel, let text = out["text"] as? String {
+                        session.browser?.claude.read(text, at: out["textOffset"] as? Int ?? 0, of: out["textLength"] as? Int ?? text.utf16.count,
+                                                     tab: tab.id, address: tab.pageAddress)
+                    }
                     out["page"] = handle
                     out["url"] = AgentRules.url(out["url"] as? String ?? "")
                     // Cut and cleaned here (StructuredData), or not sent at all.
