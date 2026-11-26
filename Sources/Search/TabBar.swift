@@ -1045,6 +1045,7 @@ private struct TabPill: View, Equatable {
                 // no title to say it in.
                 .unreadBadge(prefs.showsPinCounts && !lettering && shortcutNumbers[tab.id] == nil ? tab.unread : nil, icon: 16,
                              ring: live ? greys.pinLive : selected ? greys.wash : hovering ? greys.hover : greys.tile)
+                .pinChangeDot(tab)
                 .padding(.horizontal, 7)
                 .padding(.vertical, 6)
                 .frame(width: span)
@@ -2149,6 +2150,9 @@ struct TabMenu: View {
         // The card a click on the tab you are on shows under its address.
         Button("Site Information…") { browser.showSiteInformation(tab) }
             .disabled(!Browser.offersSiteInformation(tab))
+        if PinChanges.shared.hasChanges(tab) {
+            Button("See Changes") { browser.seeChanges(tab) }
+        }
         Button("Copy Address") {
             browser.select(tab)
             browser.copyAddress()

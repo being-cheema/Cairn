@@ -182,7 +182,19 @@ final class Preferences: ObservableObject {
     }
     /// Sites closed to agents, each covering its subdomains (VaultedSites).
     @Published var vaultedSites: Set<String> {
-        didSet { store.set(Array(vaultedSites).sorted(), forKey: VaultedSites.key) }
+        didSet {
+            store.set(Array(vaultedSites).sorted(), forKey: VaultedSites.key)
+            // Nothing already kept of a site stays once it is closed.
+            PinChanges.shared.forget(sites: vaultedSites)
+        }
+    }
+    /// The words of pinned pages kept, to show what changed (PinChanges).
+    /// Off unless turned on; turned off, what was kept is deleted.
+    @Published var watchesPinChanges: Bool {
+        didSet {
+            store.set(watchesPinChanges, forKey: PinChanges.key)
+            if !watchesPinChanges { PinChanges.shared.forgetAll() }
+        }
     }
     /// The panel's Task History (TaskLedger). On unless turned off.
     @Published var keepsTaskHistory: Bool {
@@ -1440,6 +1452,7 @@ final class Preferences: ObservableObject {
         sleepsTabs = store.object(forKey: "tabs.sleep") as? Bool ?? true
         dimsSleepingTabs = store.bool(forKey: "tabs.sleep.dim")
         vaultedSites = Set(store.stringArray(forKey: VaultedSites.key) ?? [])
+        watchesPinChanges = store.bool(forKey: PinChanges.key)
         hidesBack = store.bool(forKey: "helm.back.hidden")
         hidesForward = store.bool(forKey: "helm.forward.hidden")
         hidesReload = store.bool(forKey: "helm.reload.hidden")

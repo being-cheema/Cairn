@@ -971,6 +971,7 @@ struct SettingsPanel: View {
         case "bench": Switch(on: $prefs.bench)
         case "agents": Always(text: "Asks first")
         case "claude.history": Switch(on: $prefs.keepsTaskHistory)
+        case "pins.changes": Switch(on: $prefs.watchesPinChanges)
         // The list is under the row (after).
         case "agents.vaulted": EmptyView()
         case "news.updates": OptInSettingsField(betaOnly: false) { _ = browser.open($0, foreground: true) }

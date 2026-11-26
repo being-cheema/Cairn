@@ -93,6 +93,7 @@ enum SettingsIndex {
         .init(id: "blocking", page: .privacy, title: "Blocking", icon: "shield"),
         .init(id: "permissions", page: .privacy, title: "Site permissions", icon: "checkmark.shield"),
         .init(id: "agentsites", page: .privacy, title: "Coding agents", icon: "cursorarrow.rays"),
+        .init(id: "pagecopies", page: .privacy, title: "Saved page text", icon: "doc.text"),
         .init(id: "clear", page: .privacy, title: "Clear", icon: "trash"),
 
         .init(id: "mouse", page: .keyboard, title: "Mouse and trackpad", icon: "computermouse"),
@@ -764,6 +765,10 @@ enum SettingsIndex {
               title: "Sites agents can't use", detail: "Claude and other agents are refused these sites and their subdomains",
               more: "An agent can't open, go to, be redirected to, read or act on a site here, and you aren't asked: it is refused. Add one here or with Block Agents on This Site on the site's card. It goes by a page's address: another site's page can still fetch from one with its own scripts, and the same company's other domains are other sites. In a tab you were handed to sign in, you can still go there; the agent can't read it.",
               keys: ["agents.vaultedSites"], words: ["agent", "block", "vault", "bank", "claude", "mcp", "privacy", "domain"]),
+        .init(id: "pins.changes", group: "pagecopies", icon: "pin",
+              title: "Show what changed on pinned pages", detail: "Keeps the words of pinned pages on this Mac, as you see them. Off deletes them",
+              more: "When a pinned page loads and its words differ from what you last saw, the pin gets a dot and its menu gets See Changes. The words are written to this Mac as plain files only you can open, from pages as you see them, signed in. Nothing typed into a box is read, and anything shaped like a card number, a labelled password or code or a common key is hidden; a secret a page prints another way is kept. Never from a private tab or a site closed to agents. Unpinning, Clear History or turning this off deletes them.",
+              keys: ["pins.changes"], words: ["pin", "changes", "diff", "snapshot", "watch"]),
         .init(id: "claude.history", group: "developer", icon: "clock",
               title: "Keep Task History", detail: "What you asked Claude in the side panel, where it went and what you approved",
               more: "Kept on this Mac only, with card numbers, labelled passwords and codes and common kinds of key hidden from what you typed; a secret written another way is kept as typed. Claude's replies aren't kept. Turning this off keeps nothing new; the clock in the panel has Delete All for what is already there.",
