@@ -14,6 +14,7 @@ import Foundation
 /// one side alone.
 public enum AgentVerb: String, CaseIterable, Sendable {
     case hello, status, tabs, open, go, back, forward, close, read, click, type, press, scroll
+    case selectOption = "select_option"
     case waitFor = "wait_for"
     case waitForSignIn = "wait_for_sign_in"
     case shot, bye

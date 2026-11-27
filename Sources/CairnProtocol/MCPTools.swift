@@ -105,6 +105,14 @@ public enum MCPTools {
                  ["element": element, "text": string(), "replace": boolean(), "keys": boolean(), "submit": boolean(),
                   "timeout": seconds],
                  required: ["element", "text"]),
+            tool("select_option", .selectOption,
+                 "Choose an option from a list in a tab of your own: a native select, or an ARIA combobox or listbox "
+                     + "whose options are drawn apart from it (it is opened with a real click, which is held for the "
+                     + "person's answer wherever a click would be). Name the option by its visible words or its value; "
+                     + "an exact match wins over a partial one, and one that matches several is an error listing them. "
+                     + "Checks what was chosen. Never on a password, card or code field. Open shadow roots only.",
+                 ["element": element, "value": string("The option's visible words, or its value")],
+                 required: ["element", "value"]),
             tool("wait_for_sign_in", .waitForSignIn,
                  "For a page that needs an account. Hand the tab to the person so that they sign in there themselves, with "
                      + "their own password or passkey, and wait until they hand it back (up to 15 minutes). You see nothing "

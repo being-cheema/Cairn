@@ -646,6 +646,97 @@ enum PageScripts {
         """#, [])
     }
 
+    private static let chooseBody = #"""
+    (function (key, snap, i, want, phase) {
+      function no(code, message) { return JSON.stringify({ error: code, message: message }); }
+      var kept = globalThis[key];
+      if (!kept || kept.snap !== snap) return no('stale_element', 'The page has changed since that read_page');
+      var el = kept.els[i];
+      if (!el || !el.isConnected) return no('detached', 'That element is no longer in the page');
+      // Never a field that holds a secret: not by this, not to look at it.
+      if (secret(el) || (el.tagName === 'INPUT' && /^(password|file)$/i.test(el.type || ''))) return no('secret_field', 'Not for a password, card, code or file field');
+      if (el.disabled || el.getAttribute('aria-disabled') === 'true') return no('disabled', 'That element is disabled');
+      var w = squash(want).toLowerCase();
+      // One of the items by its words or value: an exact match first, then a
+      // partial one that must be the only one.
+      function pick(items) {
+        var exact = items.filter(function (o) { return o.text.toLowerCase() === w || (o.value != null && String(o.value).toLowerCase() === w); });
+        var found = exact.length ? exact : items.filter(function (o) { return o.text.toLowerCase().indexOf(w) !== -1; });
+        var list = items.slice(0, 30).map(function (o) { return o.text; }).join(' | ');
+        if (!found.length) return { error: no('no_such_option', 'No option matches that. Options (the page\'s words): ' + list) };
+        if (found.length > 1) return { error: no('ambiguous_option', 'Several options match: ' + found.slice(0, 8).map(function (o) { return o.text; }).join(' | ')) };
+        if (found[0].disabled) return { error: no('disabled', 'That option is disabled') };
+        return { one: found[0] };
+      }
+      if (el.tagName === 'SELECT') {
+        if (phase === 'probe') return JSON.stringify({ ok: true, kind: 'native', gate: gate(el), box: boxOf(el) });
+        var items = Array.prototype.map.call(el.options, function (o, n) {
+          return { idx: n, text: squash(o.label || o.text), value: o.value, disabled: o.disabled || (o.parentNode && o.parentNode.disabled) };
+        });
+        var got = pick(items);
+        if (got.error) return got.error;
+        el.scrollIntoView({ block: 'center', inline: 'nearest' });
+        el.focus();
+        if (el.multiple) el.options[got.one.idx].selected = true; else el.selectedIndex = got.one.idx;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        return JSON.stringify({ ok: true, kind: 'native', selected: got.one.text, verified: !!el.options[got.one.idx].selected });
+      }
+      var r = role(el);
+      if (r !== 'combobox' && r !== 'listbox') return no('not_a_list', 'That element is not a select, combobox or listbox');
+      function open() { return r === 'listbox' || el.getAttribute('aria-expanded') === 'true'; }
+      if (phase === 'probe') return JSON.stringify({ ok: true, kind: 'aria', expanded: open(), gate: gate(el), box: boxOf(el) });
+      function options() {
+        function inside(root) {
+          var all = Array.prototype.slice.call(root.querySelectorAll('[role=option]'));
+          if (root.getAttribute && root.getAttribute('role') === 'option') all.unshift(root);
+          return all.filter(visible);
+        }
+        var list = [];
+        if (r === 'listbox') list = inside(el);
+        (el.getAttribute('aria-controls') || el.getAttribute('aria-owns') || '').split(/\s+/).forEach(function (id) {
+          var root = id && document.getElementById(id);
+          if (root && !list.length) list = inside(root);
+        });
+        // A list drawn apart, at the end of the document, as portals are.
+        if (!list.length) {
+          var lists = Array.prototype.filter.call(document.querySelectorAll('[role=listbox]'), visible);
+          if (lists.length) list = inside(lists[lists.length - 1]);
+        }
+        if (!list.length) list = inside(document);
+        return list;
+      }
+      if (phase === 'verify') {
+        var o = kept.opt;
+        var shows = secret(el) ? '' : squash(el.value != null && el.tagName === 'INPUT' ? el.value : el.innerText);
+        var ok = !!o && (o.getAttribute('aria-selected') === 'true' || o.getAttribute('aria-checked') === 'true' ||
+          (!!shows && shows.toLowerCase().indexOf(squash(o.innerText).toLowerCase()) !== -1));
+        return JSON.stringify({ ok: true, verified: ok, shows: shows.slice(0, 100) });
+      }
+      var items2 = options().map(function (o) {
+        return { el: o, text: squash(o.innerText || o.textContent), value: o.getAttribute('data-value') || o.getAttribute('value'),
+          disabled: o.getAttribute('aria-disabled') === 'true' };
+      });
+      var choice = pick(items2);
+      if (choice.error) return choice.error;
+      var opt = choice.one.el;
+      opt.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      var rect = opt.getBoundingClientRect(), x = rect.left + rect.width / 2, y = rect.top + rect.height / 2;
+      if (!rect.width || !rect.height || x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) return no('out_of_view', 'That option cannot be brought into view');
+      var hit = document.elementFromPoint(x, y);
+      if (!hit || !(hit === opt || opt.contains(hit))) return no('obscured', 'Covered by ' + (hit ? described(hit) : 'nothing at its middle'));
+      kept.opt = opt;
+      return JSON.stringify({ ok: true, kind: 'aria', at: [Math.round(x), Math.round(y)], name: choice.one.text, gate: gate(opt), box: boxOf(opt) });
+    })
+    """#
+
+    /// One element of the last read under `key`, a list to choose from, at
+    /// one of its steps: "probe" what it is, "set" (a native select),
+    /// "choose" the option to click (an ARIA list), "verify" what it shows.
+    static func choose(key: String, snap: Int, index: Int, want: String, phase: String) -> String {
+        call(chooseBody, [key, snap, index, want, phase])
+    }
+
     /// One element of the last read under `key`: "click", "press", "scroll",
     /// "focus", "set", "submit", "verify" or "check". `strict` refuses file
     /// fields. A nil text for "verify" checks against what "focus" kept.
