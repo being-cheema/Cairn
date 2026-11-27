@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 // One conversation with the person's own Claude Code, in the side panel.
@@ -46,6 +47,27 @@ final class ClaudeSession: ObservableObject {
     }
 
     @Published private(set) var turns: [Turn] = []
+    /// The page state from before each approved step (StepRewind).
+    @Published private(set) var steps = StepLog()
+    /// The button's own view, so only a click of yours on it counts.
+    var rewindButton: NSView?
+
+    /// Before an approved step of the run's: the tab as it is now.
+    func checkpoint(_ tab: Tab, what: String) {
+        guard running, let state = tab.keepsake else { return }
+        steps.keep(StepCheckpoint(tab: tab.id, state: state, what: AgentRules.scrubbed(what)))
+    }
+
+    /// Your press of Rewind Step: the latest tab put back where it was.
+    @discardableResult
+    func rewind(event: NSEvent?) -> Bool {
+        guard !running, steps.last != nil,
+              AgentRules.isClick(event, on: rewindButton, in: browser?.window, after: 0),
+              let browser, let item = steps.pop(),
+              let tab = (browser.tabs + browser.parkedTabs).first(where: { $0.id == item.tab }) else { return false }
+        tab.rewind(to: item.state)
+        return true
+    }
     /// Named with "@" for the next message, and that one only (Mentions).
     @Published var mentions: [Mention] = []
 
@@ -156,6 +178,7 @@ final class ClaudeSession: ObservableObject {
             ?? (text.hasPrefix("/") ? "My message: " + text : text)
         if process == nil, !start() { return }
         problem = nil
+        steps.clear()
         draft = ""
         let named = mentions
         mentions = []
@@ -216,6 +239,7 @@ final class ClaudeSession: ObservableObject {
         stop()
         record = nil
         turns = []
+        steps.clear()
         snapshots = SourceSnapshots()
         problem = nil
         draft = ""

@@ -344,6 +344,8 @@ struct Command: Identifiable {
             if let tab = browser.active { browser.beginTabRename(tab) }
         },
         Command("tabs.duplicate", "Duplicate Tab", .tabs, KeyCombo("d")) { $0.duplicate() },
+        // ⌘⇧D is Darken This Site; ⌥⌘F is free (Find's own are ⌘F and ⌃⌘F).
+        Command("tabs.fork", "Fork Tab", .tabs, KeyCombo("f", option: true)) { $0.forkTab() },
         Command("tabs.copyAddress", "Copy Address", .tabs, KeyCombo("c", shift: true)) { $0.copyAddress() },
         Command("tabs.copyMarkdown", "Copy as Markdown Link", .tabs, nil) { $0.copyMarkdownLink() },
         Command("tabs.pasteAndGo", "Paste and Go", .tabs, KeyCombo("v", shift: true)) { $0.pasteAndGo() },

@@ -1475,7 +1475,7 @@ final class AgentControl: ObservableObject {
     /// Puts `hold` to you in the window and calls `then` once with the
     /// answer: yours, or none within `holdFor`, or the session going. The
     /// agent's call waits for it, and gets the result, or why not.
-    private func ask(_ hold: AgentGate.Hold, _ session: AgentSession, sending: Tab.ID? = nil,
+    private func ask(_ hold: AgentGate.Hold, _ session: AgentSession, sending: Tab.ID? = nil, before tab: Tab? = nil,
                      within patience: TimeInterval = AgentControl.holdFor,
                      showing receipt: FormReceipt? = nil, then: @escaping (HeldAction.Answer) -> Void) {
         var answered = false
@@ -1487,6 +1487,11 @@ final class AgentControl: ObservableObject {
             session?.held = nil
             session?.receipt = nil
             if verdict == .approved, let site = hold.site { session?.sites.insert(site) }
+            // The page as it was before what you approved (StepRewind).
+            if verdict == .approved, let session, session.panel,
+               let tab = tab ?? sending.flatMap({ id in session.browser?.tabs.first { $0.id == id } }) {
+                session.browser?.claude.checkpoint(tab, what: hold.summary)
+            }
             // For the panel's task record (TaskLedger).
             if let session, session.panel {
                 session.browser?.claude.asked(reason: hold.reason.rawValue, what: hold.summary,
@@ -2349,7 +2354,7 @@ final class AgentControl: ObservableObject {
                     }
                 }
                 if let hold = addressHold(url, session, browser) {
-                    ask(hold, session) { verdict in
+                    ask(hold, session, before: tab) { verdict in
                         if verdict == .approved { go() } else { answer(Self.declined(hold, verdict)) }
                     }
                 } else {
@@ -3126,7 +3131,7 @@ final class AgentControl: ObservableObject {
         }
         // Words read on another site go in only on your say (AgentTaint).
         guard let hold = typingHold(text, on: tab, session) else { return begin() }
-        ask(hold, session) { verdict in
+        ask(hold, session, before: tab) { verdict in
             guard verdict == .approved else { return answer(Self.declined(hold, verdict)) }
             guard self.live(session) else { return answer(AgentRefusal(code: "stopped", message: "Stopped in \(Brand.name)").said) }
             begin()

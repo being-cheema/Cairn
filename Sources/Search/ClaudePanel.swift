@@ -42,6 +42,24 @@ struct ClaudePanel: View {
                 .onChange(of: session.turns.count) { _, _ in scrollToEnd(scroller) }
             }
 
+            if session.canRewind {
+                HStack(spacing: 8) {
+                    Button { session.rewind(event: NSApp.currentEvent) } label: {
+                        Text("Rewind Step")
+                            .font(.system(size: 11.5, weight: .medium))
+                            .padding(.horizontal, 10).padding(.vertical, 5)
+                            .background(Palette.wash, in: Capsule())
+                            .background(ClickSpot { session.rewindButton = $0 })
+                    }
+                    .buttonStyle(.plain)
+                    .help(ClaudeSession.rewindWarning)
+                    Text("Page only: it can't unsend what was already sent.")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(Palette.muted)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 14).padding(.vertical, 5)
+            }
             // Held for the person (AgentGate): said here too, above the box,
             // where it can't scroll away — the card with Approve is at the
             // foot of the page, and a click of yours there is the only answer.

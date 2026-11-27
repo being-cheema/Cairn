@@ -13,6 +13,8 @@ in [ROADMAP-upstream.md](docs/history/ROADMAP-upstream.md).
 
 ### Added
 
+- Tab › Fork Tab (⌥⌘F; ⌘⇧D is Darken This Site): a copy of the page with its Back and Forward history and place, in the same store as the tab it came from (a private tab's fork is private), as a split pair when split view is on. Never for an agent's tab.
+- Rewind Step in the Claude panel: before each step of Claude's you approve, the page's history and place are kept, and one click of yours puts the tab back. It restores the page only and says it can't unsend anything already sent.
 - screenshot takes marks: numbered badges [eN] drawn on the picture (never in the page) at each control in view from the last read_page, so a model can name what it sees. None over blacked-out areas or on secret fields.
 - An agent that read words on one site and is about to type them into a page on another, or open an address that carries them, is held for your click, with the card naming the site they came from. It is a heuristic (matching runs of words and long identifiers) and says so; it only adds questions, keeps the task's reading in memory until the task ends, and never records a secret field.
 

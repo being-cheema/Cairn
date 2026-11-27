@@ -418,6 +418,9 @@ struct SearchApp: App {
                 Button("Rename Tab") { if let tab = browser.active { browser.beginTabRename(tab) } }
                     .shortcut("tabs.rename")
                     .disabled(browser.active == nil)
+                Button("Fork Tab") { browser.forkTab() }
+                    .shortcut("tabs.fork")
+                    .disabled(!(browser.active.map { ForkTab.allows($0) } ?? false))
                 Button("Duplicate Tab") { browser.duplicate() }
                     .shortcut("tabs.duplicate")
                     .disabled(!(browser.active?.isWeb ?? false))
