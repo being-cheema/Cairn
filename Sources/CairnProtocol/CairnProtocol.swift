@@ -16,6 +16,7 @@ public enum AgentVerb: String, CaseIterable, Sendable {
     case hello, status, tabs, open, go, back, forward, close, read, click, type, press, scroll
     case fillForm = "fill_form"
     case disambiguate
+    case zoom
     case waitFor = "wait_for"
     case waitForSignIn = "wait_for_sign_in"
     case shot, bye

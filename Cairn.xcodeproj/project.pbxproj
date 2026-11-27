@@ -260,6 +260,7 @@
 		AA12896F2F0E502555C6BE2D /* TaskHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA12674D042E25B77B4480E7 /* TaskHistory.swift */; };
 		AA11896F2F0E502555C6BE2D /* TaskLedger.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11674D042E25B77B4480E7 /* TaskLedger.swift */; };
 		AA10896F2F0E502555C6BE2D /* Playbooks.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10674D042E25B77B4480E7 /* Playbooks.swift */; };
+		AA7CDBE78ACA601AB732E79B /* PageArchetype.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA7CE70DB47AC43CD907C730 /* PageArchetype.swift */; };
 		AA3C62844CD3D19A2DBFA05E /* LoopBreaker.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA3DAED9BC396247ADDC8765 /* LoopBreaker.swift */; };
 		AA58910C5A45B92031185EAC /* ActionReceipt.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAA62D00F85320361BCA85A4 /* ActionReceipt.swift */; };
 		AA3BB6257733694BD8E2CA57 /* PageIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1D109C000D8B509A392D97 /* PageIdentity.swift */; };
@@ -485,6 +486,7 @@
 		AA12674D042E25B77B4480E7 /* TaskHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TaskHistory.swift; path = Sources/Search/TaskHistory.swift; sourceTree = SOURCE_ROOT; };
 		AA11674D042E25B77B4480E7 /* TaskLedger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TaskLedger.swift; path = Sources/Search/TaskLedger.swift; sourceTree = SOURCE_ROOT; };
 		AA10674D042E25B77B4480E7 /* Playbooks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Playbooks.swift; path = Sources/Search/Playbooks.swift; sourceTree = SOURCE_ROOT; };
+		AA7CE70DB47AC43CD907C730 /* PageArchetype.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PageArchetype.swift; path = Sources/Search/PageArchetype.swift; sourceTree = SOURCE_ROOT; };
 		AA3DAED9BC396247ADDC8765 /* LoopBreaker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LoopBreaker.swift; path = Sources/Search/LoopBreaker.swift; sourceTree = SOURCE_ROOT; };
 		AAA62D00F85320361BCA85A4 /* ActionReceipt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ActionReceipt.swift; path = Sources/Search/ActionReceipt.swift; sourceTree = SOURCE_ROOT; };
 		AA1D109C000D8B509A392D97 /* PageIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PageIdentity.swift; path = Sources/Search/PageIdentity.swift; sourceTree = SOURCE_ROOT; };
@@ -713,6 +715,7 @@
 				AA12674D042E25B77B4480E7 /* TaskHistory.swift */,
 				AA11674D042E25B77B4480E7 /* TaskLedger.swift */,
 				AA10674D042E25B77B4480E7 /* Playbooks.swift */,
+				AA7CE70DB47AC43CD907C730 /* PageArchetype.swift */,
 				AA3DAED9BC396247ADDC8765 /* LoopBreaker.swift */,
 				AAA62D00F85320361BCA85A4 /* ActionReceipt.swift */,
 				AA1D109C000D8B509A392D97 /* PageIdentity.swift */,
@@ -1103,6 +1106,7 @@
 				AA12896F2F0E502555C6BE2D /* TaskHistory.swift in Sources */,
 				AA11896F2F0E502555C6BE2D /* TaskLedger.swift in Sources */,
 				AA10896F2F0E502555C6BE2D /* Playbooks.swift in Sources */,
+				AA7CDBE78ACA601AB732E79B /* PageArchetype.swift in Sources */,
 				AA3C62844CD3D19A2DBFA05E /* LoopBreaker.swift in Sources */,
 				AA58910C5A45B92031185EAC /* ActionReceipt.swift in Sources */,
 				AA3BB6257733694BD8E2CA57 /* PageIdentity.swift in Sources */,

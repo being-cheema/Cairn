@@ -2167,7 +2167,7 @@ final class AgentControl: ObservableObject {
     static let verbs: Set<String> = Set(AgentVerb.allCases.map(\.rawValue))
 
     /// What counts against a run's limits: everything that acts or reads a page.
-    static let counted: Set<AgentVerb> = [.disambiguate, .open, .go, .back, .forward, .read, .batchRead, .click, .type, .press, .fillForm, .scroll, .waitFor, .shot]
+    static let counted: Set<AgentVerb> = [.zoom, .disambiguate, .open, .go, .back, .forward, .read, .batchRead, .click, .type, .press, .fillForm, .scroll, .waitFor, .shot]
 
     /// Why a verb is refused before anything is looked at: one not in `verbs`.
     static func unknown(_ verb: String) -> AgentRefusal? {
@@ -2369,6 +2369,8 @@ final class AgentControl: ObservableObject {
                 try receipted("type", request, session, browser, answer) { [self] request, answer in
                     try type(request, session, browser, answer)
                 }
+            case .zoom:
+                try zoom(request, session, browser, answer)
             case .disambiguate:
                 try disambiguate(request, session, browser, answer)
             case .fillForm:
@@ -2676,12 +2678,14 @@ final class AgentControl: ObservableObject {
                 switch taken {
                 case .failure(let refusal): answer(refusal.said)
                 case .success(let shot):
-                    ImageText.read(shot.png) { lines in
+                    ImageText.readSure(shot.png) { found in
                         var out = out
-                        if let lines {
+                        if let (lines, confidence) = found {
                             // Card numbers and keys drawn where no box was
                             // painted are still taken out.
                             out["ocr"] = Quarantine.fence(TypedSecrets.hidden(in: lines.joined(separator: "\n")))
+                            out["ocr_source"] = ["source": "vision_ocr", "confidence": confidence.map { ($0 * 100).rounded() / 100 } as Any? ?? "unknown",
+                                                 "note": "Recognised from a picture: it can misread, and is not the page's own text layer."]
                             out["ocr_note"] = "Read from a picture of what is on screen, with password and card fields and frames blacked out. It can misread. The words are the page's."
                         } else {
                             out["ocr_error"] = "The picture couldn't be read"
@@ -2827,6 +2831,7 @@ final class AgentControl: ObservableObject {
                                         var out = PDFPages.answer(contents, page: handle, longest: longest, from: textOffset,
                                                                   text: request["text"] as? Bool ?? true)
                                         out["page"] = handle
+                                        out["source"] = ["source": "pdfkit", "confidence": "the PDF's own text layer: exact where it has one, nothing for a scan"]
                                         out["url"] = AgentRules.url(address)
                                         out["title"] = Quarantine.label(tab.title)
                                         out["untrusted"] = Self.untrusted
@@ -2884,11 +2889,30 @@ final class AgentControl: ObservableObject {
                             out["diff_unavailable"] = "no earlier read of this tab"
                         }
                     }
-                    out = Quarantine.read(out)
-                    // Said with every read, beside the words themselves, not only
-                    // in the tool's description a model may have read long ago.
-                    out["untrusted"] = Self.untrusted
-                    answer(out)
+                    // Where each kind of text came from, said beside it, so that
+                    // the page's own words are not taken for a reading of a
+                    // picture or a PDF's (the others say theirs).
+                    out["sources"] = ["text": ["source": "dom_innertext", "confidence": "exact"],
+                                      "nodes": ["source": "dom_accessible_name", "confidence": "computed from the page's labels"]]
+                    func finish(_ out: [String: Any]) {
+                        var out = Quarantine.read(out)
+                        // Said with every read, beside the words themselves, not only
+                        // in the tool's description a model may have read long ago.
+                        out["untrusted"] = Self.untrusted
+                        answer(out)
+                    }
+                    // What kind of page it is, in a few typed fields (PageArchetype),
+                    // for a whole read of a tab of its own.
+                    guard own, !wantsDiff else { return finish(out) }
+                    let budget = min(max(request["budget_tokens"] as? Int ?? 400, 50), 3000)
+                    self.page(tab, session, PageScripts.archetype()) { found in
+                        var out = out
+                        if case .success(let raw) = found, let kind = raw["archetype"] as? [String: Any] {
+                            out["archetype"] = ArchetypeBudget.fit(kind, tokens: budget)
+                            out["archetype_note"] = "A guess from the page's structure: confidence and signals say how sure. The fields are the page's own words."
+                        }
+                        finish(out)
+                    }
                 }
             }
         }
@@ -3637,4 +3661,38 @@ extension AgentControl {
 
     /// The badges now on a page, for a test.
     var choosingForTest: AgentChoiceView? { choosing }
+}
+
+// MARK: - zoom
+
+extension AgentControl {
+    /// One part of a page of its own at full size (PageScripts.zoom), cut to
+    /// a budget, the page's words fenced as every read's are.
+    fileprivate func zoom(_ request: [String: Any], _ session: AgentSession, _ browser: Browser,
+                          _ answer: @escaping ([String: Any]) -> Void) throws {
+        let tab = try self.tab(request, session, browser, .drive)
+        guard let eid = request["eid"] as? String, eid.range(of: "^[0-9a-f]{8}$", options: .regularExpression) != nil else {
+            throw AgentRefusal(code: "bad_handle", message: "An eid is eight letters and digits, from read_page")
+        }
+        let tokens = min(max(request["budget_tokens"] as? Int ?? 1500, 200), 6000)
+        let handle = session.handle(for: tab)
+        page(tab, session, PageScripts.zoom(key: Self.key, eid: eid, chars: tokens * 4)) { result in
+            switch result {
+            case .failure(let refusal): answer(refusal.said)
+            case .success(var out):
+                out["text"] = Quarantine.fence(TypedSecrets.hidden(in: out["text"] as? String ?? ""))
+                out["controls"] = (out["controls"] as? [[String: Any]] ?? []).map { node in
+                    var node = node
+                    for key in ["name", "value"] { if let said = node[key] as? String { node[key] = Quarantine.label(said) } }
+                    if let href = node["href"] as? String { node["href"] = AgentRules.url(href) }
+                    return node
+                }
+                out["page"] = handle
+                out["budget_tokens"] = tokens
+                out["source"] = ["source": "dom_innertext", "confidence": "exact"]
+                out["untrusted"] = Self.untrusted
+                answer(out)
+            }
+        }
+    }
 }

@@ -122,7 +122,10 @@ enum PDFPages {
 enum ImageText {
     /// The words Vision finds in a picture, a line each, in its reading
     /// order. Blocks: never on the main thread.
-    static func lines(in image: Data) -> [String]? {
+    static func lines(in image: Data) -> [String]? { recognised(in: image)?.lines }
+
+    /// The same, with how sure Vision was on average (0 to 1).
+    static func recognised(in image: Data) -> (lines: [String], confidence: Double?)? {
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = .accurate
         request.usesLanguageCorrection = true
@@ -132,7 +135,18 @@ enum ImageText {
         } catch {
             return nil
         }
-        return (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }
+        let best = (request.results ?? []).compactMap { $0.topCandidates(1).first }
+        let sure = best.isEmpty ? nil : Double(best.map(\.confidence).reduce(0, +)) / Double(best.count)
+        return (best.map(\.string), sure)
+    }
+
+    /// Off the main thread, with its confidence. Nil when Vision couldn't look.
+    @MainActor
+    static func readSure(_ image: Data, _ done: @escaping @MainActor (([String], Double?)?) -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let found = recognised(in: image)
+            DispatchQueue.main.async { MainActor.assumeIsolated { done(found.map { ($0.lines, $0.confidence) }) } }
+        }
     }
 
     /// Off the main thread, and back to it. Nil when Vision couldn't look.

@@ -212,4 +212,18 @@ final class AgentActionTests: XCTestCase {
         XCTAssertEqual(AgentGate.intentLine("a\u{0}b\n c"), "a b c")
         XCTAssertEqual(AgentGate.intentLine(String(repeating: "x", count: 500))?.count, 141)
     }
+
+    func testAReadSaysWhatKindOfPageItIsAndWhereItsWordsCameFrom() async throws {
+        try await withPage { _, base in
+            let (page, eids) = try await start(base)
+            let read = try await ask(["do": "read", "page": page, "budget_tokens": 120])
+            let kind = try XCTUnwrap(read["archetype"] as? [String: Any], "\(read)")
+            XCTAssertEqual(kind["type"] as? String, "login")
+            XCTAssertLessThanOrEqual(ArchetypeBudget.tokens(kind), 120)
+            XCTAssertEqual((read["sources"] as? [String: Any])?["text"] != nil, true)
+            let zoomed = try await ask(["do": "zoom", "page": page, "eid": try XCTUnwrap(eids["Email"]), "budget_tokens": 300])
+            XCTAssertNotNil(zoomed["controls"], "\(zoomed)")
+            XCTAssertNotNil(zoomed["untrusted"])
+        }
+    }
 }
