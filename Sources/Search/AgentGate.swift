@@ -67,6 +67,8 @@ enum AgentGate {
 
     enum Reason: String, Equatable {
         case pay, send, signIn, submit, leave
+        /// Words read on one site about to be put on another (AgentTaint): a guess.
+        case flow
     }
 
     /// What is held, in the words the question and the agent are given.

@@ -141,6 +141,7 @@ A change to any of these needs its tests (`Agent*Tests.swift`) and a probe run.
 - While an agent has a tab, this Mac and private networks are refused
   (`PrivateNetwork`). DNS rebinding and subresources fetched through a public
   name that points inside are known gaps.
+- Words an agent read on one site and is about to type into, or put in an address on, another site are held for your click (`TaintLedger`, `AgentGate.hold(flowFrom:)`). A heuristic that only adds questions: the ledger is in memory, ends with the task, and takes no secret field's value.
 - A task that ends normally hands its tabs to the user, still in their own
   store. Stop, quit, misbehaviour and a declined site change close them.
 - **Local Dev Bridge.** Only a real click on its switch turns it on: no menu

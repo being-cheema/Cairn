@@ -727,6 +727,7 @@ struct PanelWaiting: View {
         case .signIn:
             return "Sign in on \(hold.site ?? "the page") yourself, then press Resume on the card at the foot of the page."
         case .submit: return "Claude wants to submit a form." + answer
+        case .flow: return "Claude wants to move text it read on one site to another. The card names the site; it is a guess from matching words." + answer
         }
     }
 }

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		AAD6C19C13F4DBB78C835333 /* AgentTaint.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA4015DE38D6EB496815E949 /* AgentTaint.swift */; };
 		01744E61AC11FE472BB499F1 /* AgentControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A3B2EDD8D3157B85CF50D9B /* AgentControl.swift */; };
 		020A24A35233118C8A84E834 /* PinIconHome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03FDBCFD6BD2D03F36EF765E /* PinIconHome.swift */; };
 		02E8F78913B74A65984BEE49 /* SoftPasskeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DEE1500A2CAF48174750183 /* SoftPasskeys.swift */; };
@@ -307,6 +308,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		AA4015DE38D6EB496815E949 /* AgentTaint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AgentTaint.swift; path = Sources/Search/AgentTaint.swift; sourceTree = SOURCE_ROOT; };
 		006D0AA98436E72FEA556A22 /* Webmail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Webmail.swift; path = Sources/Search/Webmail.swift; sourceTree = SOURCE_ROOT; };
 		00F30BADF1B68F400E955B38 /* OneWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = OneWindow.swift; path = Sources/Search/OneWindow.swift; sourceTree = SOURCE_ROOT; };
 		018752CF31837E445A6C0CE4 /* Float.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Float.swift; path = Sources/Search/Float.swift; sourceTree = SOURCE_ROOT; };
@@ -707,6 +709,7 @@
 				AA12674D042E25B77B4480E7 /* TaskHistory.swift */,
 				AA11674D042E25B77B4480E7 /* TaskLedger.swift */,
 				AA10674D042E25B77B4480E7 /* Playbooks.swift */,
+				AA4015DE38D6EB496815E949 /* AgentTaint.swift */,
 				AA10277B92F383F026131BD3 /* HomeTiles.swift */,
 				AA10DFA92DB64E3C90A5F772 /* DNSRetry.swift */,
 				C4D0674D042E25B77B4480E7 /* AgentDrawer.swift */,
@@ -1094,6 +1097,7 @@
 				AA12896F2F0E502555C6BE2D /* TaskHistory.swift in Sources */,
 				AA11896F2F0E502555C6BE2D /* TaskLedger.swift in Sources */,
 				AA10896F2F0E502555C6BE2D /* Playbooks.swift in Sources */,
+				AAD6C19C13F4DBB78C835333 /* AgentTaint.swift in Sources */,
 				AA1079CC3127F30BEB4B6C50 /* HomeTiles.swift in Sources */,
 				AA105C81AFC866E50D452B01 /* DNSRetry.swift in Sources */,
 				C4D0896F2F0E502555C6BE2D /* AgentDrawer.swift in Sources */,

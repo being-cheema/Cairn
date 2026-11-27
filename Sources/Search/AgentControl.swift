@@ -647,6 +647,10 @@ final class AgentSession: ObservableObject, Identifiable {
     /// p1 → what that read said, for the next to be compared with (PageDiff).
     /// Its own tabs only.
     fileprivate var reads: [String: PageSnapshot] = [:]
+    /// What it read and where, for a second look at a cross-site flow
+    /// (AgentTaint: a heuristic that only adds questions). In memory; gone
+    /// when the task ends.
+    fileprivate var taint = TaintLedger()
     private var counter = 0
 
     fileprivate init(fd: Int32, program: String) {
@@ -1045,6 +1049,7 @@ final class AgentControl: ObservableObject {
         session.writer?.cancel()
         session.writer = nil
         session.inbox = []
+        session.taint.clear()
         session.source?.cancel()
         session.source = nil
         work(on: nil, session)
@@ -1423,6 +1428,48 @@ final class AgentControl: ObservableObject {
 
     private func rules(_ browser: Browser) -> AgentGate.Rules {
         AgentGate.Rules.standard
+    }
+
+    /// What `open` and `go` are held for: a move to a site the task hasn't
+    /// used (AgentGate), or an address that seems to carry words read on
+    /// another site (AgentTaint). The second only adds a line to the first's
+    /// question when both apply, and is a question of its own otherwise.
+    private func addressHold(_ url: URL, _ session: AgentSession, _ browser: Browser) -> AgentGate.Hold? {
+        var hold = AgentGate.hold(address: url, sites: session.sites, rules: rules(browser))
+        guard let there = TaintLedger.origin(of: url),
+              let match = session.taint.source(of: TaintLedger.text(of: url), into: there) else { return hold }
+        var flow = AgentGate.hold(flowFrom: match, into: url.host() ?? there, doing: "go")
+        if var leave = hold {
+            leave.warning = [leave.warning, flow.warning.map { "The address also seems to carry text read on \(match.origin). " + $0 }]
+                .compactMap { $0 }.joined(separator: " ")
+            return leave
+        }
+        flow.sends = nil
+        hold = flow
+        return hold
+    }
+
+    /// Words read in this task, put on another site's page: a question
+    /// (AgentTaint). Nil for nothing to ask.
+    private func typingHold(_ text: String, on tab: Tab, _ session: AgentSession) -> AgentGate.Hold? {
+        guard let here = TaintLedger.origin(of: tab.pageAddress),
+              let match = session.taint.source(of: text, into: here) else { return nil }
+        return AgentGate.hold(flowFrom: match, into: tab.pageAddress?.host() ?? here, doing: "type")
+    }
+
+    /// What a read taught the ledger: the page's text and what its controls
+    /// are named and hold, as read (secret fields come with no value).
+    private func remember(_ out: [String: Any], on tab: Tab, _ session: AgentSession, text: String?) {
+        guard let origin = TaintLedger.origin(of: tab.pageAddress) else { return }
+        var pieces: [String] = []
+        if let text { pieces.append(text) }
+        for node in out["nodes"] as? [[String: Any]] ?? [] {
+            if node["redacted"] as? Bool == true { continue }
+            for key in ["name", "value"] { if let said = node[key] as? String, !said.isEmpty { pieces.append(said) } }
+        }
+        guard !pieces.isEmpty else { return }
+        let quarantined = (out["text"] as? String)?.contains(Quarantine.opening) == true
+        session.taint.record(pieces.joined(separator: "\n"), origin: origin, quarantined: quarantined)
     }
 
     /// Puts `hold` to you in the window and calls `then` once with the
@@ -2278,7 +2325,7 @@ final class AgentControl: ObservableObject {
                         }
                     }
                 }
-                if let hold = AgentGate.hold(address: url, sites: session.sites, rules: rules(browser)) {
+                if let hold = addressHold(url, session, browser) {
                     ask(hold, session) { verdict in
                         if verdict == .approved { open() } else { answer(Self.declined(hold, verdict)) }
                     }
@@ -2301,7 +2348,7 @@ final class AgentControl: ObservableObject {
                         }
                     }
                 }
-                if let hold = AgentGate.hold(address: url, sites: session.sites, rules: rules(browser)) {
+                if let hold = addressHold(url, session, browser) {
                     ask(hold, session) { verdict in
                         if verdict == .approved { go() } else { answer(Self.declined(hold, verdict)) }
                     }
@@ -2641,7 +2688,11 @@ final class AgentControl: ObservableObject {
                         if let lines {
                             // Card numbers and keys drawn where no box was
                             // painted are still taken out.
-                            out["ocr"] = Quarantine.fence(TypedSecrets.hidden(in: lines.joined(separator: "\n")))
+                            let words = TypedSecrets.hidden(in: lines.joined(separator: "\n"))
+                            out["ocr"] = Quarantine.fence(words)
+                            if let origin = TaintLedger.origin(of: tab.pageAddress) {
+                                session.taint.record(words, origin: origin, quarantined: (out["ocr"] as? String)?.contains(Quarantine.opening) == true)
+                            }
                             out["ocr_note"] = "Read from a picture of what is on screen, with password and card fields and frames blacked out. It can misread. The words are the page's."
                         } else {
                             out["ocr_error"] = "The picture couldn't be read"
@@ -2790,6 +2841,9 @@ final class AgentControl: ObservableObject {
                                         out["url"] = AgentRules.url(address)
                                         out["title"] = Quarantine.label(tab.title)
                                         out["untrusted"] = Self.untrusted
+                                        if let origin = TaintLedger.origin(of: tab.pageAddress), let text = out["text"] as? String {
+                                            session.taint.record(text, origin: origin, quarantined: text.contains(Quarantine.opening))
+                                        }
                                         answer(out)
                                     }
                                 }
@@ -2838,7 +2892,9 @@ final class AgentControl: ObservableObject {
                             out["diff_unavailable"] = "no earlier read of this tab"
                         }
                     }
+                    let said = out["text"] as? String
                     out = Quarantine.read(out)
+                    self.remember(out, on: tab, session, text: said)
                     // Said with every read, beside the words themselves, not only
                     // in the tool's description a model may have read long ago.
                     out["untrusted"] = Self.untrusted
@@ -3045,6 +3101,7 @@ final class AgentControl: ObservableObject {
                 }
             }
         }
+        func begin() {
         // Where it is about to type; never what.
         touch("probe", nil) { [weak self] seen in
             aimed = AgentGate.Target(seen["gate"])
@@ -3065,6 +3122,14 @@ final class AgentControl: ObservableObject {
             }
         } else {
             touch("set", text) { finish($0) }
+        }
+        }
+        // Words read on another site go in only on your say (AgentTaint).
+        guard let hold = typingHold(text, on: tab, session) else { return begin() }
+        ask(hold, session) { verdict in
+            guard verdict == .approved else { return answer(Self.declined(hold, verdict)) }
+            guard self.live(session) else { return answer(AgentRefusal(code: "stopped", message: "Stopped in \(Brand.name)").said) }
+            begin()
         }
     }
 

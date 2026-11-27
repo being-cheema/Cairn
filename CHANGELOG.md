@@ -11,6 +11,10 @@ in [ROADMAP-upstream.md](docs/history/ROADMAP-upstream.md).
 
 ## Unreleased
 
+### Added
+
+- An agent that read words on one site and is about to type them into a page on another, or open an address that carries them, is held for your click, with the card naming the site they came from. It is a heuristic (matching runs of words and long identifiers) and says so; it only adds questions, keeps the task's reading in memory until the task ends, and never records a secret field.
+
 ### Fixed
 
 - Settings › Appearance › Darken pages that stay light no longer turns pages near black with their borders gone, or gives up on them: WebKit now lists a page's added style sheets among its own, so the dark copy of each of a site's colours was copied again on every look, darker and longer each time, until the page fell back to the inverting filter. Pages are darkened in their own colours again (Google, Wikipedia, GitHub, Stack Overflow, Amazon, Notion, news sites), a light frame such as Google's sign-in prompt no longer shows as a white box, and the switch stays in Settings while it is on even with Search set to Light, so it can always be turned off. `python3 Tests/dark_pages.py`
