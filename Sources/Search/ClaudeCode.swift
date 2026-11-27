@@ -303,6 +303,7 @@ enum ClaudeCode {
             "press": "Pressing a key",
             "scroll": "Scrolling",
             "select_option": "Choosing from a list",
+            "collect_list": "Gathering a list",
             // It is done with the browser: its tabs stay, as the person's.
             "disconnect": leaving,
             "create_artifact": "Laying out the result",

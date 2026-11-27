@@ -2338,6 +2338,8 @@ final class AgentControl: ObservableObject {
             case .type:
                 session.sendGrant = nil
                 try type(request, session, browser, answer)
+            case .collectList:
+                try collectList(request, session, browser, answer)
             case .selectOption:
                 session.sendGrant = nil
                 try selectOption(request, session, browser, answer)
@@ -3215,6 +3217,71 @@ final class AgentControl: ObservableObject {
                         answer(AgentRefusal(code: "internal", message: error.localizedDescription).said)
                     }
                 }
+            }
+        }
+    }
+
+    /// The rows of a long list in a tab of its own, gathered by scrolling it
+    /// (ListHarvest). Read-only: only the list's own scrolling, put back at
+    /// the end, and the rows' words come back fenced as page text. The count
+    /// so far is shown over the page as it goes.
+    private func collectList(_ request: [String: Any], _ session: AgentSession, _ browser: Browser,
+                             _ answer: @escaping ([String: Any]) -> Void) throws {
+        let tab: Tab
+        var snap = 0
+        var index: Int?
+        if let named = request["container"] as? String, !named.isEmpty {
+            let (found, page, read, at) = try element(["element": named], session, browser)
+            guard page == (request["page"] as? String ?? page) else {
+                throw AgentRefusal(code: "bad_handle", message: "That container is on another page")
+            }
+            (tab, snap, index) = (found, read, at)
+        } else {
+            tab = try self.tab(request, session, browser, .drive)
+        }
+        let handle = session.handle(for: tab)
+        var harvest = ListHarvest(limit: ListHarvest.limit(asked: request["max_items"] as? Int),
+                                  stopText: (request["stop_when_text"] as? String).map { String($0.prefix(200)) })
+        let began = ProcessInfo.processInfo.systemUptime
+        var steps = 0
+        mark(tab, "Collecting a list: 0 rows", nil)
+        @MainActor func finish(_ refusal: AgentRefusal? = nil) {
+            page(tab, session, PageScripts.collect(key: Self.key, snap: snap, index: index, phase: "restore")) { _ in
+                if let refusal, harvest.items.isEmpty { return answer(refusal.said) }
+                let rows = harvest.items.map { item -> [String: Any] in
+                    var row: [String: Any] = ["text": Quarantine.label(TypedSecrets.hidden(in: AgentRules.scrubbed(item.text)))]
+                    if let href = item.href { row["href"] = AgentRules.url(href) }
+                    return row
+                }
+                answer(["page": handle, "items": rows, "count": rows.count,
+                        "stopped": (harvest.stopped ?? .time).rawValue,
+                        "untrusted": Self.untrusted,
+                        "note": "Read by scrolling the list in overlapping steps, each row once; the list was put back where it was. "
+                            + "A row the page drew only between two steps may be missing."])
+            }
+        }
+        @MainActor func next() {
+            guard live(session) else { return finish(AgentRefusal(code: "stopped", message: "Stopped in \(Brand.name)")) }
+            page(tab, session, PageScripts.collect(key: Self.key, snap: snap, index: index, phase: "step")) { result in
+                switch result {
+                case .failure(let refusal): finish(refusal)
+                case .success(let seen):
+                    let rows = (seen["rows"] as? [[String: Any]] ?? []).map {
+                        ListHarvest.Item(text: $0["text"] as? String ?? "", href: $0["href"] as? String)
+                    }
+                    harvest.add(rows)
+                    steps += 1
+                    self.mark(tab, "Collecting a list: \(harvest.items.count) rows", seen["box"])
+                    let over = harvest.step(atEnd: seen["atEnd"] as? Bool ?? true, elapsed: ProcessInfo.processInfo.systemUptime - began)
+                    if over != nil || steps >= ListHarvest.steps { return finish() }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { next() }
+                }
+            }
+        }
+        page(tab, session, PageScripts.collect(key: Self.key, snap: snap, index: index, phase: "start")) { result in
+            switch result {
+            case .failure(let refusal): answer(refusal.said)
+            case .success: next()
             }
         }
     }

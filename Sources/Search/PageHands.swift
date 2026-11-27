@@ -737,6 +737,80 @@ enum PageScripts {
         call(chooseBody, [key, snap, index, want, phase])
     }
 
+    private static let collectBody = #"""
+    (function (key, snap, i, phase) {
+      function no(code, message) { return JSON.stringify({ error: code, message: message }); }
+      var state = globalThis.__searchCollect;
+      function scrollable(el) {
+        if (!el || el === document.documentElement || el === document.body) return false;
+        var o = getComputedStyle(el).overflowY;
+        return /^(auto|scroll|overlay)$/.test(o) && el.scrollHeight > el.clientHeight + 4 && el.clientHeight > 50;
+      }
+      if (phase === 'restore') {
+        if (state && state.box && state.box.isConnected) state.box.scrollTop = state.top;
+        else if (state && state.page) scrollTo(scrollX, state.top);
+        delete globalThis.__searchCollect;
+        return JSON.stringify({ ok: true });
+      }
+      if (phase === 'start') {
+        var box = null;
+        if (i !== null) {
+          var kept = globalThis[key];
+          if (!kept || kept.snap !== snap) return no('stale_element', 'The page has changed since that read_page');
+          var el = kept.els[i];
+          if (!el || !el.isConnected) return no('detached', 'That element is no longer in the page');
+          for (var up = el; up && !box; up = up.parentElement) if (scrollable(up)) box = up;
+          if (!box) {
+            var inner = el.querySelectorAll('*');
+            for (var n = 0; n < inner.length && !box; n++) if (scrollable(inner[n])) box = inner[n];
+          }
+          if (!box) box = el;
+        } else {
+          var all = document.querySelectorAll('*'), best = 0;
+          for (var m = 0; m < all.length; m++) {
+            var c = all[m];
+            if (scrollable(c) && visible(c) && c.clientHeight * c.clientWidth > best) { best = c.clientHeight * c.clientWidth; box = c; }
+          }
+        }
+        var page = !box || !scrollable(box);
+        state = globalThis.__searchCollect = { box: page ? null : box, page: page, top: page ? scrollY : box.scrollTop, root: box || document.body };
+        return JSON.stringify({ ok: true, page: page });
+      }
+      if (!state) return no('detached', 'The list was lost');
+      var root = state.root, scroller = state.page ? null : state.box;
+      var SELECTOR = '[role=listitem],[role=row],[role=option],[role=article],li,article,tr';
+      var rect = scroller ? scroller.getBoundingClientRect() : { top: 0, bottom: innerHeight, left: 0, right: innerWidth };
+      var found = Array.prototype.slice.call(root.querySelectorAll(SELECTOR));
+      if (!found.length) found = Array.prototype.slice.call(root.children);
+      // The outermost of each: a row's own parts are not rows.
+      found = found.filter(function (e) { return !found.some(function (o) { return o !== e && o.contains(e); }); });
+      var rows = [];
+      found.forEach(function (e) {
+        if (!visible(e)) return;
+        var r = e.getBoundingClientRect();
+        if (r.bottom <= rect.top || r.top >= rect.bottom) return;
+        var text = squash(e.innerText || e.textContent);
+        if (!text) return;
+        var a = e.matches('a[href]') ? e : e.querySelector('a[href]');
+        rows.push({ text: text, href: a ? String(a.href).slice(0, 500) : null });
+      });
+      // One overlapping step: four fifths of what is in view.
+      var before = scroller ? scroller.scrollTop : scrollY;
+      var high = scroller ? scroller.clientHeight : innerHeight;
+      if (scroller) scroller.scrollTop = before + Math.max(40, Math.floor(high * 0.8)); else scrollBy(0, Math.max(40, Math.floor(high * 0.8)));
+      var after = scroller ? scroller.scrollTop : scrollY;
+      var limit = scroller ? scroller.scrollHeight - scroller.clientHeight : document.documentElement.scrollHeight - innerHeight;
+      return JSON.stringify({ ok: true, rows: rows.slice(0, 200), atEnd: after === before || after >= limit - 2, box: boxOf(scroller || document.documentElement) });
+    })
+    """#
+
+    /// A list's rows gathered a step at a time (CollectList): "start" finds
+    /// what scrolls, "step" reads the rows in view and scrolls on, "restore"
+    /// puts it back where it was. Nothing is clicked, typed or changed.
+    static func collect(key: String, snap: Int, index: Int?, phase: String) -> String {
+        call(collectBody, [key, snap, index.map { $0 as Any } ?? NSNull(), phase])
+    }
+
     /// One element of the last read under `key`: "click", "press", "scroll",
     /// "focus", "set", "submit", "verify" or "check". `strict` refuses file
     /// fields. A nil text for "verify" checks against what "focus" kept.
