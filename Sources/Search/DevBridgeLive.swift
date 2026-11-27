@@ -139,6 +139,8 @@ final class DevBridge: ObservableObject {
         let now = origins
         guard now != before else { return }
         let lost = before.subtracting(now)
+        // What the Passkey Inspector kept goes with the grant.
+        if !lost.isEmpty { PasskeyInspector.shared.prune(granted: now) }
         for id in Array(watched.keys) {
             guard let tab = watched[id]?.tab else {
                 watched[id] = nil

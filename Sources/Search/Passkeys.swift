@@ -93,6 +93,9 @@ final class Passkeys: NSObject {
     /// The page's one-time key for this request's PRF results (see prfReply).
     private var prfKey: P256.KeyAgreement.PublicKey?
     private var token: String?
+    /// For the Passkey Inspector (PasskeyInspector): where this ceremony is
+    /// from, noted only when the Dev Bridge is on for that local origin.
+    private var inspected: (rp: String, origin: DevOrigin)?
     private var answer: (([String: Any]) -> Void)?
     private weak var anchor: NSWindow?
     /// Called off by its page before it could start.
@@ -334,6 +337,7 @@ final class Passkeys: NSObject {
         }
         let port = caller.origin.port
         let origin = "\(scheme)://\(host.contains(":") ? "[\(host)]" : host)" + (port == 0 ? "" : ":\(port)")
+        inspected = DevOrigin(scheme: scheme, host: host, port: port).map { (rp, $0) }
         var clientData = ASPublicKeyCredentialClientData(challenge: challenge, origin: origin)
         // From a frame, the page it is in is named too, as the standard has
         // it, so the site can tell (Safari's clientDataJSON does the same).
@@ -597,6 +601,14 @@ final class Passkeys: NSObject {
 
     // MARK: - answers
 
+    /// What the Passkey Inspector may keep of a finished ceremony: public
+    /// metadata, and only for a local origin the Dev Bridge is on for.
+    private func inspect(kind: String, id: Data, authenticatorData: Data?) {
+        guard let seen = inspected, let authenticatorData, DevBridge.shared.isGranted(seen.origin),
+              let ceremony = PasskeyInspector.ceremony(kind: kind, rp: seen.rp, credentialID: id, authenticatorData: authenticatorData) else { return }
+        PasskeyInspector.shared.note(ceremony, for: seen.origin, granted: true)
+    }
+
     private func finish(_ value: [String: Any]) {
         let answer = self.answer
         clear()
@@ -604,6 +616,7 @@ final class Passkeys: NSObject {
     }
 
     private func clear() {
+        inspected = nil
         controller = nil
         token = nil
         answer = nil
@@ -824,6 +837,7 @@ extension Passkeys: ASAuthorizationControllerDelegate, ASAuthorizationController
         if let got = credential as? ASAuthorizationPublicKeyCredentialAssertion {
             let attachment = (credential as? ASAuthorizationPlatformPublicKeyCredentialAssertion)?.attachment
             Passkeys.log.notice("signed in")
+            inspect(kind: "get", id: got.credentialID, authenticatorData: got.rawAuthenticatorData)
             var reply = Passkeys.assertionReply(
                 id: got.credentialID, clientData: got.rawClientDataJSON, authenticatorData: got.rawAuthenticatorData,
                 signature: got.signature, user: got.userID,
@@ -836,6 +850,7 @@ extension Passkeys: ASAuthorizationControllerDelegate, ASAuthorizationController
         } else if let made = credential as? ASAuthorizationPublicKeyCredentialRegistration {
             let platform = credential as? ASAuthorizationPlatformPublicKeyCredentialRegistration
             Passkeys.log.notice("made one")
+            inspect(kind: "create", id: made.credentialID, authenticatorData: made.rawAttestationObject.flatMap(Passkeys.authenticatorData(inAttestation:)))
             var reply = Passkeys.registrationReply(
                 id: made.credentialID, clientData: made.rawClientDataJSON, attestation: made.rawAttestationObject ?? Data(),
                 transports: platform == nil ? ["usb"] : ["hybrid", "internal"],

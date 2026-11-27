@@ -430,6 +430,7 @@ struct SiteCard: View {
             }
             if let origin = DevBridge.shared.offer(for: tab) {
                 Bridge(browser: browser, tab: tab, origin: origin)
+                if DevBridge.shared.isGranted(origin) { PasskeyInspectorRow(origin: origin) }
             }
             if prefs.keepsSitesAwake, tab.awakeHost != nil {
                 HStack(spacing: 0) {
@@ -1045,5 +1046,41 @@ extension Browser {
         } else {
             beginTabEdit(tab, card: true)
         }
+    }
+}
+
+/// The last passkey ceremony on a local site the Dev Bridge is on for, as the
+/// page saw it (PasskeyInspector): metadata to read, nothing to change.
+private struct PasskeyInspectorRow: View {
+    let origin: DevOrigin
+    @ObservedObject private var inspector = PasskeyInspector.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("Passkey Inspector")
+                .font(MenuMetrics.font)
+                .foregroundStyle(Color(nsColor: .labelColor))
+            if let c = inspector.last(for: origin, granted: DevBridge.shared.isGranted(origin)) {
+                Group {
+                    Text(verbatim: "\(c.kind == "create" ? "Registered" : "Signed in") · RP ID \(c.rp)")
+                    Text(verbatim: "User present \(c.userPresent ? "yes" : "no") · verified \(c.userVerified ? "yes" : "no")")
+                    Text(verbatim: "Backup eligible \(c.backupEligible ? "yes" : "no") · backed up \(c.backedUp ? "yes" : "no") · counter \(c.counter)")
+                    Text(verbatim: "Credential ID \(c.credentialID)").textSelection(.enabled)
+                }
+                .font(.system(size: 11))
+                .foregroundStyle(Color(nsColor: .secondaryLabelColor))
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(width: 230, alignment: .leading)
+            } else {
+                Text("Nothing yet. After a passkey sign-in or registration on this page, what it said shows here. Read-only, in memory, gone when the bridge is turned off.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color(nsColor: .secondaryLabelColor))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(width: 230, alignment: .leading)
+            }
+        }
+        .padding(.leading, MenuMetrics.text)
+        .padding(.trailing, MenuMetrics.trailing)
+        .padding(.bottom, 4)
     }
 }
