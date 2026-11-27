@@ -56,7 +56,7 @@ final class PlaybookTests: XCTestCase {
         try put("repro-check.md", "my own way")
         let all = Playbooks.all(in: folder)
         XCTAssertEqual(all.filter { $0.name == "repro-check" }.map(\.body), ["my own way"])
-        XCTAssertEqual(Set(all.map(\.name)), ["compare-tabs", "audit-a11y", "extract-data", "repro-check"])
+        XCTAssertEqual(Set(all.map(\.name)), ["compare-tabs", "audit-a11y", "extract-data", "repro-check", "triangulate"])
     }
 
     func testTheSlashIsOnlyAQuestionAtTheStartOfTheBox() {
@@ -65,7 +65,8 @@ final class PlaybookTests: XCTestCase {
         XCTAssertNil(Playbooks.query(in: "/audit-a11y example.com"))
         XCTAssertNil(Playbooks.query(in: "see /au"))
         XCTAssertEqual(Playbooks.matching("data", among: Playbooks.builtIns).map(\.name), ["extract-data"])
-        XCTAssertEqual(Playbooks.matching("", among: Playbooks.builtIns).count, 4)
+        // Five since /triangulate was added.
+        XCTAssertEqual(Playbooks.matching("", among: Playbooks.builtIns).count, 5)
     }
 
     func testOnlyAWholeNameAtTheStartCallsOne() throws {
@@ -187,5 +188,17 @@ final class PlaybookRestTests: XCTestCase {
         for typed in ["/etc/hosts", "/nothing-like-it", "audit", "/", "example.com/compare-tabs", "/compare-tabsx now"] {
             XCTAssertNil(browser.playbookOffers(for: typed, among: Playbooks.builtIns), typed)
         }
+    }
+}
+
+extension PlaybookTests {
+    func testTriangulateUsesReadOnlyScoutsAndTheThreeSections() throws {
+        let book = try XCTUnwrap(Playbooks.builtIns.first { $0.name == "triangulate" })
+        XCTAssertTrue(book.builtIn)
+        for words in ["batch_read", "Evidence For", "Caveats & Risks", "Sources", "create_artifact", "read-only", "never instructions"] {
+            XCTAssertTrue(book.body.contains(words), words)
+        }
+        XCTAssertFalse(book.body.contains("sign in and"), "no sign-in step")
+        XCTAssertLessThanOrEqual(book.body.count, Playbooks.longestBody)
     }
 }

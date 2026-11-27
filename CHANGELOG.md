@@ -13,6 +13,7 @@ in [ROADMAP-upstream.md](docs/history/ROADMAP-upstream.md).
 
 ### Added
 
+- /triangulate, a built-in playbook for the Claude panel: reads the case for a claim, then the case against, in read-only side-by-side tabs of its own store, and hands over one card with Evidence For, Caveats & Risks and Sources.
 - Edit › Ask About Selection… (⌘E): a small card beside the words you selected, with a box for your question. ⌘E only opens it; pressing Ask sends the selection and its paragraph, fenced as the website's words, to your own Claude, asked to use only those words, and Continue in Panel puts it in the panel's box instead. Never from a private tab or a blocked site.
 - A `cairn` command line in the app (Cairn.app/Contents/MacOS/cairn; Settings › Agents copies the line that links it into ~/.local/bin): `cairn md <url>` prints a page as fenced Markdown read in a fresh private tab with none of your sign-ins, `cairn ask "…"` only fills the Claude panel's box and waits for your Send before streaming the answer, `cairn audit <local url>` runs the layout checks for a site the Dev Bridge is on for (else it prints bridge_off). It asks you like any other agent.
 - Tab › Fork Tab (⌥⌘F; ⌘⇧D is Darken This Site): a copy of the page with its Back and Forward history and place, in the same store as the tab it came from (a private tab's fork is private), as a split pair when split view is on. Never for an agent's tab.
