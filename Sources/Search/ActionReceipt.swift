@@ -304,3 +304,42 @@ struct ActionBook {
         return "act-\(count)"
     }
 }
+
+
+/// One step of a turn, as the panel's timeline shows it: what a receipt said,
+/// in the browser's words. Kept in memory with the turn and nowhere else.
+/// The seam for a checkpoint to rewind to (a page's interactionState) is
+/// `id`: the receipt's action_id.
+struct TrailStep: Identifiable, Equatable {
+    let id: String
+    let verb: String
+    let summary: String
+    let failure: String?
+    let requests: Int, navigations: Int, storageChanges: Int
+    let eid: String
+
+    init?(receipt: [String: Any], failure: String?) {
+        guard let id = receipt["action_id"] as? String else { return nil }
+        self.id = id
+        verb = receipt["action"] as? String ?? ""
+        summary = receipt["delta_summary"] as? String ?? ""
+        self.failure = failure
+        let effects = receipt["side_effects"] as? [String: Any] ?? [:]
+        requests = ((effects["network"] as? [String: Any])?["requests"] as? [Any])?.count ?? 0
+        navigations = (effects["navigations"] as? [Any])?.count ?? 0
+        storageChanges = (effects["storage_writes"] as? [String: Any])?["changed"] as? Int ?? 0
+        eid = receipt["eid"] as? String ?? ""
+    }
+
+    /// The step in one line, for the list.
+    var line: String { "\(verb): \(failure.map { $0 + ", " } ?? "")\(summary)" }
+
+    /// What it did beyond the page, for the detail under the slider.
+    var effects: String {
+        var parts: [String] = []
+        if navigations > 0 { parts.append("\(navigations) navigation\(navigations == 1 ? "" : "s")") }
+        if requests > 0 { parts.append("\(requests) request\(requests == 1 ? "" : "s") seen") }
+        if storageChanges > 0 { parts.append("\(storageChanges) stored value\(storageChanges == 1 ? "" : "s") changed") }
+        return parts.isEmpty ? "Nothing beyond the page was seen (a best-effort view)" : parts.joined(separator: ", ") + " (a best-effort view)"
+    }
+}

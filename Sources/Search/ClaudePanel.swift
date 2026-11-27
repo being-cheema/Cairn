@@ -460,6 +460,10 @@ struct ClaudePanel: View {
                     LoopCard(trip: trip)
                 }
 
+                if turn.trail.count > 1 {
+                    TrailScrubber(steps: turn.trail)
+                }
+
                 ForEach(turn.artifacts) { artifact in
                     ArtifactCard(artifact: artifact, browser: browser)
                 }
@@ -774,5 +778,40 @@ private struct LoopCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Palette.wash, in: RoundedRectangle(cornerRadius: 8))
         .accessibilityElement(children: .combine)
+    }
+}
+
+
+/// The turn's actions as a timeline to scrub: each step's change and what it
+/// did beyond the page, from the receipts the browser made (never from what
+/// Claude said it did). A step that went wrong shows its code.
+private struct TrailScrubber: View {
+    let steps: [TrailStep]
+    @State private var at = 0.0
+    @State private var open = false
+
+    private var step: TrailStep { steps[min(max(Int(at.rounded()), 0), steps.count - 1)] }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Button { open.toggle() } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: open ? "chevron.down" : "chevron.right").font(.system(size: 8.5, weight: .semibold))
+                    Text("Timeline, \(steps.count) steps").font(.system(size: 11.5))
+                }
+                .foregroundStyle(Palette.muted)
+            }
+            .buttonStyle(.plain)
+            if open {
+                Slider(value: $at, in: 0...Double(steps.count - 1), step: 1)
+                    .controlSize(.mini)
+                    .accessibilityLabel("Step")
+                    .accessibilityValue("\(Int(at.rounded()) + 1) of \(steps.count)")
+                Text(verbatim: "\(Int(at.rounded()) + 1) of \(steps.count): \(step.line)")
+                    .font(.system(size: 11.5)).foregroundStyle(step.failure == nil ? Palette.ink : Palette.accent)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(verbatim: step.effects).font(.system(size: 10.5)).foregroundStyle(Palette.muted)
+            }
+        }
     }
 }

@@ -36,6 +36,8 @@ final class ClaudeSession: ObservableObject {
         var scouts: [ScoutProgress] = []
         /// The run was stopped as looping (LoopBreaker): a card says so.
         var loop: LoopTrip?
+        /// Each action's receipt, for the timeline (TrailStep).
+        var trail: [TrailStep] = []
     }
 
     /// Why it can't start, as the panel says it.
@@ -306,6 +308,12 @@ final class ClaudeSession: ObservableObject {
 
     func read(_ text: String, at offset: Int, of length: Int, tab: Tab.ID, address: URL?) {
         snapshots.keep(text, at: offset, of: length, tab: tab, page: MarginNotes.page(address))
+    }
+
+    /// One action's receipt, on the turn's timeline.
+    func trail(_ step: TrailStep) {
+        guard let last = turns.indices.last, turns[last].trail.count < 200 else { return }
+        turns[last].trail.append(step)
     }
 
     /// The run's actions were stopped by a hard limit (LoopBreaker).

@@ -3443,6 +3443,9 @@ extension AgentControl {
                                         receipt["failure"] = failure.rawValue
                                     }
                                     out["receipt"] = receipt
+                                    if session.panel, let step = TrailStep(receipt: receipt, failure: failure?.rawValue) {
+                                        session.browser?.claude.trail(step)
+                                    }
                                     if let trip = session.book.breaker.took(verb, key: key, eid: eid, before: before.hash, after: after.hash) {
                                         self.loopTripped(trip, session)
                                         out["loop_suspected"] = trip.said["error"]

@@ -104,3 +104,18 @@ final class AgentActionReceiptTests: XCTestCase {
         XCTAssertFalse(Dedupe.guards(action: "press", role: "", key: "Tab"))
     }
 }
+
+@MainActor
+final class TrailStepTests: XCTestCase {
+    func testAStepIsMadeFromAReceiptAndSaysWhatItDid() throws {
+        let receipt: [String: Any] = ["action_id": "act-3", "action": "click", "eid": "12345678", "delta_summary": "2 controls appeared",
+            "side_effects": ["network": ["requests": [["via": "fetch"]]], "navigations": [["from": "a", "to": "b"]],
+                             "storage_writes": ["changed": 1]] as [String: Any]]
+        let step = try XCTUnwrap(TrailStep(receipt: receipt, failure: nil))
+        XCTAssertEqual(step.line, "click: 2 controls appeared")
+        XCTAssertTrue(step.effects.contains("1 navigation"))
+        XCTAssertTrue(step.effects.contains("best-effort"))
+        XCTAssertTrue(try XCTUnwrap(TrailStep(receipt: receipt, failure: "NO_EFFECT")).line.contains("NO_EFFECT"))
+        XCTAssertNil(TrailStep(receipt: [:], failure: nil))
+    }
+}
