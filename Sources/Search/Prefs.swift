@@ -176,10 +176,15 @@ final class Preferences: ObservableObject {
     private(set) var benchRefused = false
     /// The model the side panel's Claude runs (ClaudePanel), by the alias
     /// Claude Code knows it by: nil is whatever the person's own Claude Code
-    /// is set to use. Only ever one of ClaudeCode.models.
+    /// is set to use. Only ever one of ClaudeCode.models. Sonnet until the
+    /// person picks: browsing reads many long pages, and the most capable
+    /// model spends their plan's limit several times as fast for little gain.
     @Published var claudeModel: String? {
-        didSet { store.set(claudeModel, forKey: "claude.model") }
+        // Default, once picked, is written down as such, or it would read
+        // back as nothing picked and become Sonnet again.
+        didSet { store.set(claudeModel ?? Self.ownDefault, forKey: "claude.model") }
     }
+    private static let ownDefault = "default"
     /// Sites closed to agents, each covering its subdomains (VaultedSites).
     @Published var vaultedSites: Set<String> {
         didSet {
@@ -1581,7 +1586,7 @@ final class Preferences: ObservableObject {
         asksBeforeFilling = store.bool(forKey: "passwords.fill.prove")
         keepsVaultUnlocked = store.object(forKey: Vault.Unlock.key) as? Bool ?? true
         suggestsPasswords = store.object(forKey: "passwords.suggest") as? Bool ?? true
-        claudeModel = ClaudeCode.model(named: store.string(forKey: "claude.model"))
+        claudeModel = ClaudeCode.model(named: store.string(forKey: "claude.model") ?? "sonnet")
         keepsTaskHistory = store.object(forKey: "claude.history") as? Bool ?? true
         let contacts = store.bool(forKey: "contacts.fill")
         fillsContacts = contacts

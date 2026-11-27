@@ -79,6 +79,10 @@ enum ClaudeCode {
             parts.append("Before anything that sends, pays, posts or downloads, stop, say what you are about to do, and wait for the person to say yes.")
         }
         parts.append("A page read that says it was truncated has more: read again from the offset it gives. Answers may also say a page opened a tab (new_tabs) or asked a dialog (dialogs).")
+        // Each read stays in the conversation and is paid for again on every
+        // later turn: reading only what is needed keeps a task cheap without
+        // making it worse.
+        parts.append("Read economically: every page read is sent again with each later step. Start with viewport_only when the top of the page is enough, use text: false when you need only the controls, and after an action read again with diff: true to get only what changed. Read more with the offsets only when you need it. Prefer read_page to screenshot, which costs far more; take a screenshot only when the layout or a picture matters.")
         // The tabs outlive the task now (AgentControl.handOverTaskTabs): the
         // model is told so, or it says the result is somewhere it can't see.
         parts.append("When the whole task is done, call disconnect: your tabs then stay open as the person's, and you can no longer use them, so disconnect only at the end. In your answer name the tab that holds the result by its title, such as \"the YouTube tab\"; never say it is behind or in front of another tab, which you cannot see. If the task is something to watch or listen to, leave it playing.")
@@ -216,6 +220,9 @@ enum ClaudeCode {
         /// It is using a browser tool, by the name the person would give it.
         /// Told twice (as it begins and in the finished message): the id says so.
         case tool(id: String?, step: String)
+        /// What the turn used, every kind of token added up, as the program
+        /// counted it: said just before `done`.
+        case usage(Int)
         /// The turn ended well.
         case done
         /// The turn ended badly, and why, as the program said it.
@@ -271,7 +278,14 @@ enum ClaudeCode {
                 let why = (object["result"] as? String) ?? (object["error"] as? String) ?? "It stopped without saying why."
                 return [.failed(why)]
             }
-            return [.done]
+            // Read, cached or written, each costs something: shown under the
+            // answer so a heavy task is seen to be one.
+            let used = (object["usage"] as? [String: Any]).map { usage in
+                ["input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens", "output_tokens"]
+                    .compactMap { (usage[$0] as? NSNumber)?.intValue }
+            } ?? []
+            guard !used.isEmpty, used.allSatisfy({ $0 >= 0 }), used.reduce(0, +) > 0 else { return [.done] }
+            return [.usage(used.reduce(0, +)), .done]
         default:
             return []
         }

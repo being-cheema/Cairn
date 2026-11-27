@@ -2733,12 +2733,18 @@ final class AgentControl: ObservableObject {
         ask(from: 0)
     }
 
+    /// How much one read gives when it isn't told: enough for most pages'
+    /// controls and a few screens of text. Every read is sent to the model
+    /// again with each later turn of the task, so a bigger default is paid
+    /// for many times over; more is one read with an offset away.
+    static let readDefaults = (nodes: 150, text: 8000)
+
     /// One read of a tab already found to be readable.
     private func reading(_ tab: Tab, _ request: [String: Any], _ session: AgentSession, _ answer: @escaping ([String: Any]) -> Void) {
         let handle = session.handle(for: tab)
         let snap = (session.snaps[handle] ?? 0) + 1
-        let most = min(max(request["max_nodes"] as? Int ?? 300, 1), 2000)
-        let longest = min(max(request["max_text"] as? Int ?? 20000, 0), 200_000)
+        let most = min(max(request["max_nodes"] as? Int ?? Self.readDefaults.nodes, 1), 2000)
+        let longest = min(max(request["max_text"] as? Int ?? Self.readDefaults.text, 0), 200_000)
         let nodeOffset = min(max(request["node_offset"] as? Int ?? 0, 0), 100_000)
         let textOffset = min(max(request["text_offset"] as? Int ?? 0, 0), 10_000_000)
         if session.own.contains(tab.id) { mark(tab, "Reading the page", nil) }

@@ -34,6 +34,8 @@ final class ClaudeSession: ObservableObject {
         var attached: [String] = []
         /// The pages being read side by side (batch_read), for their pills.
         var scouts: [ScoutProgress] = []
+        /// What it used, as the program counted it, once it has finished.
+        var tokens: Int?
     }
 
     /// Why it can't start, as the panel says it.
@@ -494,6 +496,8 @@ final class ClaudeSession: ObservableObject {
                     seenTools[id] = turns[last].steps.count
                 } else if turns[last].steps.last == step { continue }
                 turns[last].steps.append(step)
+            case .usage(let count):
+                turns[last].tokens = count
             case .done:
                 dropRepeat(last)
                 turns[last].done = true

@@ -176,6 +176,14 @@ struct ClaudePanel: View {
     /// A turn you stopped, said as what you did rather than as a fault.
     static let stoppedWords = "You stopped it. Its tabs were closed."
 
+    /// What a task used, rounded: the size of it is what matters.
+    static func tokens(_ count: Int) -> String {
+        if count < 1000 { return "Used under 1k tokens" }
+        if count < 1_000_000 { return "Used about \((count + 500) / 1000)k tokens" }
+        let tenths = (count + 50_000) / 100_000
+        return "Used about \(tenths / 10).\(tenths % 10)M tokens"
+    }
+
     static func earlier(_ count: Int) -> String {
         count == 1 ? "1 earlier step" : "\(count) earlier steps"
     }
@@ -454,6 +462,13 @@ struct ClaudePanel: View {
 
                 if !turn.scouts.isEmpty {
                     ScoutPills(pages: turn.scouts, working: working)
+                }
+
+                if let tokens = turn.tokens, turn.done {
+                    Text(verbatim: ClaudePanel.tokens(tokens))
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(Palette.muted)
+                        .help("Every kind of token the task used, as Claude Code counted it. Each page read is sent again with every later step.")
                 }
 
                 ForEach(turn.artifacts) { artifact in
