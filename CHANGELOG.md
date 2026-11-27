@@ -11,6 +11,10 @@ in [ROADMAP-upstream.md](docs/history/ROADMAP-upstream.md).
 
 ## Unreleased
 
+- **Action receipts, failure codes and fill_form.** click, type, press and fill_form answer with a receipt: before and after hashes of the page, what changed (counts, never the page's words), focus and navigations, and the requests and storage writes the page's own scripts can show, labelled best effort and never complete. A failure carries one of NO_EFFECT, OCCLUDED, DETACHED, DISABLED, VALIDATION_BLOCKED (with the fields and the browser's messages), NAV_INTERRUPTED, AUTH_WALL, CAPTCHA, RATE_LIMIT or PAYWALL, with a hint; the last four, and NO_EFFECT, are labelled guesses, and an agent never solves a CAPTCHA. The same action again on a page it left as it was is held for your click, never dropped. fill_form fills several of its own tab's fields at once and never a password, card, code or file field.
+- **eids.** Every control read_page lists has an eid, a hash of its structure worked out again from the page each time (nothing is stored), so it names the same control after the page redraws; click, type and fill_form take it. hit_testable and occluded_by come from five probes of what is drawn over it.
+- **Loop breaker.** A run is stopped by hard limits in the browser (actions, repeats with nothing changing, identical results, time), editable in Settings beside Coding agents, with a card in the Claude panel. A limit can only stop things.
+
 ### Fixed
 
 - Settings › Appearance › Darken pages that stay light no longer turns pages near black with their borders gone, or gives up on them: WebKit now lists a page's added style sheets among its own, so the dark copy of each of a site's colours was copied again on every look, darker and longer each time, until the page fell back to the inverting filter. Pages are darkened in their own colours again (Google, Wikipedia, GitHub, Stack Overflow, Amazon, Notion, news sites), a light frame such as Google's sign-in prompt no longer shows as a white box, and the switch stays in Settings while it is on even with Search set to Light, so it can always be turned off. `python3 Tests/dark_pages.py`

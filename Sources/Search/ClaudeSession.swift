@@ -34,6 +34,8 @@ final class ClaudeSession: ObservableObject {
         var attached: [String] = []
         /// The pages being read side by side (batch_read), for their pills.
         var scouts: [ScoutProgress] = []
+        /// The run was stopped as looping (LoopBreaker): a card says so.
+        var loop: LoopTrip?
     }
 
     /// Why it can't start, as the panel says it.
@@ -304,6 +306,12 @@ final class ClaudeSession: ObservableObject {
 
     func read(_ text: String, at offset: Int, of length: Int, tab: Tab.ID, address: URL?) {
         snapshots.keep(text, at: offset, of: length, tab: tab, page: MarginNotes.page(address))
+    }
+
+    /// The run's actions were stopped by a hard limit (LoopBreaker).
+    func loopStopped(_ trip: LoopTrip) {
+        guard let last = turns.indices.last, turns[last].loop == nil else { return }
+        turns[last].loop = trip
     }
 
     /// Where each page of a batch_read has got to (AgentControl).

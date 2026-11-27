@@ -67,6 +67,8 @@ enum AgentGate {
 
     enum Reason: String, Equatable {
         case pay, send, signIn, submit, leave
+        /// The same action again on a page it left as it was (ActionReceipt.Dedupe).
+        case repeatAction = "repeat"
     }
 
     /// What is held, in the words the question and the agent are given.

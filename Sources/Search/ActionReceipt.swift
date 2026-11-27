@@ -164,6 +164,8 @@ struct PageDelta: Equatable {
     var focusMoved = false
     var storageChanges = 0
     var requests = 0
+    /// Something in the page's words or controls differs, however small.
+    var different = false
 
     init(from before: PageState, to after: PageState) {
         let was = Set(before.nodes.keys), now = Set(after.nodes.keys)
@@ -178,10 +180,11 @@ struct PageDelta: Equatable {
             storageChanges += Set(a.keys).union(b.keys).filter { a[$0] != b[$0] }.count
         }
         requests = max(0, after.requestTotal - before.requestTotal)
+        different = before.hash != after.hash
     }
 
     /// Whether anything the browser can see is different.
-    var none: Bool { added + removed + changed == 0 && !moved && textChange == 0 && !focusMoved && storageChanges == 0 && requests == 0 }
+    var none: Bool { added + removed + changed == 0 && !moved && textChange == 0 && !focusMoved && storageChanges == 0 && requests == 0 && !different }
 
     /// In the browser's words alone: counts, never what the page called anything.
     var summary: String {
@@ -193,6 +196,7 @@ struct PageDelta: Equatable {
         if changed > 0 { parts.append("\(changed) changed") }
         if textChange != 0 { parts.append("the page's text is \(abs(textChange)) characters \(textChange > 0 ? "longer" : "shorter")") }
         if focusMoved { parts.append("focus moved") }
+        if parts.isEmpty && different { parts.append("the page's words or controls differ") }
         if storageChanges > 0 { parts.append("\(storageChanges) stored value\(storageChanges == 1 ? "" : "s") changed") }
         if requests > 0 { parts.append("\(requests) request\(requests == 1 ? "" : "s") seen") }
         let line = parts.joined(separator: "; ")
@@ -285,5 +289,18 @@ struct DedupeLedger {
     mutating func record(_ key: String, before: String, after: String, at now: TimeInterval) {
         entries[key] = Entry(after: after, at: now, effective: before != after)
         if entries.count > 200 { entries = entries.filter { now - $0.value.at <= Self.window } }
+    }
+}
+
+/// What one task has done, for numbering its actions and noticing a repeat.
+struct ActionBook {
+    private(set) var count = 0
+    var ledger = DedupeLedger()
+    /// The run's hard limits (LoopBreaker), as set when it began.
+    var breaker = LoopBreaker()
+
+    mutating func next() -> String {
+        count += 1
+        return "act-\(count)"
     }
 }

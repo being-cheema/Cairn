@@ -456,6 +456,10 @@ struct ClaudePanel: View {
                     ScoutPills(pages: turn.scouts, working: working)
                 }
 
+                if let trip = turn.loop {
+                    LoopCard(trip: trip)
+                }
+
                 ForEach(turn.artifacts) { artifact in
                     ArtifactCard(artifact: artifact, browser: browser)
                 }
@@ -727,6 +731,7 @@ struct PanelWaiting: View {
         case .signIn:
             return "Sign in on \(hold.site ?? "the page") yourself, then press Resume on the card at the foot of the page."
         case .submit: return "Claude wants to submit a form." + answer
+        case .repeatAction: return "Claude wants to do the same thing a second time." + answer
         }
     }
 }
@@ -742,5 +747,31 @@ struct ClaudeDoor: View {
                  on: browser.sidePanelShown && browser.sidePanel == .claude,
                  help: "Claude   ⌥⌘K") { browser.toggleClaudePanel() }
         }
+    }
+}
+
+
+/// What the browser says when it stops a run it thinks is going round in
+/// circles: its own words, and the steps that repeated as it counted them.
+private struct LoopCard: View {
+    let trip: LoopTrip
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: 11, weight: .semibold))
+                Text("Stopped: this looks like a loop").font(.system(size: 12, weight: .semibold))
+            }
+            Text(verbatim: trip.message + ". Its actions are stopped for this message; send another to go on.")
+                .font(.system(size: 11.5))
+            ForEach(Array(trip.trace.suffix(5).enumerated()), id: \.offset) { _, line in
+                Text(verbatim: line).font(.system(size: 10.5, design: .monospaced)).foregroundStyle(Palette.muted)
+            }
+        }
+        .foregroundStyle(Palette.ink)
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Palette.wash, in: RoundedRectangle(cornerRadius: 8))
+        .accessibilityElement(children: .combine)
     }
 }

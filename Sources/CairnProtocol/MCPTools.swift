@@ -37,6 +37,10 @@ public enum MCPTools {
     private static var page: [String: Any] { string("A page handle, such as p1") }
     private static var seconds: [String: Any] { number("Seconds to wait for the page to load") }
     private static var element: [String: Any] { string("Such as p1.s3.e12, from the last read_page") }
+    private static var eid: [String: Any] { string("The element's eid from read_page (eight letters and digits): it names the same control after the page redraws. Give page with it.") }
+    private static var intent: [String: Any] {
+        string("One line, in your words, on why you are doing this. The person sees it on the question if one is asked: it is yours, not Cairn's.")
+    }
 
     private static func tool(_ name: String, _ verb: AgentVerb, passes: [String]? = nil, _ description: String,
                              _ properties: [String: [String: Any]] = [:], required: [String] = []) -> MCPTool {
@@ -95,14 +99,25 @@ public enum MCPTools {
             tool("click", .click,
                  "Click an element from the last read_page with a real mouse click at its middle, after checking it "
                      + "is attached, visible and not covered. Returns the page's state after any navigation it started.",
-                 ["element": element, "timeout": seconds], required: ["element"]),
+                 ["element": element, "eid": eid, "page": page, "intent": intent, "timeout": seconds]),
             tool("type", .type,
                  "Put text into a field from the last read_page, replacing what it holds (replace: false appends), "
                      + "and check the field holds it afterwards. keys: true types real key events instead of setting the "
                      + "value. submit: true then submits its form.",
-                 ["element": element, "text": string(), "replace": boolean(), "keys": boolean(), "submit": boolean(),
-                  "timeout": seconds],
-                 required: ["element", "text"]),
+                 ["element": element, "eid": eid, "page": page, "intent": intent, "text": string(), "replace": boolean(),
+                  "keys": boolean(), "submit": boolean(), "timeout": seconds],
+                 required: ["text"]),
+            tool("fill_form", .fillForm,
+                 "Fill several fields of a form in a tab of your own at once, each by its eid (or element handle) from "
+                     + "read_page: text boxes, text areas, menus (by value or label) and checkboxes (true or false). Set the way "
+                     + "the page's own scripts expect, then checked, with what the browser says is wrong with the form. Never "
+                     + "a password, card, one-time-code or file field (the whole call is refused, nothing filled). It does not "
+                     + "send the form: click the button, which asks the person if it would send something.",
+                 ["page": page, "intent": intent,
+                  "fields": ["type": "array", "minItems": 1, "maxItems": 40, "items": [
+                      "type": "object", "properties": ["eid": ["type": "string"], "element": ["type": "string"], "value": ["type": "string"]],
+                      "required": ["value"]] as [String: Any]]],
+                 required: ["page", "fields"]),
             tool("wait_for_sign_in", .waitForSignIn,
                  "For a page that needs an account. Hand the tab to the person so that they sign in there themselves, with "
                      + "their own password or passkey, and wait until they hand it back (up to 15 minutes). You see nothing "
@@ -113,7 +128,7 @@ public enum MCPTools {
                  "Press one key in a tab of your own: Enter, Tab, Escape, Backspace, Delete, ArrowUp/Down/Left/Right, "
                      + "Home, End, PageUp, PageDown, Space, or one character, optionally after shift+, alt+ or ctrl+. "
                      + "Never cmd: copy, paste and the app's shortcuts are the person's.",
-                 ["page": page, "key": string()], required: ["page", "key"]),
+                 ["page": page, "key": string(), "intent": intent], required: ["page", "key"]),
             tool("scroll", .scroll,
                  "Scroll a tab of your own by dy (and dx) CSS pixels, to 'top' or 'bottom', or bring an element "
                      + "from the last read_page into view.",
