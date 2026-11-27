@@ -141,3 +141,18 @@ struct VaultedSiteList: View {
         prefs.vaultedSites.insert(entry)
     }
 }
+
+/// Settings › Privacy: the sites set to Trusted Hub in a site card, each
+/// with a way to take it back to Standard. Added only from the card.
+struct TrustedHubList: View {
+    @ObservedObject var prefs: Preferences
+
+    var body: some View {
+        ForEach(prefs.trustedHubs.sorted(), id: \.self) { site in
+            Rule()
+            Line(site, "Trusted Hub: an agent follows links out of it without asking; everything else is still asked") {
+                Pill("Standard") { prefs.trustedHubs.remove(site) }
+            }
+        }
+    }
+}

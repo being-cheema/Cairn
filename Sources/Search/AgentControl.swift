@@ -2963,7 +2963,8 @@ final class AgentControl: ObservableObject {
                 if let url = VaultedSites.reached(by: target, in: VaultedSites.current) {
                     return answer(Self.blockedByPerson(VaultedSites.host(of: url)).said)
                 }
-                guard let hold = AgentGate.hold(click: target, on: tab.pageAddress, sites: session.sites, rules: self.rules(browser)) else {
+                guard let hold = AgentGate.hold(click: target, on: tab.pageAddress, sites: session.sites, rules: self.rules(browser),
+                                           hubs: AutonomyTiers.current) else {
                     return press(seen)
                 }
                 if self.handsOverSignIn(hold, tab, session, answer) { return }
@@ -3119,7 +3120,8 @@ final class AgentControl: ObservableObject {
             if let url = VaultedSites.reached(by: target, in: VaultedSites.current) {
                 return answer(Self.blockedByPerson(VaultedSites.host(of: url)).said)
             }
-            guard let hold = AgentGate.hold(click: target, on: tab.pageAddress, sites: session.sites, rules: rules(browser)) else {
+            guard let hold = AgentGate.hold(click: target, on: tab.pageAddress, sites: session.sites, rules: rules(browser),
+                                      hubs: AutonomyTiers.current) else {
                 return then()
             }
             if handsOverSignIn(hold, tab, session, answer) { return }

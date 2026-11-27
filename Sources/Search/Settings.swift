@@ -1043,6 +1043,7 @@ struct SettingsPanel: View {
             }
         case "agents.vaulted":
             if !searched { VaultedSiteList(prefs: prefs).under() }
+            if !searched, !prefs.trustedHubs.isEmpty { TrustedHubList(prefs: prefs).under() }
         case "pages.watch":
             if !searched, prefs.watchesPages { PageWatchList().under() }
         case "passkeys":

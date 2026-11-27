@@ -260,6 +260,7 @@
 		AA12896F2F0E502555C6BE2D /* TaskHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA12674D042E25B77B4480E7 /* TaskHistory.swift */; };
 		AA11896F2F0E502555C6BE2D /* TaskLedger.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11674D042E25B77B4480E7 /* TaskLedger.swift */; };
 		AA10896F2F0E502555C6BE2D /* Playbooks.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10674D042E25B77B4480E7 /* Playbooks.swift */; };
+		AA93A6008C1AF855CB745DD4 /* AutonomyTiers.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA83A6008C1AF855CB745DD4 /* AutonomyTiers.swift */; };
 		AA9817B17D967DBE8FBEF4FE /* CollectList.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA8817B17D967DBE8FBEF4FE /* CollectList.swift */; };
 		AA9001A00000000000000001 /* ActionOutcome.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA9001A00000000000000002 /* ActionOutcome.swift */; };
 		AA1079CC3127F30BEB4B6C50 /* HomeTiles.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10277B92F383F026131BD3 /* HomeTiles.swift */; };
@@ -484,6 +485,7 @@
 		AA12674D042E25B77B4480E7 /* TaskHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TaskHistory.swift; path = Sources/Search/TaskHistory.swift; sourceTree = SOURCE_ROOT; };
 		AA11674D042E25B77B4480E7 /* TaskLedger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TaskLedger.swift; path = Sources/Search/TaskLedger.swift; sourceTree = SOURCE_ROOT; };
 		AA10674D042E25B77B4480E7 /* Playbooks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Playbooks.swift; path = Sources/Search/Playbooks.swift; sourceTree = SOURCE_ROOT; };
+		AA83A6008C1AF855CB745DD4 /* AutonomyTiers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AutonomyTiers.swift; path = Sources/Search/AutonomyTiers.swift; sourceTree = SOURCE_ROOT; };
 		AA8817B17D967DBE8FBEF4FE /* CollectList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CollectList.swift; path = Sources/Search/CollectList.swift; sourceTree = SOURCE_ROOT; };
 		AA9001A00000000000000002 /* ActionOutcome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ActionOutcome.swift; path = Sources/Search/ActionOutcome.swift; sourceTree = SOURCE_ROOT; };
 		AA10277B92F383F026131BD3 /* HomeTiles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HomeTiles.swift; path = Sources/Search/HomeTiles.swift; sourceTree = SOURCE_ROOT; };
@@ -711,6 +713,7 @@
 				AA12674D042E25B77B4480E7 /* TaskHistory.swift */,
 				AA11674D042E25B77B4480E7 /* TaskLedger.swift */,
 				AA10674D042E25B77B4480E7 /* Playbooks.swift */,
+				AA83A6008C1AF855CB745DD4 /* AutonomyTiers.swift */,
 				AA8817B17D967DBE8FBEF4FE /* CollectList.swift */,
 				AA9001A00000000000000002 /* ActionOutcome.swift */,
 				AA10277B92F383F026131BD3 /* HomeTiles.swift */,
@@ -1100,6 +1103,7 @@
 				AA12896F2F0E502555C6BE2D /* TaskHistory.swift in Sources */,
 				AA11896F2F0E502555C6BE2D /* TaskLedger.swift in Sources */,
 				AA10896F2F0E502555C6BE2D /* Playbooks.swift in Sources */,
+				AA93A6008C1AF855CB745DD4 /* AutonomyTiers.swift in Sources */,
 				AA9817B17D967DBE8FBEF4FE /* CollectList.swift in Sources */,
 				AA9001A00000000000000001 /* ActionOutcome.swift in Sources */,
 				AA1079CC3127F30BEB4B6C50 /* HomeTiles.swift in Sources */,

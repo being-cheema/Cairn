@@ -190,6 +190,10 @@ final class Preferences: ObservableObject {
             ReadingMemory.shared.forget(sites: vaultedSites)
         }
     }
+    /// Sites set to Trusted Hub in the site card (AutonomyTiers).
+    @Published var trustedHubs: Set<String> {
+        didSet { store.set(Array(trustedHubs).sorted(), forKey: AutonomyTiers.key) }
+    }
     /// Pages you pick, looked at again now and then (PageWatch). Off unless
     /// turned on; turned off, the watches and their words are deleted.
     @Published var watchesPages: Bool {
@@ -1462,6 +1466,7 @@ final class Preferences: ObservableObject {
         sleepsTabs = store.object(forKey: "tabs.sleep") as? Bool ?? true
         dimsSleepingTabs = store.bool(forKey: "tabs.sleep.dim")
         vaultedSites = Set(store.stringArray(forKey: VaultedSites.key) ?? [])
+        trustedHubs = Set(store.stringArray(forKey: AutonomyTiers.key) ?? [])
         watchesPinChanges = store.bool(forKey: PinChanges.key)
         watchesPages = store.bool(forKey: PageWatches.key)
         hidesBack = store.bool(forKey: "helm.back.hidden")

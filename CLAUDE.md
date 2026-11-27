@@ -141,6 +141,12 @@ A change to any of these needs its tests (`Agent*Tests.swift`) and a probe run.
 - While an agent has a tab, this Mac and private networks are refused
   (`PrivateNetwork`). DNS rebinding and subresources fetched through a public
   name that points inside are known gaps.
+- `select_option` and `collect_list` act only in a task's own tabs, never on a
+  secret field; `select_option` opens a list with the gated click and asks the
+  gates again about the option, `collect_list` only scrolls (and puts back).
+  An action's `outcome` informs and never changes a gate. A Trusted Hub site
+  (`AutonomyTiers`, set only in the site card) drops the `leave` question for
+  links out of it and nothing else: pay, send, sign in and submit still hold.
 - A task that ends normally hands its tabs to the user, still in their own
   store. Stop, quit, misbehaviour and a declined site change close them.
 - **Local Dev Bridge.** Only a real click on its switch turns it on: no menu
