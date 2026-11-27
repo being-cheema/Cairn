@@ -174,6 +174,9 @@ enum PageScripts {
       var found = candidates(), els = same ? before.els.slice() : [], nodes = [], cut = false, vw = innerWidth, vh = innerHeight, seen = 0;
       var known = new Map();
       els.forEach(function (el, i) { known.set(el, i); });
+      // Their eids, over every control a read could list, so that a control
+      // keeps its own however the read is cut (PageIdentity).
+      var ids = eids(found);
       if (same) snap = since;
       for (var i = 0; i < found.length; i++) {
         var el = found[i], r0 = wanted(el);
@@ -200,6 +203,12 @@ enum PageScripts {
         if (el.getRootNode() !== document) n.shadow = true;
         n.box = [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)];
         n.inView = r.bottom > 0 && r.right > 0 && r.top < vh && r.left < vw;
+        n.eid = ids.get(el);
+        // Whether a click at its middle would land on it, and if not what is
+        // in the way (the five-point probe).
+        var hit = probe(el, ids);
+        n.hit_testable = hit.testable;
+        if (hit.by) n.occluded_by = hit.by;
         if (at === els.length) els.push(el);
         nodes.push(n);
       }
@@ -549,7 +558,7 @@ enum PageScripts {
     }
 
     static func call(_ body: String, _ args: [Any]) -> String {
-        helpers + FormReceipt.script + StructuredData.script + body + "(" + args.map(json).joined(separator: ", ") + ")"
+        helpers + identity + FormReceipt.script + StructuredData.script + body + "(" + args.map(json).joined(separator: ", ") + ")"
     }
 
     /// The page's visible controls and headings, with the element list kept
