@@ -131,8 +131,12 @@ public enum MCPTools {
                   "gone": boolean(), "timeout": number()],
                  required: ["page"]),
             tool("screenshot", .shot, passes: [],
-                 "A PNG of a tab of your own as it is laid out, with password and card fields blacked out.",
-                 ["page": page, "width": number("Snapshot width in points")], required: ["page"]),
+                 "A PNG of a tab of your own as it is laid out, with password and card fields blacked out. With marks, "
+                     + "numbered badges [eN] are drawn on the picture (never in the page) at the corner of each control "
+                     + "in view from your last read_page, so what you see and what you can click are the same: "
+                     + "p1.s3.e12 is the badge [e12].",
+                 ["page": page, "width": number("Snapshot width in points"),
+                  "marks": boolean("Draw numbered badges for the controls of the last read_page")], required: ["page"]),
             tool("annotate_page", .annotate,
                  "Leave a note in the margin of a tab of your own, beside the part it is about, for the person to read "
                      + "there: the part is highlighted. The page itself is not changed. Name the part by an element from "

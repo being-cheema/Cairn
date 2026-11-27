@@ -3249,12 +3249,26 @@ final class AgentControl: ObservableObject {
     private func shot(_ request: [String: Any], _ session: AgentSession, _ browser: Browser, _ answer: @escaping ([String: Any]) -> Void) throws {
         let tab = try self.tab(request, session, browser, .drive)
         let width = (request["width"] as? Double).map { min(max($0, 200), 2560) }
-        picture(tab, session, width: width) { taken in
+        let handle = session.handle(for: tab)
+        let wantsMarks = request["marks"] as? Bool == true
+        // Numbered as the last read_page numbered them: no read, no badges.
+        let snap = wantsMarks ? session.snaps[handle] : nil
+        picture(tab, session, width: width, marking: snap) { taken in
             switch taken {
             case .failure(let refusal): answer(refusal.said)
             case .success(let shot):
-                answer(["png": shot.png.base64EncodedString(), "width": shot.width, "height": shot.height,
-                        "blackedOut": shot.boxes, "page": session.handle(for: tab)])
+                var out: [String: Any] = ["png": shot.png.base64EncodedString(), "width": shot.width, "height": shot.height,
+                                          "blackedOut": shot.boxes, "page": handle]
+                if wantsMarks {
+                    if snap == nil {
+                        out["marks_note"] = "No badges: read_page this tab first, then take the picture."
+                    } else {
+                        out["marks"] = shot.marked.map { "\(handle).s\(snap ?? 0).e\($0)" }
+                        out["marks_note"] = shot.markNote ?? "Badges [eN] were drawn on the picture only, at the corner of each control in view from your last read_page; "
+                            + "the page itself is unchanged. Nothing is badged over a blacked-out area or on a password, card or code field."
+                    }
+                }
+                answer(out)
             }
         }
     }
@@ -3262,10 +3276,13 @@ final class AgentControl: ObservableObject {
     private struct Picture {
         let png: Data
         let width: Int, height: Int, boxes: Int
+        /// Numbers of the controls given a badge, when asked for.
+        var marked: [Int] = []
+        var markNote: String?
     }
 
     /// The only picture of a page that anything of an agent's is made from.
-    private func picture(_ tab: Tab, _ session: AgentSession, width: Double?,
+    private func picture(_ tab: Tab, _ session: AgentSession, width: Double?, marking snap: Int? = nil,
                          _ done: @escaping (Result<Picture, AgentRefusal>) -> Void) {
         let key = Self.key + "Hidden"
         // Put back whatever happens, alive or not: the page is yours too.
@@ -3285,6 +3302,9 @@ final class AgentControl: ObservableObject {
                 putBack()
                 return done(.failure(AgentRefusal(code: "stopped", message: "Stopped in \(Brand.name)")))
             }
+            // Measured with the picture's own page state, before it is taken;
+            // a stale read just means no badges.
+            @MainActor func take(_ marks: [SetOfMark.Mark], note: String?) {
             PageHands.snapshot(tab.web, width: width) { taken in
                 putBack()
                 guard !Self.isVaulted(tab) else { return done(.failure(Self.blockedByPerson())) }
@@ -3297,11 +3317,21 @@ final class AgentControl: ObservableObject {
                     let across = found["width"] as? Double ?? Double(rep.pixelsWide)
                     let scale = across > 0 ? Double(rep.pixelsWide) / across : 1
                     let boxes = (found["boxes"] as? [[Double]] ?? []).filter { $0.count == 4 }
-                    guard let png = Self.blackedOut(rep, boxes: boxes, scale: scale) else {
+                    guard let png = Self.blackedOut(rep, boxes: boxes, scale: scale, marks: marks) else {
                         done(.failure(AgentRefusal(code: "no_picture", message: "No picture")))
                         return
                     }
-                    done(.success(Picture(png: png, width: rep.pixelsWide, height: rep.pixelsHigh, boxes: boxes.count)))
+                    let drawn = SetOfMark.visible(marks, masks: boxes).map(\.index)
+                    done(.success(Picture(png: png, width: rep.pixelsWide, height: rep.pixelsHigh, boxes: boxes.count,
+                                          marked: drawn, markNote: note)))
+                }
+            }
+            }
+            guard let snap else { return take([], note: nil) }
+            self.page(tab, session, SetOfMark.script(key: Self.key, snap: snap)) { measured in
+                switch measured {
+                case .success(let out): take(SetOfMark.parse(out["marks"]), note: nil)
+                case .failure: take([], note: "No badges: the page changed since read_page. Read it again, then take the picture.")
                 }
             }
         }
@@ -3309,8 +3339,8 @@ final class AgentControl: ObservableObject {
 
     /// The picture as a PNG, with each box (top-left CSS pixels) painted
     /// over.
-    static func blackedOut(_ rep: NSBitmapImageRep, boxes: [[Double]], scale: Double) -> Data? {
-        guard !boxes.isEmpty else { return rep.representation(using: .png, properties: [:]) }
+    static func blackedOut(_ rep: NSBitmapImageRep, boxes: [[Double]], scale: Double, marks: [SetOfMark.Mark] = []) -> Data? {
+        guard !boxes.isEmpty || !marks.isEmpty else { return rep.representation(using: .png, properties: [:]) }
         guard let context = NSGraphicsContext(bitmapImageRep: rep) else { return nil }
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = context
@@ -3323,6 +3353,8 @@ final class AgentControl: ObservableObject {
             let x = box[0] * scale, y = box[1] * scale, w = box[2] * scale, h = box[3] * scale
             NSRect(x: x * points, y: (height - y - h) * points, width: w * points, height: h * points).fill()
         }
+        // After the blacking out, so no badge is ever under it or over it.
+        SetOfMark.draw(marks, masks: boxes, height: height, scale: scale, points: points)
         NSGraphicsContext.restoreGraphicsState()
         return rep.representation(using: .png, properties: [:])
     }
