@@ -16,7 +16,7 @@ final class ForkTabTests: XCTestCase {
 
     func testAForkIsAnotherTabInTheSameStore() throws {
         let browser = make()
-        defer { Browsers.discard(browser) }
+        defer { browser.window = nil; browser.closeAll(); Browsers.discard(browser) }
         let source = browser.open(try XCTUnwrap(URL(string: "https://example.com/a")), foreground: true)
         let before = browser.tabs.count
         let fork = try XCTUnwrap(browser.forkTab())
@@ -30,7 +30,7 @@ final class ForkTabTests: XCTestCase {
 
     func testAPrivateTabForksPrivateAndNeverIntoYourStore() throws {
         let browser = make()
-        defer { Browsers.discard(browser) }
+        defer { browser.window = nil; browser.closeAll(); Browsers.discard(browser) }
         let source = browser.benchOpen(try XCTUnwrap(URL(string: "https://example.com/p")), shy: true)
         source.agent = false
         XCTAssertTrue(source.bench)
@@ -45,7 +45,7 @@ final class ForkTabTests: XCTestCase {
 
     func testAnAgentsTabIsNeverForked() throws {
         let browser = make()
-        defer { Browsers.discard(browser) }
+        defer { browser.window = nil; browser.closeAll(); Browsers.discard(browser) }
         let tab = browser.benchOpen(try XCTUnwrap(URL(string: "https://example.com/t")), agent: true, store: .nonPersistent())
         browser.activeID = tab.id
         let before = browser.tabs.count
