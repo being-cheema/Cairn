@@ -51,9 +51,9 @@ let package = Package(
         ),
         // The command line: the same socket, the same checks (CairnCLI).
         .executableTarget(
-            name: "cairn",
+            name: "cairn-cli",
             dependencies: ["CairnProtocol"],
-            path: "Sources/cairn",
+            path: "Sources/cairn-cli",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .executableTarget(

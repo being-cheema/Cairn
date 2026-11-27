@@ -1,6 +1,6 @@
 import Foundation
 
-// The `cairn` command line (Cairn.app/Contents/MacOS/cairn): a small client
+// The `cairn` command line (Cairn.app/Contents/MacOS/cairn-cli, linked as `cairn`): a small client
 // of the same socket and the same checks cairn-mcp uses. It is one more
 // program asking to use Cairn, so the person is asked about it as for any
 // other, and every verb it sends is held to what an agent's is.

@@ -163,7 +163,7 @@ struct RememberedAgents: View {
                        detail: "cairn md <url>, cairn ask \"…\", cairn audit <local url>. It asks you like any other agent, and cairn ask only fills the Claude panel's box: you press Send. This copies a line that links it into ~/.local/bin; nothing is written until you run it.") {
                 Pill(linked ? "Copied" : "Copy Install Line") {
                     NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(AgentSetup.cliLink(path: tool.deletingLastPathComponent().appendingPathComponent("cairn").path),
+                    NSPasteboard.general.setString(AgentSetup.cliLink(path: tool.deletingLastPathComponent().appendingPathComponent("cairn-cli").path),
                                                    forType: .string)
                     linked = true
                 }

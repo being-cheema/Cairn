@@ -2,7 +2,8 @@ import CairnProtocol
 import Foundation
 
 // cairn: the command line for the Cairn you have open (CairnProtocol/CairnCLI.swift).
-// It is in the app, at Cairn.app/Contents/MacOS/cairn; Settings shows the line
+// It is in the app, at Cairn.app/Contents/MacOS/cairn-cli (a file named cairn would be the app on a
+// case-insensitive disk); Settings shows the line
 // that links it into your PATH.
 
 signal(SIGPIPE, SIG_IGN)

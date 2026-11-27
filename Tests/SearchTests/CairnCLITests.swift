@@ -163,7 +163,7 @@ final class CairnCLITests: XCTestCase {
 
 final class CairnCLIInstallTests: XCTestCase {
     func testTheInstallLineIsOnlyTextAndQuotesThePath() {
-        let line = AgentSetup.cliLink(path: "/Applications/My App.app/Contents/MacOS/cairn")
-        XCTAssertEqual(line, "mkdir -p ~/.local/bin && ln -sf '/Applications/My App.app/Contents/MacOS/cairn' ~/.local/bin/cairn")
+        let line = AgentSetup.cliLink(path: "/Applications/My App.app/Contents/MacOS/cairn-cli")
+        XCTAssertEqual(line, "mkdir -p ~/.local/bin && ln -sf '/Applications/My App.app/Contents/MacOS/cairn-cli' ~/.local/bin/cairn")
     }
 }
