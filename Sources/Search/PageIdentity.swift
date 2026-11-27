@@ -252,7 +252,11 @@ extension PageScripts {
           var out = { url: location.href, hash: sha256hex(location.href + '|' + parts.join(',') + '|' + words).slice(0, 12),
             nodes: nodes, nodeCount: map.size, textLength: text.length, focus: focus,
             storage: { local: store(globalThis.localStorage), session: store(globalThis.sessionStorage), cookies: cookies },
-            requests: { total: total, recent: seen, full: total >= 250 } };
+            requests: { total: total, recent: seen, full: total >= 250 },
+            // Only to be guessed from, in the app: never handed on.
+            sample: (document.title + ' ' + text.slice(0, 4000)).toLowerCase(),
+            captcha: !!document.querySelector('iframe[src*=recaptcha],iframe[src*=hcaptcha],iframe[src*=turnstile],iframe[src*="challenges.cloudflare"],.g-recaptcha,.h-captcha,.cf-turnstile'),
+            password: !!document.querySelector('input[type=password]') };
           if (el && el.isConnected) {
             var form = el.form || (el.closest ? el.closest('form') : null), values = '', invalid = [];
             if (form) {

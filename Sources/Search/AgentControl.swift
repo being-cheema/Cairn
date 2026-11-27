@@ -492,7 +492,14 @@ struct AgentRefusal: Error {
 
     var said: [String: Any] {
         var out: [String: Any] = ["code": code, "message": message]
-        if !hint.isEmpty { out["hint"] = hint }
+        // The code an agent already branches on stays; the taxonomy's name
+        // and its way on come beside it (ActionFailure).
+        let failure = ActionFailure.from(refusal: code)
+        if let failure {
+            out["failure"] = failure.rawValue
+            if failure.heuristic { out["heuristic"] = true }
+        }
+        if !hint.isEmpty { out["hint"] = hint } else if let failure { out["hint"] = failure.hint }
         return ["error": out]
     }
 }
