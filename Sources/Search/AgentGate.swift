@@ -69,6 +69,8 @@ enum AgentGate {
         case pay, send, signIn, submit, leave
         /// The same action again on a page it left as it was (ActionReceipt.Dedupe).
         case repeatAction = "repeat"
+        /// Which of two to four controls is meant: answered by a click on a badge (AgentChoiceView).
+        case choose
     }
 
     /// What is held, in the words the question and the agent are given.
@@ -86,6 +88,8 @@ enum AgentGate {
         var warning: String?
         /// Where the form asked about would send, when that can be told.
         var sends: URL?
+        /// The agent's own one line on why, shown on the card as its words (never ours).
+        var intent: String?
     }
 
     struct Rules: Equatable {
@@ -106,6 +110,16 @@ enum AgentGate {
     static let payWords = #"\b(pay|payment|buy|purchase|check ?out|place (your |my )?order|complete (your |my )?(order|purchase)|confirm (your |my )?(order|purchase|payment)|order now|donate|subscribe)\b"#
     static let sendWords = #"\b(send|post|publish|reply|tweet|share|comment|submit|confirm|delete|transfer)\b"#
     static let signInWords = #"\b(sign ?in|log ?in|sign ?up|register|create (an |your )?account)\b"#
+
+    /// An agent's one line of reason, as it may be shown: printable, one
+    /// line, at most `longest` characters. Nil when it says nothing.
+    static func intentLine(_ raw: Any?, longest: Int = 140) -> String? {
+        guard let text = raw as? String else { return nil }
+        let line = text.unicodeScalars.map { CharacterSet.controlCharacters.contains($0) ? " " : String($0) }.joined()
+        let squashed = line.split(separator: " ", omittingEmptySubsequences: true).joined(separator: " ")
+        guard !squashed.isEmpty else { return nil }
+        return squashed.count > longest ? String(squashed.prefix(longest)) + "…" : squashed
+    }
 
     /// A label as it may be quoted: one short printable line.
     static func quoted(_ label: String) -> String {

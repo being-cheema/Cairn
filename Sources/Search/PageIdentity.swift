@@ -377,4 +377,23 @@ extension PageScripts {
         })
         """#, [key, snap, fields])
     }
+
+    /// Where each of these eids is on the page now, for badges to be put on
+    /// them (AgentChoiceView): box, role, a short name, and whether a click
+    /// would land. An eid with nothing behind it says so.
+    static func choices(eids wanted: [String]) -> String {
+        call(#"""
+        (function (wanted) {
+          var map = eids(candidates()), byId = {};
+          map.forEach(function (id, el) { byId[id] = el; });
+          return JSON.stringify({ items: wanted.map(function (id) {
+            var el = byId[id];
+            if (!el) return { eid: id, found: false };
+            var r = el.getBoundingClientRect(), hit = probe(el, map);
+            return { eid: id, found: true, box: boxOf(el), role: role(el), name: squash(name(el)).slice(0, 60),
+              inView: r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth, hit: hit.testable };
+          }) });
+        })
+        """#, [wanted])
+    }
 }

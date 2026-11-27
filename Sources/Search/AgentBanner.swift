@@ -42,7 +42,9 @@ private struct AgentSessionBar: View {
         if session.browser === browser, session.consent.state == .asking {
             AgentQuestion(session: session)
         } else if session.browser === browser, session.consent.state == .allowed, let held = session.held {
-            if held.hold.reason == .signIn { AgentBatonCard(session: session, held: held) } else { AgentApproval(session: session, held: held) }
+            if held.hold.reason == .signIn { AgentBatonCard(session: session, held: held) }
+            else if held.hold.reason == .choose { AgentChoiceCard(session: session, held: held) }
+            else { AgentApproval(session: session, held: held) }
         }
     }
 }
@@ -371,6 +373,13 @@ struct AgentApproval: View {
                         .font(.system(size: 11.5))
                         .foregroundStyle(Palette.ink)
                         .fixedSize(horizontal: false, vertical: true)
+                    if let intent = held.hold.intent {
+                        // The agent's words, said to be: Cairn's own are above.
+                        Text(verbatim: "\(session.shownName) says why: “\(Quarantine.label(intent))”")
+                            .font(.system(size: 11.5).italic())
+                            .foregroundStyle(Palette.ink)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     Text(verbatim: AgentApproval.footnote(held.hold))
                         .font(.system(size: 10.5))
                         .foregroundStyle(Palette.muted)
@@ -541,4 +550,63 @@ struct ClickSpot: NSViewRepresentable {
     }
 
     func updateNSView(_ view: NSView, context: Context) {}
+}
+
+
+/// Which of two to four controls is meant, asked on the page itself with
+/// numbered badges (AgentChoiceView); the answer is a fresh click of yours on
+/// one of them. "None of these" is the only button here.
+struct AgentChoiceCard: View {
+    @ObservedObject var session: AgentSession
+    let held: HeldAction
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(verbatim: "\(session.shownName) asks which one you mean")
+                .font(.system(size: 12.5, weight: .medium)).foregroundStyle(Palette.ink)
+            if let words = held.hold.intent {
+                Text(verbatim: "“\(Quarantine.label(words))”")
+                    .font(.system(size: 11.5).italic()).foregroundStyle(Palette.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Text("Click a numbered badge on the page. The question in quotes is the agent's own words.")
+                .font(.system(size: 10.5)).foregroundStyle(Palette.muted)
+            HStack(spacing: 12) {
+                Button { AgentControl.shared.showWaitingTab() } label: {
+                    Text("Show the Page").padding(.horizontal, 8).padding(.vertical, 6).contentShape(Rectangle())
+                }
+                Spacer(minLength: 8)
+                Button { AgentControl.shared.answerHeld(approve: false, event: NSApp.currentEvent) } label: {
+                    Text("None of These")
+                        .padding(.horizontal, 8).padding(.vertical, 6).contentShape(Rectangle())
+                        .background(ClickSpot { AgentControl.shared.declineButton = $0 })
+                }
+            }
+            .font(.system(size: 12)).foregroundStyle(Palette.ink).buttonStyle(.plain)
+        }
+        .frame(maxWidth: 420, alignment: .leading)
+        .padding(16)
+        .background(Palette.ground, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Palette.hairline, lineWidth: 1))
+        .shadow(color: .black.opacity(0.12), radius: 20, y: 6)
+        .padding(.horizontal, 16)
+    }
+}
+
+/// A thin coral line down the edge of a row of a tab an agent opened, so that
+/// its own store, signed in as nobody, is told from your signed-in tabs at a
+/// glance. Nothing to click.
+struct AgentHairline: View {
+    @ObservedObject var tab: Tab
+
+    var body: some View {
+        if tab.agent {
+            Capsule()
+                .fill(Palette.accent.opacity(0.9))
+                .frame(width: 1.5)
+                .padding(.vertical, 3)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
+    }
 }

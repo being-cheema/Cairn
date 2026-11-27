@@ -107,6 +107,14 @@ public enum MCPTools {
                  ["element": element, "eid": eid, "page": page, "intent": intent, "text": string(), "replace": boolean(),
                   "keys": boolean(), "submit": boolean(), "timeout": seconds],
                  required: ["text"]),
+            tool("disambiguate", .disambiguate,
+                 "When what you were asked matches two to four controls and you can't tell which: numbered badges are put on "
+                     + "them on the page and the person clicks one. You get the eid they picked, or that they picked none. "
+                     + "The prompt is shown as yours: one short line saying which you mean. Own tabs only; the person's click "
+                     + "is the only thing that answers.",
+                 ["page": page, "prompt": string("One line, at most 160 characters"),
+                  "eids": ["type": "array", "minItems": 2, "maxItems": 4, "items": ["type": "string"]]],
+                 required: ["page", "eids", "prompt"]),
             tool("fill_form", .fillForm,
                  "Fill several fields of a form in a tab of your own at once, each by its eid (or element handle) from "
                      + "read_page: text boxes, text areas, menus (by value or label) and checkboxes (true or false). Set the way "

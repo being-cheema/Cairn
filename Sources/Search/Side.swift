@@ -2500,6 +2500,7 @@ private struct SideRow: View, Equatable {
         .padding(.trailing, status || peeking ? 7 : 0)
         .frame(height: prefs.sideRow)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(alignment: .leading) { AgentHairline(tab: tab).offset(x: -5) }
         // The title keeps its length under the pointer and fades out
         // beneath the cross, rather than being cut shorter, so its end
         // doesn't jump on each row the pointer passes.

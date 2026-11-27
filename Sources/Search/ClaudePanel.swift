@@ -732,6 +732,7 @@ struct PanelWaiting: View {
             return "Sign in on \(hold.site ?? "the page") yourself, then press Resume on the card at the foot of the page."
         case .submit: return "Claude wants to submit a form." + answer
         case .repeatAction: return "Claude wants to do the same thing a second time." + answer
+        case .choose: return "Claude asks which one you mean: click a numbered badge on the page."
         }
     }
 }

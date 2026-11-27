@@ -651,6 +651,10 @@ final class AgentSession: ObservableObject, Identifiable {
     fileprivate var vaultRefused: String?
     /// What it did, for receipts and for noticing a repeat (ActionBook).
     fileprivate var book = ActionBook()
+    /// The agent's one line on why, for the question its action may raise.
+    fileprivate var intent: String?
+    /// The badge the person clicked, for a disambiguate being asked.
+    fileprivate var chosen: Int?
     /// p1 → the number of its last read.
     fileprivate var snaps: [String: Int] = [:]
     /// p1 → what that read said, for the next to be compared with (PageDiff).
@@ -704,6 +708,8 @@ final class AgentControl: ObservableObject {
 
     /// The one connection there is, asking or allowed.
     @Published private(set) var session: AgentSession?
+    /// The badges on a page while a disambiguate is asked.
+    fileprivate var choosing: AgentChoiceView?
     private(set) var running = false
     private var listener: Int32 = -1
     private var accepting: DispatchSourceRead?
@@ -1440,6 +1446,8 @@ final class AgentControl: ObservableObject {
     private func ask(_ hold: AgentGate.Hold, _ session: AgentSession, sending: Tab.ID? = nil,
                      within patience: TimeInterval = AgentControl.holdFor,
                      showing receipt: FormReceipt? = nil, then: @escaping (HeldAction.Answer) -> Void) {
+        var hold = hold
+        if hold.intent == nil { hold.intent = session.intent }
         var answered = false
         let began = ProcessInfo.processInfo.systemUptime
         let held = HeldAction(hold: hold, since: began) { [weak session] verdict in
@@ -2159,7 +2167,7 @@ final class AgentControl: ObservableObject {
     static let verbs: Set<String> = Set(AgentVerb.allCases.map(\.rawValue))
 
     /// What counts against a run's limits: everything that acts or reads a page.
-    static let counted: Set<AgentVerb> = [.open, .go, .back, .forward, .read, .batchRead, .click, .type, .press, .fillForm, .scroll, .waitFor, .shot]
+    static let counted: Set<AgentVerb> = [.disambiguate, .open, .go, .back, .forward, .read, .batchRead, .click, .type, .press, .fillForm, .scroll, .waitFor, .shot]
 
     /// Why a verb is refused before anything is looked at: one not in `verbs`.
     static func unknown(_ verb: String) -> AgentRefusal? {
@@ -2215,6 +2223,7 @@ final class AgentControl: ObservableObject {
             }
             // The run's hard limits (LoopBreaker): once one trips, nothing of
             // what counts as an action is done again.
+            session.intent = AgentGate.intentLine(request["intent"])
             if Self.counted.contains(known), let trip = session.book.breaker.admit(verb) {
                 loopTripped(trip, session)
                 return answer(trip.said)
@@ -2360,6 +2369,8 @@ final class AgentControl: ObservableObject {
                 try receipted("type", request, session, browser, answer) { [self] request, answer in
                     try type(request, session, browser, answer)
                 }
+            case .disambiguate:
+                try disambiguate(request, session, browser, answer)
             case .fillForm:
                 session.sendGrant = nil
                 try receipted("fill_form", request, session, browser, answer) { [self] request, answer in
@@ -3544,4 +3555,86 @@ extension AgentControl {
         mark(tab, "Filling in a form", nil)
         resolve(0)
     }
+}
+
+// MARK: - disambiguate
+
+extension AgentControl {
+    /// Badges 1 to 4 on as many controls of its own page; the person clicks
+    /// one. Held like any question (so Stop, timeouts and the task ending all
+    /// settle it), and answered only by a fresh click on a badge.
+    fileprivate func disambiguate(_ request: [String: Any], _ session: AgentSession, _ browser: Browser,
+                                  _ answer: @escaping ([String: Any]) -> Void) throws {
+        let tab = try self.tab(request, session, browser, .drive)
+        guard let eids = request["eids"] as? [String], (2...4).contains(eids.count), Set(eids).count == eids.count,
+              eids.allSatisfy({ $0.range(of: "^[0-9a-f]{8}$", options: .regularExpression) != nil }) else {
+            throw AgentRefusal(code: "bad_eids", message: "Two to four different eids, from read_page")
+        }
+        guard let prompt = AgentGate.intentLine(request["prompt"], longest: 160) else {
+            throw AgentRefusal(code: "bad_prompt", message: "A prompt is one short line saying which you mean")
+        }
+        guard session.held == nil else {
+            throw AgentRefusal(code: "waiting", message: "Something is already waiting for the person", hint: "Try again once they have answered.")
+        }
+        page(tab, session, PageScripts.choices(eids: eids)) { [self] result in
+            switch result {
+            case .failure(let refusal): return answer(refusal.said)
+            case .success(let out):
+                let items = out["items"] as? [[String: Any]] ?? []
+                guard items.allSatisfy({ $0["found"] as? Bool == true }) else {
+                    return answer(AgentRefusal(code: "detached", message: "One of those eids is not on the page now",
+                                               hint: "Call read_page again.").said)
+                }
+                guard let web = tab.built else { return answer(AgentRefusal(code: "asleep", message: "That tab is asleep").said) }
+                let zoom = web.pageZoom * web.magnification
+                let boxes = items.compactMap { item -> CGRect? in
+                    guard item["inView"] as? Bool == true, let box = (item["box"] as? [Any])?.compactMap({ ($0 as? NSNumber)?.doubleValue }) else { return nil }
+                    return AgentOverlayView.place(box, zoom: zoom)
+                }
+                guard boxes.count == items.count else {
+                    return answer(AgentRefusal(code: "not_shown", message: "Not all of them are on screen",
+                                               hint: "Scroll so that they are, read the page again and ask once more.").said)
+                }
+                PageRoom.shared.house(tab)
+                session.chosen = nil
+                let view = AgentChoiceView.show(on: web, boxes: boxes)
+                self.choosing = view
+                var hold = AgentGate.Hold(reason: .choose, summary: "Pick one of \(items.count) on \(tab.pageAddress?.host() ?? "the page")")
+                hold.intent = prompt
+                self.ask(hold, session) { [weak self] verdict in
+                    view.removeFromSuperview()
+                    self?.choosing = nil
+                    guard verdict == .approved, let number = session.chosen, (1...eids.count).contains(number) else {
+                        return answer(verdict == .timedOut
+                            ? AgentRefusal(code: "no_answer", message: "The person didn't pick one in time", hint: "Ask in your reply.").said
+                            : AgentRefusal(code: "declined", message: "The person picked none of them",
+                                           hint: "Say what you were looking for and ask them, or carry on with the rest.").said)
+                    }
+                    let item = items[number - 1]
+                    answer(["chosen": eids[number - 1], "number": number, "role": item["role"] ?? "",
+                            "name": Quarantine.label(AgentRules.scrubbed(item["name"] as? String ?? "")), "page": session.handle(for: tab)])
+                }
+            }
+        }
+    }
+
+    /// A badge clicked: only a fresh click of the person's on that badge
+    /// answers (AgentRules.isClick); a key, an accessibility press or
+    /// anything an agent sent does not.
+    func choose(number: Int, event: NSEvent?, on badge: NSView) {
+        guard let session, let held = session.held, held.hold.reason == .choose,
+              AgentRules.isClick(event, on: badge, in: session.browser?.window, after: held.since + 0.5) else { return }
+        session.chosen = number
+        held.resolve(.approved)
+    }
+
+    /// For a unit test: the same, without an event.
+    func chooseForTest(number: Int) {
+        guard Store.testing, let session, let held = session.held, held.hold.reason == .choose else { return }
+        session.chosen = number
+        held.resolve(.approved)
+    }
+
+    /// The badges now on a page, for a test.
+    var choosingForTest: AgentChoiceView? { choosing }
 }

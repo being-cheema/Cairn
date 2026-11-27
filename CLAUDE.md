@@ -146,7 +146,9 @@ A change to any of these needs its tests (`Agent*Tests.swift`) and a probe run.
   effort. `fill_form` is for an agent's own tabs, refuses the whole call if
   any field is a secret or a file, and never sends. A repeat of an action on
   a page it left as it was is held (`AgentGate.Reason.repeatAction`), not
-  dropped. The loop breaker (`LoopBreaker.swift`) only ever stops a run.
+  dropped. `disambiguate` is answered only by a fresh click on a badge
+  (`AgentControl.choose`), and an `intent` is shown only as the agent's own
+  words. The loop breaker (`LoopBreaker.swift`) only ever stops a run.
 - A task that ends normally hands its tabs to the user, still in their own
   store. Stop, quit, misbehaviour and a declined site change close them.
 - **Local Dev Bridge.** Only a real click on its switch turns it on: no menu

@@ -15,7 +15,7 @@ final class AgentActionTests: XCTestCase {
             "/": .init(type: "text/html", body: """
                 <title>Start</title>
                 <button id=count onclick="n.textContent = +n.textContent + 1">Count</button>
-                <button id=idle>Nothing</button> <span id=n>0</span>
+                <button id=idle>Nothing</button> <button id=send>Send message</button> <span id=n>0</span>
                 <form action="/found" method=get><label>Email <input name=email type=email required></label>
                 <label>Notes <input name=notes></label><label>Pass <input type=password name=pw></label>
                 <button type=submit>Look</button></form>
@@ -156,5 +156,60 @@ final class AgentActionTests: XCTestCase {
             out = try await ask(["do": "read", "page": page])
             XCTAssertEqual((out["error"] as? [String: Any])?["code"] as? String, "LOOP_SUSPECTED", "reads stop too")
         }
+    }
+
+    func testADisambiguationIsAnsweredOnlyByAClickOnABadge() async throws {
+        try await withPage { _, base in
+            let (page, eids) = try await start(base)
+            let (count, idle) = (try XCTUnwrap(eids["Count"]), try XCTUnwrap(eids["Nothing"]))
+            var result: [String: Any]?
+            AgentControl.shared.askForTest(["do": "disambiguate", "page": page, "eids": [count, idle],
+                                            "prompt": "Which of these is the one to press?"]) { result = $0 }
+            for _ in 0..<200 where AgentControl.shared.session?.held == nil { try await Task.sleep(nanoseconds: 50_000_000) }
+            let held = try XCTUnwrap(AgentControl.shared.session?.held, "\(String(describing: result))")
+            XCTAssertEqual(held.hold.reason, .choose)
+            XCTAssertEqual(held.hold.intent, "Which of these is the one to press?")
+            let view = try XCTUnwrap(AgentControl.shared.choosingForTest)
+            XCTAssertEqual(view.badges.map(\.number), [1, 2])
+            AgentControl.shared.choose(number: 1, event: nil, on: view.badges[0])
+            AgentControl.shared.answerHeld(approve: true, event: nil)
+            XCTAssertNil(result, "no event, no answer")
+            AgentControl.shared.chooseForTest(number: 2)
+            for _ in 0..<100 where result == nil { try await Task.sleep(nanoseconds: 50_000_000) }
+            XCTAssertEqual(result?["chosen"] as? String, idle)
+            XCTAssertEqual(result?["number"] as? Int, 2)
+            XCTAssertNil(AgentControl.shared.choosingForTest, "the badges go")
+        }
+    }
+
+    func testPickingNoneIsSaidAndTooFewOrManyIsRefused() async throws {
+        try await withPage { _, base in
+            let (page, eids) = try await start(base)
+            let (count, idle) = (try XCTUnwrap(eids["Count"]), try XCTUnwrap(eids["Nothing"]))
+            var out = try await ask(["do": "disambiguate", "page": page, "eids": [count], "prompt": "x"])
+            XCTAssertEqual((out["error"] as? [String: Any])?["code"] as? String, "bad_eids")
+            out = try await ask(["do": "disambiguate", "page": page, "eids": [count, idle], "prompt": "Which?"], approve: false)
+            XCTAssertEqual((out["error"] as? [String: Any])?["code"] as? String, "declined", "\(out)")
+        }
+    }
+
+    func testTheIntentIsShownAsTheAgentsWordsOnTheQuestion() async throws {
+        try await withPage { _, base in
+            let (page, eids) = try await start(base)
+            var seen: String?
+            let out = try await ask(["do": "click", "page": page, "eid": try XCTUnwrap(eids["Send message"]),
+                                     "intent": "Tell Ada\nthe news"], approve: false) { _ in
+                seen = AgentControl.shared.session?.held?.hold.intent
+            }
+            XCTAssertEqual(seen, "Tell Ada the news")
+            XCTAssertEqual((out["error"] as? [String: Any])?["code"] as? String, "declined")
+        }
+    }
+
+    func testAnIntentIsOneShortPrintableLine() {
+        XCTAssertNil(AgentGate.intentLine(nil))
+        XCTAssertNil(AgentGate.intentLine("  \n "))
+        XCTAssertEqual(AgentGate.intentLine("a\u{0}b\n c"), "a b c")
+        XCTAssertEqual(AgentGate.intentLine(String(repeating: "x", count: 500))?.count, 141)
     }
 }
