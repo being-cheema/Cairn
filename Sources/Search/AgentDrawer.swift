@@ -43,6 +43,13 @@ enum AgentSetup {
         """
     }
 
+    /// The line that links the `cairn` command line (CairnCLI) into a folder
+    /// on your PATH. Only ever shown and copied: nothing here runs it or
+    /// writes outside the app.
+    static func cliLink(path: String) -> String {
+        "mkdir -p ~/.local/bin && ln -sf \(quoted(path)) ~/.local/bin/cairn"
+    }
+
     /// An app opened straight from a download or a disk image runs from a
     /// copy macOS makes and throws away: a path into it won't last.
     static func passing(_ path: String) -> Bool { path.contains("/AppTranslocation/") }
@@ -91,6 +98,7 @@ struct RememberedAgents: View {
     @ObservedObject private var trust: AgentTrust
     @State private var open: Bool
     @State private var copied = false
+    @State private var linked = false
 
     private let tool: URL?
 
@@ -150,6 +158,16 @@ struct RememberedAgents: View {
                 .padding(.leading, 52)
                 .padding(.trailing, 14)
                 .padding(.bottom, 10)
+            Rule()
+            SettingRow(icon: "terminal", title: "Command line",
+                       detail: "cairn md <url>, cairn ask \"…\", cairn audit <local url>. It asks you like any other agent, and cairn ask only fills the Claude panel's box: you press Send. This copies a line that links it into ~/.local/bin; nothing is written until you run it.") {
+                Pill(linked ? "Copied" : "Copy Install Line") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(AgentSetup.cliLink(path: tool.deletingLastPathComponent().appendingPathComponent("cairn").path),
+                                                   forType: .string)
+                    linked = true
+                }
+            }
         } else {
             Nothing("This copy of \(Brand.name) has no cairn-mcp for an agent to run. A copy made by build.sh has one.")
         }

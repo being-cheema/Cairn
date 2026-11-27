@@ -18,7 +18,7 @@ public struct MCPRefusal: Error {
     public let message: String
     public let hint: String
 
-    init(_ code: String, _ message: String, _ hint: String = "") {
+    public init(_ code: String, _ message: String, _ hint: String = "") {
         self.code = code
         self.message = message
         self.hint = hint

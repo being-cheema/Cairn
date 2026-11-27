@@ -49,6 +49,13 @@ let package = Package(
             path: "Sources/cairn-mcp",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
+        // The command line: the same socket, the same checks (CairnCLI).
+        .executableTarget(
+            name: "cairn",
+            dependencies: ["CairnProtocol"],
+            path: "Sources/cairn",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
         .executableTarget(
             name: "Search",
             dependencies: ["SearchPluginAPI", "CairnProtocol"],

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B1D6C492AD7AFBCD5E7F2A77 /* CairnCLI.swift in Sources */ = {isa = PBXBuildFile; fileRef = B11D78F0F101945F63D8E8B5 /* CairnCLI.swift */; };
 		AA51E98C33959A8717CC0680 /* StepRewind.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA89A3D16FAFA1CBC05B2887 /* StepRewind.swift */; };
 		AA309FFCEE6E4EC26650E45E /* ForkTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1541F1436138C74FCA8914 /* ForkTab.swift */; };
 		AAACA42141DD78984F2C0BE5 /* SetOfMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA8767B7B124BA76343384C1 /* SetOfMark.swift */; };
@@ -311,6 +312,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		B11D78F0F101945F63D8E8B5 /* CairnCLI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CairnCLI.swift; path = Sources/CairnProtocol/CairnCLI.swift; sourceTree = SOURCE_ROOT; };
 		AA89A3D16FAFA1CBC05B2887 /* StepRewind.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = StepRewind.swift; path = Sources/Search/StepRewind.swift; sourceTree = SOURCE_ROOT; };
 		AA1541F1436138C74FCA8914 /* ForkTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ForkTab.swift; path = Sources/Search/ForkTab.swift; sourceTree = SOURCE_ROOT; };
 		AA8767B7B124BA76343384C1 /* SetOfMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SetOfMark.swift; path = Sources/Search/SetOfMark.swift; sourceTree = SOURCE_ROOT; };
@@ -728,6 +730,7 @@
 				B1D0674D042E25B77B4480E7 /* AgentOverlayView.swift */,
 				B1C4674D042E25B77B4480E7 /* MCPServer.swift */,
 				B1C3674D042E25B77B4480E7 /* MCPTools.swift */,
+				B11D78F0F101945F63D8E8B5 /* CairnCLI.swift */,
 				B1C2674D042E25B77B4480E7 /* CairnProtocol.swift */,
 				B1C1674D042E25B77B4480E7 /* AgentWorkspaceCoordinator.swift */,
 				B1C0674D042E25B77B4480E7 /* NavigationPolicyEngine.swift */,
@@ -1119,6 +1122,7 @@
 				B1D0896F2F0E502555C6BE2D /* AgentOverlayView.swift in Sources */,
 				B1C4896F2F0E502555C6BE2D /* MCPServer.swift in Sources */,
 				B1C3896F2F0E502555C6BE2D /* MCPTools.swift in Sources */,
+				B1D6C492AD7AFBCD5E7F2A77 /* CairnCLI.swift in Sources */,
 				B1C2896F2F0E502555C6BE2D /* CairnProtocol.swift in Sources */,
 				B1C1896F2F0E502555C6BE2D /* AgentWorkspaceCoordinator.swift in Sources */,
 				B1C0896F2F0E502555C6BE2D /* NavigationPolicyEngine.swift in Sources */,

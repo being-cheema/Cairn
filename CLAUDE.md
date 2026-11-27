@@ -142,6 +142,7 @@ A change to any of these needs its tests (`Agent*Tests.swift`) and a probe run.
   (`PrivateNetwork`). DNS rebinding and subresources fetched through a public
   name that points inside are known gaps.
 - Words an agent read on one site and is about to type into, or put in an address on, another site are held for your click (`TaintLedger`, `AgentGate.hold(flowFrom:)`). A heuristic that only adds questions: the ledger is in memory, ends with the task, and takes no secret field's value.
+- `cairn` (the command line, `CairnCLI`) is one more agent on the socket: asked about, gated like any other. `ask` only fills the panel's box; `md` reads a tab of its own in the task store; `audit` needs a live Dev Bridge grant. Fork Tab and Rewind Step never touch an agent's tabs or undo anything sent.
 - A task that ends normally hands its tabs to the user, still in their own
   store. Stop, quit, misbehaviour and a declined site change close them.
 - **Local Dev Bridge.** Only a real click on its switch turns it on: no menu

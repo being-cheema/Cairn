@@ -2483,6 +2483,45 @@ final class AgentControl: ObservableObject {
                 answer(known == .devConsole ? DevReport.console(logs, level: nil) : DevReport.network(logs))
             case .assertLayout:
                 try assertLayout(request, session, browser, answer)
+            case .markdown:
+                // For `cairn md`: a tab of its own, as Markdown, fenced as any read is.
+                let tab = try self.tab(request, session, browser, .drive)
+                let handle = session.handle(for: tab)
+                if tab.bench { PageRoom.shared.house(tab) }
+                holdingStill(tab, session) { [weak self] _ in
+                    guard let self, self.live(session) else { return answer(AgentRefusal(code: "stopped", message: "Stopped in \(Brand.name)").said) }
+                    guard !Self.isVaulted(tab), !Self.isShut(tab, session) else { return answer(Self.blockedByPerson().said) }
+                    PageMarkdown.read(tab.web, links: true, most: 200_000) { page in
+                        guard self.live(session) else { return answer(AgentRefusal(code: "stopped", message: "Stopped in \(Brand.name)").said) }
+                        guard !Self.isVaulted(tab), let page, !page.markdown.isEmpty else {
+                            return answer(AgentRefusal(code: "no_text", message: "Nothing on that page could be read as text").said)
+                        }
+                        let words = TypedSecrets.hidden(in: PageMarkdown.copied(page) ?? page.markdown)
+                        if let origin = TaintLedger.origin(of: tab.pageAddress) {
+                            session.taint.record(words, origin: origin, quarantined: Quarantine.fence(words).contains(Quarantine.opening))
+                        }
+                        answer(["markdown": Quarantine.fence(words), "title": Quarantine.label(page.title),
+                                "url": AgentRules.url(page.url?.absoluteString ?? ""), "cut": page.cut, "page": handle,
+                                "untrusted": Self.untrusted])
+                    }
+                }
+            case .askPanel:
+                // Fills the panel's box and nothing more: sending it is the
+                // person's, from the panel (ClaudeSession.submit).
+                let prompt = String((request["prompt"] as? String ?? "").prefix(4000)).trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !prompt.isEmpty, AgentRules.typeable(prompt) else {
+                    throw AgentRefusal(code: "bad_text", message: "A question with no control characters but tab and newline")
+                }
+                let claude = browser.claude
+                guard claude.offer(prompt) else {
+                    throw AgentRefusal(code: "box_busy", message: "The Claude panel is busy or has something typed in it",
+                                       hint: "Ask the person to send or clear it, then try again.")
+                }
+                if !(browser.sidePanelShown && browser.sidePanel == .claude) { browser.toggleClaudePanel() }
+                answer(["waiting": true, "note": "The question is in the Claude panel's box. Nothing is asked until the person presses Send there."])
+            case .askPoll:
+                let seen = browser.claude.progress(from: min(max(request["offset"] as? Int ?? 0, 0), 10_000_000))
+                answer(seen)
             case .bye:
                 answer(["bye": true])
                 DispatchQueue.main.async { [weak self] in self?.end(session, .bye) }

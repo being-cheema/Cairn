@@ -32,6 +32,12 @@ public enum AgentVerb: String, CaseIterable, Sendable {
     /// tool sends these.
     case devConsole = "dev_console"
     case devNetworkErrors = "dev_network_errors"
+    /// For the `cairn` command line (CairnCLI), which no MCP tool sends: a
+    /// tab of the task's own as Markdown; the prompt put in the Claude panel's
+    /// box, never sent; and how that question has gone since.
+    case markdown
+    case askPanel = "ask_panel"
+    case askPoll = "ask_poll"
 }
 
 /// What cairn-mcp offers to be read as an MCP resource. Read-only, each
