@@ -381,7 +381,9 @@ def main():
         left = agents().get("handed", [])
         t.ok("its tabs, handed over, carry none of it",
              left and all(not h["dressed"] and h["heard"] == 0 for h in left), left)
-        t.ok("the grant is still the person's", bridge(mine)["granted"] == [LOCAL], bridge(mine))
+        # A grant is for the task it was given to: it ends with it, so no
+        # later client has it without the person's click.
+        t.ok("the grant ends with the task", bridge(mine)["granted"] == [], bridge(mine))
     finally:
         if a:
             a.close()

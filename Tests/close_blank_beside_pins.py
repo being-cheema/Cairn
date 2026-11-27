@@ -49,8 +49,17 @@ def main():
         a_now = next((x for x in st["tabs"] if x["id"] == a), {})
         t.ok("the pin stays down", a_now.get("asleep") is True, a_now)
 
-        # A pin still open: ⌘T then ⌘W goes back to it, as before.
-        sv.cmd({"do": "select", "id": a}); sv.sp("newTab")
+        # A pin still open: ⌘T then ⌘W goes back to it, as before. Cairn's
+        # ⌘T always opens a fresh tab, where Search's takes up the empty one
+        # left above, so that one is closed first: only the pin is beside
+        # the new tab, which is the case this is about. The pin is opened
+        # first, as the probe's setup does: with it down, closing the empty
+        # tab would leave another.
+        sv.cmd({"do": "select", "id": a})
+        sv.sp("close", id=blank)
+        st = sv.sp("state")
+        t.ok("only the open pin is left", loose(st) == [] and st["activeID"] == a, st)
+        sv.sp("newTab")
         st = sv.sp("state"); fresh = st["activeID"]
         t.ok("⌘T over an open pin gives a new tab", fresh != a and active(st)["blank"], st)
         st = sv.sp("closeTab", id=fresh)

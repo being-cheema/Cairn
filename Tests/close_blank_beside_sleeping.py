@@ -43,9 +43,15 @@ def run(t, goes_back):
         # The pin put down: ⌘W on it lands on a new tab or on b.
         st = sv.sp("closeTab", id=a); time.sleep(0.4)
         t.ok(f"{w}: ⌘W puts the pin down", tab(st, a).get("asleep") is True, st)
-        sv.sp("newTab"); time.sleep(0.4)
+        # The new tab: the one putting the pin down left, if it left one,
+        # else ⌘T's. Cairn's ⌘T always opens a fresh tab, where Search's
+        # takes up an empty one, so a second would stand beside the first.
+        st = sv.sp("state")
+        if not (tab(st, st["activeID"]).get("blank") and st["activeID"] not in (a, b)):
+            sv.sp("newTab"); time.sleep(0.4)
         st = sv.sp("state"); blank = st["activeID"]
-        t.ok(f"{w}: ⌘T gives a new tab", blank not in (a, b), st)
+        t.ok(f"{w}: a new tab, alone beside a and b", blank not in (a, b) and tab(st, blank).get("blank")
+             and len(st["tabs"]) == 3, st)
         st = sv.sp("closeTab", id=blank); time.sleep(0.4)
         t.ok(f"{w}: ⌘W on it doesn't land on the pin put down", st["activeID"] != a, st)
         t.ok(f"{w}: the pin stays down", tab(st, a).get("asleep") is True, tab(st, a))
