@@ -148,7 +148,9 @@ A change to any of these needs its tests (`Agent*Tests.swift`) and a probe run.
   a page it left as it was is held (`AgentGate.Reason.repeatAction`), not
   dropped. `disambiguate` is answered only by a fresh click on a badge
   (`AgentControl.choose`), and an `intent` is shown only as the agent's own
-  words. The loop breaker (`LoopBreaker.swift`) only ever stops a run.
+  words. Record Skill (`SkillRecorder.swift`) runs only while the person has
+  it on, in their own front tab, never a private one, and never writes a typed
+  value or anything of a secret box. The loop breaker (`LoopBreaker.swift`) only ever stops a run.
 - A task that ends normally hands its tabs to the user, still in their own
   store. Stop, quit, misbehaviour and a declined site change close them.
 - **Local Dev Bridge.** Only a real click on its switch turns it on: no menu

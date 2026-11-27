@@ -81,6 +81,7 @@ struct ClaudePanel: View {
                 }
             }
             Spacer(minLength: 0)
+            if let browser = session.browser { RecordSkillDoor(browser: browser) }
             Door(icon: "clock", help: "Task History") { showingHistory.toggle() }
                 .popover(isPresented: $showingHistory, arrowEdge: .bottom) {
                     TaskHistory(session: session) { showingHistory = false }
@@ -811,6 +812,45 @@ private struct TrailScrubber: View {
                     .font(.system(size: 11.5)).foregroundStyle(step.failure == nil ? Palette.ink : Palette.accent)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(verbatim: step.effects).font(.system(size: 10.5)).foregroundStyle(Palette.muted)
+            }
+        }
+    }
+}
+
+
+/// Record Skill: on, it follows what you do in the tab in front; off, it asks
+/// what to call the playbook and writes it to the Skills folder, or drops it.
+private struct RecordSkillDoor: View {
+    let browser: Browser
+    @ObservedObject private var recorder: SkillRecorder
+
+    init(browser: Browser) {
+        self.browser = browser
+        _recorder = ObservedObject(wrappedValue: browser.skillRecorder)
+    }
+
+    var body: some View {
+        Door(icon: recorder.recording ? "stop.circle.fill" : "record.circle",
+             help: recorder.recording ? "Stop Recording and Save as a Skill" : "Record Skill: do something once, and Claude can repeat it") {
+            if recorder.recording { finish() } else {
+                recorder.start(in: browser)
+                browser.announce("Recording your steps in the tab in front: names of controls only, never what you type")
+            }
+        }
+        .foregroundStyle(recorder.recording ? Palette.accent : Palette.muted)
+    }
+
+    private func finish() {
+        let steps = recorder.stop()
+        guard !steps.isEmpty else { return browser.announce("Nothing was recorded") }
+        Ask.name("Save these \(steps.count) steps as a skill?",
+                 detail: "It is written to the Skills folder as a playbook you can read and edit. What you typed is not in it: it becomes something to type after its name. Passwords, cards and codes are never kept.",
+                 placeholder: "my-skill", confirm: "Save") { name in
+            let made = SkillRecording.markdown(name: Playbooks.name(name) ?? "skill", steps: steps)
+            if let file = SkillRecording.save(made.text, as: name) {
+                browser.announce("Saved as /\(file.deletingLastPathComponent().lastPathComponent)")
+            } else {
+                browser.announce("Couldn't save it: use letters, digits and hyphens for the name")
             }
         }
     }
