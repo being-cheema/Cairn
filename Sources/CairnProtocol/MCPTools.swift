@@ -125,6 +125,13 @@ public enum MCPTools {
                      + "largest scrolling area is used.",
                  ["page": page, "container": element, "max_items": integer(), "stop_when_text": string()],
                  required: ["page"]),
+            tool("update_scratchpad", .updateScratchpad,
+                 "Keep short notes for yourself and the person in the side panel's Task Scratchpad: a plan, what you "
+                     + "have found, what is left. The person reads them there. They may write in their own box beside "
+                     + "yours: whatever they change comes back to you as user_notes in your next answer, in their own "
+                     + "words. Plain words, at most 4000 characters; append: true adds a line. Only for the side panel's "
+                     + "Claude. Never put a password, card number or code in it.",
+                 ["text": string(), "append": boolean()], required: ["text"]),
             tool("wait_for_sign_in", .waitForSignIn,
                  "For a page that needs an account. Hand the tab to the person so that they sign in there themselves, with "
                      + "their own password or passkey, and wait until they hand it back (up to 15 minutes). You see nothing "

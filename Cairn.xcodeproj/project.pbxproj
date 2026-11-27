@@ -260,6 +260,7 @@
 		AA12896F2F0E502555C6BE2D /* TaskHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA12674D042E25B77B4480E7 /* TaskHistory.swift */; };
 		AA11896F2F0E502555C6BE2D /* TaskLedger.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11674D042E25B77B4480E7 /* TaskLedger.swift */; };
 		AA10896F2F0E502555C6BE2D /* Playbooks.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10674D042E25B77B4480E7 /* Playbooks.swift */; };
+		AA9B80052FBE5E70EC8FD6A8 /* Scratchpad.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA8B80052FBE5E70EC8FD6A8 /* Scratchpad.swift */; };
 		AA9F180F6E249ED422DA12D7 /* ContextGovernor.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA8F180F6E249ED422DA12D7 /* ContextGovernor.swift */; };
 		AA995D3C1884351DFB409B9D /* FocusRank.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA895D3C1884351DFB409B9D /* FocusRank.swift */; };
 		AA93A6008C1AF855CB745DD4 /* AutonomyTiers.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA83A6008C1AF855CB745DD4 /* AutonomyTiers.swift */; };
@@ -487,6 +488,7 @@
 		AA12674D042E25B77B4480E7 /* TaskHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TaskHistory.swift; path = Sources/Search/TaskHistory.swift; sourceTree = SOURCE_ROOT; };
 		AA11674D042E25B77B4480E7 /* TaskLedger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TaskLedger.swift; path = Sources/Search/TaskLedger.swift; sourceTree = SOURCE_ROOT; };
 		AA10674D042E25B77B4480E7 /* Playbooks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Playbooks.swift; path = Sources/Search/Playbooks.swift; sourceTree = SOURCE_ROOT; };
+		AA8B80052FBE5E70EC8FD6A8 /* Scratchpad.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Scratchpad.swift; path = Sources/Search/Scratchpad.swift; sourceTree = SOURCE_ROOT; };
 		AA8F180F6E249ED422DA12D7 /* ContextGovernor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ContextGovernor.swift; path = Sources/Search/ContextGovernor.swift; sourceTree = SOURCE_ROOT; };
 		AA895D3C1884351DFB409B9D /* FocusRank.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = FocusRank.swift; path = Sources/Search/FocusRank.swift; sourceTree = SOURCE_ROOT; };
 		AA83A6008C1AF855CB745DD4 /* AutonomyTiers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AutonomyTiers.swift; path = Sources/Search/AutonomyTiers.swift; sourceTree = SOURCE_ROOT; };
@@ -717,6 +719,7 @@
 				AA12674D042E25B77B4480E7 /* TaskHistory.swift */,
 				AA11674D042E25B77B4480E7 /* TaskLedger.swift */,
 				AA10674D042E25B77B4480E7 /* Playbooks.swift */,
+				AA8B80052FBE5E70EC8FD6A8 /* Scratchpad.swift */,
 				AA8F180F6E249ED422DA12D7 /* ContextGovernor.swift */,
 				AA895D3C1884351DFB409B9D /* FocusRank.swift */,
 				AA83A6008C1AF855CB745DD4 /* AutonomyTiers.swift */,
@@ -1109,6 +1112,7 @@
 				AA12896F2F0E502555C6BE2D /* TaskHistory.swift in Sources */,
 				AA11896F2F0E502555C6BE2D /* TaskLedger.swift in Sources */,
 				AA10896F2F0E502555C6BE2D /* Playbooks.swift in Sources */,
+				AA9B80052FBE5E70EC8FD6A8 /* Scratchpad.swift in Sources */,
 				AA9F180F6E249ED422DA12D7 /* ContextGovernor.swift in Sources */,
 				AA995D3C1884351DFB409B9D /* FocusRank.swift in Sources */,
 				AA93A6008C1AF855CB745DD4 /* AutonomyTiers.swift in Sources */,

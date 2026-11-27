@@ -1733,12 +1733,13 @@ final class AgentControl: ObservableObject {
 
     /// An allowed session with no socket, in a test run, for the unit tests
     /// to put verbs to as a connected agent would (AgentReplayTests).
-    func sessionForTest(in browser: Browser, seesTabs: Bool = false) -> AgentSession? {
+    func sessionForTest(in browser: Browser, seesTabs: Bool = false, panel: Bool = false) -> AgentSession? {
         guard Store.testing, session == nil else { return nil }
         let made = AgentSession(fd: -1, program: "test")
         made.client = "test"
         made.browser = browser
         made.greeted = true
+        made.panel = panel
         made.working = true
         made.consent.hello()
         made.consent.answer(allow: true, seesTabs: seesTabs)
@@ -2159,6 +2160,15 @@ final class AgentControl: ObservableObject {
     }
 
     private func run(_ verb: String, _ request: [String: Any], in session: AgentSession, _ answer: @escaping ([String: Any]) -> Void) {
+        // What the person wrote in the scratchpad since, in their own words,
+        // goes with the next answer of the panel's own run, whatever it was.
+        let answer: ([String: Any]) -> Void = { [weak session] out in
+            var out = out
+            if verb != "hello", let session, session.panel, let notes = session.browser?.claude.takeScratchpadEdits() {
+                out["user_notes"] = notes
+            }
+            answer(out)
+        }
         func refuse(_ refusal: AgentRefusal) { answer(refusal.said) }
         if let refusal = Self.unknown(verb) { return refuse(refusal) }
         if verb == "hello" {
@@ -2343,6 +2353,20 @@ final class AgentControl: ObservableObject {
             case .type:
                 session.sendGrant = nil
                 try type(request, session, browser, answer)
+            case .updateScratchpad:
+                guard session.panel, let panel = session.browser?.claude else {
+                    throw AgentRefusal(code: "no_panel", message: "The scratchpad is the side panel's Claude's",
+                                       hint: "Put the notes in your reply instead.")
+                }
+                let words = String((request["text"] as? String ?? "").prefix(Scratchpad.agentMost + 1))
+                guard AgentRules.typeable(words), !words.isEmpty else {
+                    throw AgentRefusal(code: "bad_text", message: "Plain words, no control characters")
+                }
+                guard panel.writeScratchpad(words, append: request["append"] as? Bool ?? false) else {
+                    throw AgentRefusal(code: "too_long", message: "At most \(Scratchpad.agentMost) characters in all",
+                                       hint: "Replace the notes with a shorter version.")
+                }
+                answer(["saved": true, "characters": panel.scratchpad.agent.count])
             case .collectList:
                 try collectList(request, session, browser, answer)
             case .selectOption:

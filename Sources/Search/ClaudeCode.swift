@@ -304,6 +304,7 @@ enum ClaudeCode {
             "scroll": "Scrolling",
             "select_option": "Choosing from a list",
             "collect_list": "Gathering a list",
+            "update_scratchpad": "Updating the scratchpad",
             // It is done with the browser: its tabs stay, as the person's.
             "disconnect": leaving,
             "create_artifact": "Laying out the result",
