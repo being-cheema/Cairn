@@ -1033,8 +1033,10 @@ final class AgentControl: ObservableObject {
         let handsOver = how.handsOver(declined: session.declined)
         lastEnd = ["how": how.why, "handedOver": handsOver]
         if handsOver { handOverTaskTabs(session) } else { closeTaskTabs(session) }
-        // Your Stop turns the Dev Bridge off as well.
-        if stopped, was == .allowed { DevBridge.shared.revokeAll() }
+        // A grant is for the task it was given to, or the next one: it ends
+        // with that task however it ends, so no later client, let in by
+        // "Always allow" or not, inherits it without your click.
+        if was == .allowed { DevBridge.shared.revokeAll() }
         session.consent.end()
         // What was said last goes if the socket takes it now; nothing waits.
         flush(session)
@@ -1617,6 +1619,8 @@ final class AgentControl: ObservableObject {
         // lets in (DevChain); asked of every navigation, since it follows
         // where the tab is on its way to.
         let local = DevBridge.shared.admits(action, on: tab)
+        // Under a granted page, only that origin's own frames (DevFrames).
+        if DevBridge.shared.keepsOut(action, on: tab) { return done(false) }
         let screen = NavigationPolicyEngine.screen(url, vaulted: session.workspace.batonWithYou ? [] : nil, bridged: local != nil)
         switch screen {
         case .notWeb: return done(true)
@@ -3219,6 +3223,8 @@ final class AgentControl: ObservableObject {
             PageHands.snapshot(tab.web, width: width) { taken in
                 putBack()
                 guard !Self.isVaulted(tab) else { return done(.failure(Self.blockedByPerson())) }
+                // The bridge may have been turned off while it was taken.
+                guard !Self.isShut(tab, session) else { return done(.failure(Self.bridgeOff())) }
                 switch taken {
                 case .failure(let error):
                     done(.failure(AgentRefusal(code: "no_picture", message: error.localizedDescription)))

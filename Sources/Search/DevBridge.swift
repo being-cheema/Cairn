@@ -111,8 +111,10 @@ enum DevRules {
     /// The private-network blocks as they are, then for each granted origin
     /// two exceptions, one for pages and one for sockets: that port alone,
     /// and only while the tab's own page is a granted one, so a public page
-    /// in the same tab fetches nothing here. One list and not two, since a
-    /// list's exceptions reach only its own blocks.
+    /// as the tab's page fetches nothing here. The exceptions reach every
+    /// frame under that page, which is why no frame of another origin is
+    /// loaded under it (DevFrames). One list and not two, since a list's
+    /// exceptions reach only its own blocks.
     static func source(_ origins: Set<DevOrigin>, allowing allowed: Set<String>) -> String {
         let base = Data(PrivateNetworkRules.source(allowing: allowed).utf8)
         var rules = (try? JSONSerialization.jsonObject(with: base)) as? [[String: Any]] ?? []
@@ -128,9 +130,27 @@ enum DevRules {
         return String(decoding: data, as: UTF8.self)
     }
 
+    /// What every one of the bridge's lists in WebKit's store is named with.
+    static let prefix = "agent-dev-bridge"
+
     /// The compiled list's name in WebKit's store, one per set of origins.
     static func identifier(_ origins: Set<DevOrigin>) -> String {
-        "agent-dev-bridge " + origins.map(\.said).sorted().joined(separator: " ")
+        prefix + " " + origins.map(\.said).sorted().joined(separator: " ")
+    }
+}
+
+/// Which frames an agent's tab may load while its page is a granted one.
+///
+/// The rule list's exceptions go by the top page alone, so any frame under
+/// a granted page could call the local server; and a frame that goes out
+/// and is redirected back still names the app as where it came from. So
+/// under a granted page only its own origin's frames load: a public frame
+/// (an advertisement, a widget, a preview) is never fetched at all.
+enum DevFrames {
+    static func refuses(_ url: URL, subframe: Bool, top: DevOrigin?, granted: Set<DevOrigin>) -> Bool {
+        guard subframe, let top, granted.contains(top),
+              ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { return false }
+        return DevOrigin(url).map { !granted.contains($0) } ?? true
     }
 }
 
@@ -410,8 +430,24 @@ enum DevScrub {
             return "\(name): \(mark)"
         }
         out = replace(#"\b[A-Za-z0-9+/_\-]{40,}={0,2}"#, in: out) { NavigationPolicyEngine.looksEncoded($0) ? mark : $0 }
+        out = replace(secretField, in: out) { found in
+            guard let colon = found.firstIndex(where: { $0 == ":" || $0 == "=" }) else { return found }
+            let after = found[found.index(after: colon)...]
+            let value = after.drop { $0 == " " }
+            let quote = value.first.flatMap { "\"'".contains($0) ? String($0) : nil } ?? ""
+            return String(found[...colon]) + (after.first == " " ? " " : "") + quote + mark + quote
+        }
         return TypedSecrets.hidden(in: out)
     }
+
+    /// An object an app logs, as JSON or as a script prints it: a field whose
+    /// name says it holds a secret, camelCase and snake_case alike
+    /// (currentPassword, accessToken, client_secret, sessionId), or ends in a
+    /// short code's name (otp, cvv, pin), keeps its name and loses its value.
+    /// Some fields that hold nothing secret go too; none that do is kept.
+    private static let secretField =
+        #"["']?(?:[A-Za-z0-9_$\-]*(?:password|passwd|passphrase|secret|token|session|api_?key|credential)[A-Za-z0-9_$\-]*"#
+        + #"|[A-Za-z0-9_$\-]*(?:otp|cvv|cvc|pin))["']?\s*[:=]\s*(?:"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|-?\d+(?:\.\d+)?)"#
 }
 
 // MARK: - what an agent is given

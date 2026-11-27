@@ -148,10 +148,13 @@ A change to any of these needs its tests (`Agent*Tests.swift`) and a probe run.
   origin with its port (localhost, `*.localhost`, 127.0.0.0/8, `[::1]`),
   held in memory, made from one tab of the user's, never a private one. It
   ends when that tab's view goes (closed, a pin put down, asleep), when the
-  tab leaves the origin, and on Stop. Never add a local host to
-  `PrivateNetwork.allowed`, which knows no ports: the way in is a per-tab
-  rule list with `if-top-url` and `DevChain` in `vet`, which refuses links
-  and redirects from public pages. Console and requests are heard only on
+  tab leaves the origin, and when the task it was for ends, however it
+  ends. Never add a local host to `PrivateNetwork.allowed`, which knows no
+  ports: the way in is a per-tab rule list with `if-top-url` and `DevChain`
+  in `vet`, which refuses links and redirects from public pages; under a
+  granted page no frame of another origin loads (`DevFrames`). The compiled
+  list names the origins, so it is removed from WebKit's store when nothing
+  is granted and at launch. Console and requests are heard only on
   the run's own tabs, never the tab it was granted from (which isn't read at
   all), and nothing once the baton has been passed or the tabs handed over.
   What is heard comes from wrappers in the page's world: forgeable, so only

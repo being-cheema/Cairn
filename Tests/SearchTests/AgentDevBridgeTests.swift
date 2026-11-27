@@ -178,6 +178,24 @@ final class AgentDevBridgeTests: XCTestCase {
         XCTAssertTrue(admits(&chain, "http://localhost:3000/start", from: none, committed: nil))
     }
 
+    /// Under a granted page, a frame of anywhere else is never loaded: a
+    /// public frame would reach the local server under the top page's
+    /// exceptions, and one that redirects back would come in as the app.
+    func testUnderAGrantedPageOnlyItsOwnFramesLoad() {
+        let granted: Set = [app]
+        func refused(_ to: String, sub: Bool = true, top: DevOrigin?) -> Bool {
+            DevFrames.refuses(url(to), subframe: sub, top: top, granted: granted)
+        }
+        XCTAssertTrue(refused("https://ads.example/frame", top: app), "a public frame under the app")
+        XCTAssertTrue(refused("http://127.0.0.1:9/bounce", top: app), "a frame of another local name")
+        XCTAssertTrue(refused("http://localhost:3001/", top: app), "another port, not granted")
+        XCTAssertFalse(refused("http://localhost:3000/frame", top: app), "the app's own frame")
+        XCTAssertFalse(refused("about:blank", top: app), "no load at all")
+        XCTAssertFalse(refused("https://ads.example/frame", sub: false, top: app), "the tab itself is the chain's to judge")
+        XCTAssertFalse(refused("https://ads.example/frame", top: origin("http://localhost:4000/")), "under a page not granted")
+        XCTAssertFalse(refused("https://ads.example/frame", top: nil))
+    }
+
     func testTheEngineLetsABridgedAddressThroughButNeverABlockedSite() {
         XCTAssertEqual(NavigationPolicyEngine.destination("http://localhost:3000/", allowed: []), .failure(.privateAddress))
         XCTAssertNotNil(try? NavigationPolicyEngine.destination("http://localhost:3000/", allowed: [],
@@ -257,6 +275,22 @@ final class AgentDevBridgeTests: XCTestCase {
         XCTAssertTrue(said.contains("app.js") && said.contains(":12:5"), "where it happened is kept:\n\(said)")
         XCTAssertTrue(said.contains("Failed GET"))
         XCTAssertEqual(DevScrub.text("TypeError: undefined is not a function?"), "TypeError: undefined is not a function?")
+    }
+
+    func testSecretsAnAppLogsAsJSONAreHidden() {
+        let said = DevScrub.text("""
+            login failed {"currentPassword":"cp-111","newPassword":"np-222","accessToken":"at-333",\
+            "refreshToken":"rt-444","clientSecret":"cs-555","sessionId":"sid-666","otp":"123456","cvv":"321",\
+            "pin":4821,"user_pin":"9876","apiKey":"ak-777","name":"Ada","spinner":"on","code":500}
+            and {currentPassword: 'cp-888', otp: 654321}
+            """)
+        for secret in ["cp-111", "np-222", "at-333", "rt-444", "cs-555", "sid-666", "123456", "321", "4821", "9876",
+                       "ak-777", "cp-888", "654321"] {
+            XCTAssertFalse(said.contains(secret), "\(secret) is still there:\n\(said)")
+        }
+        for kept in ["Ada", "\"spinner\":\"on\"", "500", "currentPassword"] {
+            XCTAssertTrue(said.contains(kept), "\(kept) should stay:\n\(said)")
+        }
     }
 
     func testTheLogIsCapped() {
@@ -439,6 +473,8 @@ final class AgentDevBridgeTests: XCTestCase {
         let origin: DevOrigin
         let main: LocalPageServer
         let second: LocalPageServer
+        /// The "public" server the app's page links to.
+        let publicSite: LocalPageServer
     }
 
     private static let appPage = #"""
@@ -481,6 +517,12 @@ final class AgentDevBridgeTests: XCTestCase {
             "/two": .init(type: "text/html", body: "<title>Two</title><script>console.error('on two')</script>"),
             "/fail": .init(status: "500 Internal Server Error", type: "text/plain", body: "no"),
             "/delete": .init(type: "text/html", body: "<title>Deleted</title>"),
+            "/api": .init(type: "text/plain", body: "ok"),
+            "/framed": .init(type: "text/html", body: """
+                <title>Framed</title>
+                <iframe src="http://127.0.0.1:\(publicSite.port)/frame-bounce"></iframe>
+                <iframe src="http://127.0.0.1:\(publicSite.port)/frame-call"></iframe>
+                """),
         ])
         defer { main.stop() }
         let inward = try LocalPageServer([
@@ -491,6 +533,10 @@ final class AgentDevBridgeTests: XCTestCase {
         defer { inward.stop() }
         publicSite.put("/bounce", .init(status: "302 Found", type: "text/plain", body: "",
                                         location: "http://localhost:\(main.port)/delete"))
+        publicSite.put("/frame-bounce", .init(status: "302 Found", type: "text/plain", body: "",
+                                              location: "http://localhost:\(main.port)/delete"))
+        publicSite.put("/frame-call", .init(type: "text/html", body:
+            "<script>fetch('http://localhost:\(main.port)/api', {mode: 'no-cors', method: 'POST', body: 'x'})</script>"))
         Store.settings.set(["127.0.0.1"], forKey: "test.agentLocalHosts")
         defer { Store.settings.removeObject(forKey: "test.agentLocalHosts") }
         let browser = Browser()
@@ -500,7 +546,8 @@ final class AgentDevBridgeTests: XCTestCase {
         DevBridge.shared.revokeAll()
         let app = "http://localhost:\(main.port)"
         try await body(browser, Site(app: app, other: "http://localhost:\(second.port)", pub: "http://127.0.0.1:\(inward.port)",
-                                     origin: try XCTUnwrap(DevOrigin(URL(string: app))), main: main, second: second))
+                                     origin: try XCTUnwrap(DevOrigin(URL(string: app))), main: main, second: second,
+                                     publicSite: publicSite))
     }
 
     private func until(_ what: String, _ check: () -> Bool) async throws {
@@ -757,6 +804,38 @@ final class AgentDevBridgeTests: XCTestCase {
         }
     }
 
+    func testAPublicFrameUnderTheAppIsNeverLoaded() async throws {
+        try await withSite { browser, site in
+            try await grant(try await userTab(browser, site.app))
+            try start(browser)
+            let out = try await ask(["do": "open", "url": site.app + "/framed"])
+            XCTAssertEqual(out["title"] as? String, "Framed", text(out))
+            try await Task.sleep(nanoseconds: 1_500_000_000)
+            XCTAssertFalse(site.main.requests.contains("/delete"), "redirected in by a frame: \(site.main.requests)")
+            XCTAssertFalse(site.main.requests.contains("/api"), "called by a public frame: \(site.main.requests)")
+            XCTAssertFalse(site.publicSite.requests.contains { $0.hasPrefix("/frame") },
+                           "the public frames were asked for: \(site.publicSite.requests)")
+        }
+    }
+
+    func testNoGrantIsKeptOnDisk() async throws {
+        try await withSite { browser, site in
+            try await grant(try await userTab(browser, site.app))
+            try start(browser)
+            _ = try await ask(["do": "open", "url": site.app + "/two"])
+            let store = try XCTUnwrap(WKContentRuleListStore.default())
+            func ours() async -> [String] {
+                (await store.availableIdentifiers() ?? []).filter { $0.hasPrefix(DevRules.prefix) }
+            }
+            let during = await ours()
+            XCTAssertEqual(during.count, 1, "one list while it is on: \(during)")
+            DevBridge.shared.revokeAll()
+            for _ in 0..<40 where !(await ours()).isEmpty { try await Task.sleep(nanoseconds: 50_000_000) }
+            let after = await ours()
+            XCTAssertTrue(after.isEmpty, "nothing of the grant left on disk: \(after)")
+        }
+    }
+
     func testForgedAndStrayMessagesAreDropped() async throws {
         try await withSite { browser, site in
             let mine = try await userTab(browser, site.app)
@@ -910,7 +989,7 @@ final class AgentDevBridgeTests: XCTestCase {
             agent.reload()
             try await Task.sleep(nanoseconds: 1_000_000_000)
             XCTAssertTrue(DevBridge.shared.log(of: agent.id).isEmpty, "yours now")
-            XCTAssertEqual(DevBridge.shared.origins, [site.origin], "your grant is yours to keep")
+            XCTAssertTrue(DevBridge.shared.origins.isEmpty, "a grant ends with the task it was for")
         }
     }
 

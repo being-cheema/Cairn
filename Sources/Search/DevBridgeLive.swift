@@ -40,6 +40,8 @@ final class DevBridge: ObservableObject {
     /// What the wrappers' messages travel under, new each launch.
     private let event = "cairn-dev-" + UUID().uuidString.lowercased()
 
+    private init() { purgeLeftovers() }
+
     // MARK: - your tabs
 
     /// The origin it could be turned on for from this tab: a local page of
@@ -145,7 +147,9 @@ final class DevBridge: ObservableObject {
             redress(id)
             let on = [tab.committed, tab.address, tab.built?.url].compactMap { DevOrigin($0) }
             if let held = watched[id]?.logOrigin, lost.contains(held) { clear(id) }
-            guard on.contains(where: lost.contains) else {
+            // On any origin granted before, not only the one gone: its page
+            // may hold a socket open to the lost one, which no rule closes.
+            guard !lost.isEmpty, on.contains(where: before.contains) else {
                 tab.rearm()
                 continue
             }
@@ -154,7 +158,29 @@ final class DevBridge: ObservableObject {
             tab.built?.stopLoading()
             if let blank = URL(string: "about:blank") { tab.built?.load(URLRequest(url: blank)) }
         }
-        if !now.isEmpty { ready {} }
+        if !now.isEmpty { ready {} } else { forgetCompiled() }
+    }
+
+    /// Nothing granted: the compiled list, which names the origins, goes from
+    /// WebKit's store too. A grant is memory only.
+    private func forgetCompiled() {
+        guard let name = compiled?.name else { return }
+        compiled = nil
+        WKContentRuleListStore.default().removeContentRuleList(forIdentifier: name) { _ in }
+    }
+
+    /// Lists a run before this one left, quit or crashed mid-grant: none of
+    /// this run's own.
+    private func purgeLeftovers() {
+        guard let store = WKContentRuleListStore.default() else { return }
+        store.getAvailableContentRuleListIdentifiers { [weak self] names in
+            MainActor.assumeIsolated {
+                for name in names ?? [] where name.hasPrefix(DevRules.prefix) {
+                    guard let self, self.compiled?.name != name, !self.compiling.contains(where: { $0.name == name }) else { continue }
+                    store.removeContentRuleList(forIdentifier: name) { _ in }
+                }
+            }
+        }
     }
 
     // MARK: - the tab's life
@@ -247,6 +273,9 @@ final class DevBridge: ObservableObject {
                     for id in Array(self.watched.keys) { self.redress(id) }
                     // One compiled list on disk at a time.
                     if let old { WKContentRuleListStore.default().removeContentRuleList(forIdentifier: old) { _ in } }
+                } else if list != nil, self.compiled?.name != name {
+                    // Made for grants that have changed since: not kept.
+                    WKContentRuleListStore.default().removeContentRuleList(forIdentifier: name) { _ in }
                 }
                 waiting.forEach { $0() }
             }
@@ -284,6 +313,12 @@ final class DevBridge: ObservableObject {
             return at == origin && source.origin == origin ? origin : nil
         }
         return entry.chain.admits(url, origin: origin, mainFrame: main, source: source, committed: DevOrigin(here)) ? origin : nil
+    }
+
+    /// A frame of another origin, under an agent tab's granted page.
+    func keepsOut(_ action: WKNavigationAction, on tab: Tab) -> Bool {
+        guard watched[tab.id] != nil, let url = action.request.url, let frame = action.targetFrame else { return false }
+        return DevFrames.refuses(url, subframe: !frame.isMainFrame, top: DevOrigin(tab.committed), granted: origins)
     }
 
     // MARK: - listening
@@ -364,7 +399,16 @@ final class DevClickView: NSView {
 
     required init?(coder: NSCoder) { nil }
 
-    func act(_ action: @escaping (NSEvent, NSView, TimeInterval) -> Void) { self.action = action }
+    /// What it is the switch for; another, and it starts its wait again.
+    private var key: AnyHashable?
+
+    func act(_ action: @escaping (NSEvent, NSView, TimeInterval) -> Void, for key: AnyHashable) {
+        self.action = action
+        // The same view drawn again for another tab is a new switch to that
+        // tab: a click is taken only once it has been there a moment.
+        if self.key != key { shownAt = ProcessInfo.processInfo.systemUptime }
+        self.key = key
+    }
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
@@ -403,7 +447,7 @@ struct DevBridgeSwitch: View {
                           + (bridge.granted(from: tab) == nil ? ", turned on from another tab" : "") + ". Click to turn it off.")
             } else {
                 words("Turn On Bridge", on: false)
-                    .overlay(Spot { [weak browser] event, view, shownAt in
+                    .overlay(Spot(key: tab.id) { [weak browser] event, view, shownAt in
                         DevBridge.shared.enable(tab, event: event, on: view, shownAt: shownAt) { [weak browser] origin in
                             browser?.announce("Dev Bridge on for \(origin.short), until this tab closes or leaves it")
                         }
@@ -425,8 +469,13 @@ struct DevBridgeSwitch: View {
     }
 
     private struct Spot: NSViewRepresentable {
+        let key: Tab.ID
         let action: (NSEvent, NSView, TimeInterval) -> Void
-        func makeNSView(context: Context) -> DevClickView { DevClickView(action) }
-        func updateNSView(_ view: DevClickView, context: Context) { view.act(action) }
+        func makeNSView(context: Context) -> DevClickView {
+            let view = DevClickView(action)
+            view.act(action, for: key)
+            return view
+        }
+        func updateNSView(_ view: DevClickView, context: Context) { view.act(action, for: key) }
     }
 }
