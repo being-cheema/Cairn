@@ -2350,12 +2350,16 @@ final class AgentControl: ObservableObject {
                 let spec = request["key"] as? String ?? ""
                 func send(_ focused: AgentGate.Target?, on host: String?) {
                     guard self.live(session) else { return answer(AgentRefusal(code: "stopped", message: "Stopped in \(Brand.name)").said) }
-                    PageHands.key(tab.web, code: key.code, characters: key.characters, flags: key.flags)
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-                        self?.settle(tab, session, timeout: 10) { out in
-                            self?.record(MacroStep(kind: .press, tab: 0, host: host, role: focused?.role, name: focused?.label, key: spec),
-                                         on: tab, session, if: out)
-                            answer(out)
+                    let before = tab.address
+                    self.page(tab, session, PageScripts.outcomeStart()) { _ in
+                        guard self.live(session) else { return answer(AgentRefusal(code: "stopped", message: "Stopped in \(Brand.name)").said) }
+                        PageHands.key(tab.web, code: key.code, characters: key.characters, flags: key.flags)
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                            self?.settle(tab, session, timeout: 10) { out in
+                                self?.record(MacroStep(kind: .press, tab: 0, host: host, role: focused?.role, name: focused?.label, key: spec),
+                                             on: tab, session, if: out)
+                                self?.observed(tab, session, before: before, out, answer)
+                            }
                         }
                     }
                 }
@@ -2925,18 +2929,25 @@ final class AgentControl: ObservableObject {
                     self.mark(tab, Self.doing("Clicking", seen["gate"]), seen["box"], click: true)
                     let aimed = AgentGate.Target(seen["gate"]) ?? AgentGate.Target()
                     let host = tab.pageAddress?.host()?.lowercased()
-                    guard let at = seen["at"] as? [Double], PageHands.click(tab.web, at: at) else {
+                    guard let at = seen["at"] as? [Double] else {
                         answer(AgentRefusal(code: "not_clicked", message: "The page had nowhere to click").said)
                         return
                     }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        self.settle(tab, session, timeout: request["timeout"] as? Double ?? 10) { out in
-                            var out = out
-                            out["page"] = page
-                            out["navigated"] = tab.address != before
-                            self.record(MacroStep(kind: .click, tab: 0, host: host, role: aimed.role, name: aimed.label),
-                                        on: tab, session, if: out)
-                            answer(out)
+                    // Watched from just before the click, so what it does is seen.
+                    self.page(tab, session, PageScripts.outcomeStart()) { _ in
+                        guard self.live(session), PageHands.click(tab.web, at: at) else {
+                            answer(AgentRefusal(code: "not_clicked", message: "The page had nowhere to click").said)
+                            return
+                        }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            self.settle(tab, session, timeout: request["timeout"] as? Double ?? 10) { out in
+                                var out = out
+                                out["page"] = page
+                                out["navigated"] = tab.address != before
+                                self.record(MacroStep(kind: .click, tab: 0, host: host, role: aimed.role, name: aimed.label),
+                                            on: tab, session, if: out)
+                                self.observed(tab, session, before: before, out, answer)
+                            }
                         }
                     }
                 }
@@ -2986,6 +2997,7 @@ final class AgentControl: ObservableObject {
                                hint: "Type the text without them, then use press Enter.")
         }
         let replace = request["replace"] as? Bool ?? true
+        let before = tab.address
         func touch(_ how: String, _ text: String?, _ then: @escaping ([String: Any]) -> Void) {
             page(tab, session, PageScripts.touch(key: Self.key, snap: snap, index: index, how: how, text: text, replace: replace, strict: true)) { result in
                 switch result {
@@ -3007,7 +3019,7 @@ final class AgentControl: ObservableObject {
                 // Never kept, not even as a step with a blank.
                 self?.spoilMacro(session, "it typed into a secret field")
             }
-            answer(out)
+            self?.observed(tab, session, before: before, out, answer)
         }
         func finish(_ out: [String: Any]) {
             guard request["submit"] as? Bool == true else { return kept(out) }
@@ -3050,6 +3062,8 @@ final class AgentControl: ObservableObject {
             aimed = AgentGate.Target(seen["gate"])
             self?.mark(tab, Self.doing("Typing into", seen["gate"]), seen["box"])
         }
+        // Watched from before the typing, for what it does to the page.
+        page(tab, session, PageScripts.outcomeStart()) { _ in }
         if request["keys"] as? Bool == true {
             // Real key events, into the field once focused. A field in the
             // room off screen may take the focus; one in your window you
@@ -3065,6 +3079,26 @@ final class AgentControl: ObservableObject {
             }
         } else {
             touch("set", text) { finish($0) }
+        }
+    }
+
+    /// `out` with what the page showed of the action (ActionOutcome), once
+    /// asked. Not for an answer that is an error: nothing was done. Never
+    /// changes what was asked or held; if the page can't be asked and its
+    /// address didn't change, no outcome is said rather than a guessed one.
+    private func observed(_ tab: Tab, _ session: AgentSession, before: URL?, _ out: [String: Any],
+                          _ answer: @escaping ([String: Any]) -> Void) {
+        guard out["error"] == nil else { return answer(out) }
+        let moved = tab.address != before
+        page(tab, session, PageScripts.outcomeEnd()) { result in
+            var out = out
+            switch result {
+            case .success(let seen):
+                out.merge(ActionOutcome.fields(.init(page: seen, addressChanged: moved))) { mine, _ in mine }
+            case .failure:
+                if moved { out.merge(ActionOutcome.fields(.init(page: nil, addressChanged: true))) { mine, _ in mine } }
+            }
+            answer(out)
         }
     }
 

@@ -94,12 +94,14 @@ public enum MCPTools {
                  required: ["urls"]),
             tool("click", .click,
                  "Click an element from the last read_page with a real mouse click at its middle, after checking it "
-                     + "is attached, visible and not covered. Returns the page's state after any navigation it started.",
+                     + "is attached, visible and not covered. Returns the page's state after any navigation it started, and an outcome "
+                     + "(navigated, dom_mutated, network_settled or no_effect) from the first 400 ms after: it informs only, and "
+                     + "network_settled is best effort (the page's own fetch/XHR that finished in time). no_effect may be a dead click, or a slow one.",
                  ["element": element, "timeout": seconds], required: ["element"]),
             tool("type", .type,
                  "Put text into a field from the last read_page, replacing what it holds (replace: false appends), "
                      + "and check the field holds it afterwards. keys: true types real key events instead of setting the "
-                     + "value. submit: true then submits its form.",
+                     + "value. submit: true then submits its form. Answers with an outcome as click does.",
                  ["element": element, "text": string(), "replace": boolean(), "keys": boolean(), "submit": boolean(),
                   "timeout": seconds],
                  required: ["element", "text"]),

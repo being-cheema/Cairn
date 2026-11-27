@@ -603,6 +603,49 @@ enum PageScripts {
         """#, [])
     }
 
+    /// The page watched for what an action does to it (ActionOutcome): the
+    /// document's changes and the page's own fetch, XHR and beacons from
+    /// resource timing, for the first 400 ms after this. The watch is
+    /// Search's, in Search's world: the page can't see it or make it say more.
+    /// A script of the page's that calls fetch is not wrapped, because the
+    /// two worlds have each their own globals: resource timing is shared,
+    /// which is why the network count is best effort.
+    static func outcomeStart() -> String {
+        call(#"""
+        (function (window) {
+          var old = globalThis.__searchOutcome;
+          if (old && old.watch) old.watch.disconnect();
+          var now = performance.now();
+          var s = globalThis.__searchOutcome = { t0: now, until: now + window, mutations: 0, watch: null };
+          s.watch = new MutationObserver(function (records) {
+            if (performance.now() <= s.until) s.mutations += records.length;
+          });
+          s.watch.observe(document, { subtree: true, childList: true, attributes: true, characterData: true });
+          return JSON.stringify({ ok: true });
+        })
+        """#, [Int(ActionOutcome.window * 1000)])
+    }
+
+    /// What the watch of `outcomeStart` saw, and the watch taken away. Gone
+    /// when the document was replaced since: the page navigated.
+    static func outcomeEnd() -> String {
+        call(#"""
+        (function () {
+          var s = globalThis.__searchOutcome;
+          if (!s) return JSON.stringify({ ok: true, gone: true });
+          if (s.watch) { s.pending = s.watch.takeRecords().length; s.watch.disconnect(); }
+          delete globalThis.__searchOutcome;
+          var requests = 0;
+          try {
+            performance.getEntriesByType('resource').forEach(function (e) {
+              if (e.startTime >= s.t0 && e.startTime <= s.until && /^(fetch|xmlhttprequest|beacon)$/.test(e.initiatorType)) requests++;
+            });
+          } catch (e) {}
+          return JSON.stringify({ ok: true, gone: false, mutations: s.mutations + (s.pending || 0), requests: requests });
+        })
+        """#, [])
+    }
+
     /// One element of the last read under `key`: "click", "press", "scroll",
     /// "focus", "set", "submit", "verify" or "check". `strict` refuses file
     /// fields. A nil text for "verify" checks against what "focus" kept.
