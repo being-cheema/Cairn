@@ -158,6 +158,9 @@ struct SearchApp: App {
                     .shortcut("edit.copyMarkdown")
                     .disabled(!(browser.active?.isWeb ?? false))
                 Divider()
+                Button("Ask About Selection…") { browser.askAboutSelection() }
+                    .shortcut("edit.askSelection")
+                    .disabled(!(browser.active?.isWeb ?? false))
                 Button("Find on Page…") { browser.openFind() }
                     .shortcut("edit.find")
                     // On the Settings tab, ⌘F finds a setting.

@@ -235,6 +235,8 @@ struct Command: Identifiable {
         Command("edit.pasteMatchStyle", "Paste and Match Style", .edit, KeyCombo("v", shift: true, option: true)) { _ in
             Browser.pasteMatchingStyle()
         },
+        // ⌘E ("Use Selection for Find") is not used here; it opens the card, and sends nothing.
+        Command("edit.askSelection", "Ask About Selection…", .edit, KeyCombo("e")) { $0.askAboutSelection() },
         Command("edit.find", "Find on Page…", .edit, KeyCombo("f")) { $0.openFind() },
         Command("edit.findNext", "Find Next", .edit, KeyCombo("g")) { $0.look(forward: true) },
         Command("edit.findPrevious", "Find Previous", .edit, KeyCombo("g", shift: true)) { $0.look(forward: false) },
