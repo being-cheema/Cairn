@@ -10,8 +10,10 @@ import Foundation
 //
 // What counts is tuned to leave ordinary research alone. A passage of twelve
 // words or more read elsewhere is asked about wherever it goes. A long
-// identifier (an order number, a key) is too, unless it goes into a search
-// field or a search engine's address, which is where model numbers belong.
+// identifier (an order number, a key) is too, unless it looks like a product or
+// model number (24 characters at most, not secret-shaped) going into a search
+// field or a search engine's address. Search is page-named, so a longer or
+// token-like value asks wherever it goes.
 // Text a page's own words had flagged as instructions (quarantined) is asked
 // about at a six-word run, anywhere off its site. A link's address, and the
 // words of a link's or page's title, as read, are not a flow by themselves:
@@ -129,7 +131,9 @@ struct TaintLedger {
         guard !words.isEmpty, !titles.contains(words.joined(separator: " ")) else { return nil }
         let runs = Self.shingles(words, run: Self.run)
         let passages = Self.shingles(words, run: Self.passage)
-        let identifiers = searching ? [] : Self.identifiers(words)
+        // A search box is page-named, so only what looks like a product or
+        // model number goes into one unasked: not a long or token-shaped value.
+        let identifiers = searching ? Self.identifiers(words).filter { !Self.looksLikeModelNumber($0) } : Self.identifiers(words)
         for entry in entries.reversed() where entry.origin != origin {
             let copied = entry.quarantined ? !runs.isDisjoint(with: entry.shingles) : !passages.isDisjoint(with: entry.passages)
             if copied || !identifiers.isDisjoint(with: entry.identifiers) {
@@ -157,6 +161,11 @@ struct TaintLedger {
             if joined.count >= shortest { out.insert(joined.hashValue) }
         }
         return out
+    }
+
+    /// Short, and not shaped like a key or a secret.
+    static func looksLikeModelNumber(_ token: String) -> Bool {
+        token.count <= 24 && !NavigationPolicyEngine.looksEncoded(token) && TypedSecrets.hidden(in: token) == token
     }
 
     private static func identifiers(_ words: [String]) -> Set<String> {

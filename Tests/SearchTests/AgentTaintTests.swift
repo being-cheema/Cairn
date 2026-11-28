@@ -114,6 +114,19 @@ final class AgentTaintPrecisionTests: XCTestCase {
                      "ten words of a page are not a passage")
     }
 
+    func testOnlyAModelNumberGoesUnaskedIntoSearch() throws {
+        var l = TaintLedger()
+        let token = String(repeating: "a1b2c3d4", count: 4)
+        l.record("Your key is \(token) and the headphones are WH-1000XM5 sold by shop one.", origin: "a.example", quarantined: false)
+        XCTAssertEqual(l.source(of: token, into: "evil.example", searching: true)?.origin, "a.example")
+        let url = try XCTUnwrap(URL(string: "https://evil.example/search?q=\(token)"))
+        XCTAssertTrue(TaintLedger.isSearch(url))
+        XCTAssertNotNil(l.source(of: TaintLedger.text(of: url), into: "evil.example", searching: TaintLedger.isSearch(url)))
+        XCTAssertNil(l.source(of: "WH-1000XM5", into: "shop.example", searching: true))
+        XCTAssertFalse(TaintLedger.looksLikeModelNumber(token))
+        XCTAssertTrue(TaintLedger.looksLikeModelNumber("hx99qz7731lmn04"))
+    }
+
     func testAnIdentifierInAnyOtherFieldIsStillAsked() {
         XCTAssertEqual(ledger().source(of: "HX99QZ7731LMN04", into: "shop.example")?.origin, "news.example")
     }
