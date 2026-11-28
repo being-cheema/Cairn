@@ -2513,14 +2513,15 @@ final class AgentControl: ObservableObject {
                     throw AgentRefusal(code: "bad_text", message: "A question with no control characters but tab and newline")
                 }
                 let claude = browser.claude
-                guard claude.offer(prompt) else {
+                guard claude.offer(prompt, by: ObjectIdentifier(session)) else {
                     throw AgentRefusal(code: "box_busy", message: "The Claude panel is busy or has something typed in it",
                                        hint: "Ask the person to send or clear it, then try again.")
                 }
                 if !(browser.sidePanelShown && browser.sidePanel == .claude) { browser.toggleClaudePanel() }
                 answer(["waiting": true, "note": "The question is in the Claude panel's box. Nothing is asked until the person presses Send there."])
             case .askPoll:
-                let seen = browser.claude.progress(from: min(max(request["offset"] as? Int ?? 0, 0), 10_000_000))
+                let seen = browser.claude.progress(from: min(max(request["offset"] as? Int ?? 0, 0), 10_000_000),
+                                                   for: ObjectIdentifier(session))
                 answer(seen)
             case .bye:
                 answer(["bye": true])

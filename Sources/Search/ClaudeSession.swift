@@ -52,21 +52,27 @@ final class ClaudeSession: ObservableObject {
     /// The question the `cairn ask` command put in the box (CairnCLI), to
     /// follow if you send it as it stands.
     private var offered: String?
+    /// The connection that offered it: only that one is told how it went,
+    /// since the answer can carry what you attached to the message.
+    private var offeredBy: ObjectIdentifier?
 
     /// Puts a question in the box for you to send. False when the panel is
     /// running or its box already holds something of yours.
-    func offer(_ prompt: String) -> Bool {
+    func offer(_ prompt: String, by asker: ObjectIdentifier) -> Bool {
         guard !running, draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
         draft = prompt
         offered = prompt
+        offeredBy = asker
         return true
     }
 
     /// How the offered question has gone, from `offset` characters into its
     /// answer: waiting for your Send, running, done, or withdrawn (what you
     /// sent isn't what was offered, or the box was cleared).
-    func progress(from offset: Int) -> [String: Any] {
-        Self.progress(offered: offered, draft: draft, turns: turns, from: offset)
+    func progress(from offset: Int, for asker: ObjectIdentifier) -> [String: Any] {
+        // Another connection, or none: nothing of the panel's conversation.
+        guard offeredBy == asker else { return ["state": "withdrawn"] }
+        return Self.progress(offered: offered, draft: draft, turns: turns, from: offset)
     }
 
     static func progress(offered: String?, draft: String, turns: [Turn], from offset: Int) -> [String: Any] {

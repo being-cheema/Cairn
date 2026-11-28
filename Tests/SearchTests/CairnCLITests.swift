@@ -106,15 +106,22 @@ final class CairnCLITests: XCTestCase {
         Browsers.register(browser)
         defer { Browsers.discard(browser) }
         let claude = browser.claude
-        XCTAssertTrue(claude.offer("what is this page"))
+        // Held, so neither identifier can be reused by the other.
+        let meObject = NSObject(), otherObject = NSObject()
+        defer { withExtendedLifetime((meObject, otherObject)) {} }
+        let me = ObjectIdentifier(meObject), other = ObjectIdentifier(otherObject)
+        XCTAssertTrue(claude.offer("what is this page", by: me))
         XCTAssertEqual(claude.draft, "what is this page")
         XCTAssertTrue(claude.turns.isEmpty)
         XCTAssertFalse(claude.running)
-        XCTAssertEqual(claude.progress(from: 0)["state"] as? String, "waiting")
+        XCTAssertEqual(claude.progress(from: 0, for: me)["state"] as? String, "waiting")
+        // Another connection learns nothing of it, nor of the answer.
+        XCTAssertEqual(claude.progress(from: 0, for: other)["state"] as? String, "withdrawn")
+        XCTAssertNil(claude.progress(from: 0, for: other)["text"])
         // Not over something the person has typed.
-        XCTAssertFalse(claude.offer("another"))
+        XCTAssertFalse(claude.offer("another", by: other))
         claude.draft = ""
-        XCTAssertEqual(claude.progress(from: 0)["state"] as? String, "withdrawn")
+        XCTAssertEqual(claude.progress(from: 0, for: me)["state"] as? String, "withdrawn")
     }
 
     func testProgressFollowsOnlyTheTurnWithTheOfferedQuestion() {
