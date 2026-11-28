@@ -107,6 +107,22 @@ final class AgentGateTests: XCTestCase {
         return t
     }
 
+    func testClickingABoxThatAgreesIsHeldJustAsFillFormTickingItIs() throws {
+        let rules = AgentGate.Rules.standard
+        for label in ["I agree to the terms", "Accept", "I consent", "Privacy policy", "Subscribe", "Newsletter",
+                      "Opt-in", "Marketing emails", "I authorize it", "Promotional emails", "Email me offers"] {
+            for type in ["checkbox", "radio"] {
+                let held = try XCTUnwrap(AgentGate.hold(click: box(label, type: type), on: page, sites: [], rules: rules, registrable: reg), label)
+                XCTAssertEqual(held.reason, .send, label)
+                XCTAssertTrue(held.summary.contains(label), held.summary)
+            }
+        }
+        XCTAssertNil(AgentGate.hold(click: box("Remember me"), on: page, sites: [], rules: rules, registrable: reg))
+        XCTAssertNil(AgentGate.hold(click: box("I agree to the terms"), on: page, sites: [], rules: .init(), registrable: reg), "gate off")
+        var link = AgentGate.Target(); link.tag = "a"; link.role = "link"; link.label = "Terms and privacy"
+        XCTAssertNil(AgentGate.hold(click: link, on: page, sites: [], rules: rules, registrable: reg), "a link is not a box")
+    }
+
     func testTickingABoxThatAgreesConsentsOrSubscribesIsHeldLikeAClick() throws {
         let rules = AgentGate.Rules.standard
         XCTAssertNil(AgentGate.hold(fill: [box("Remember me")], on: page, sites: [], rules: rules, registrable: reg))

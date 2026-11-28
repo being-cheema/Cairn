@@ -170,6 +170,12 @@ enum AgentGate {
             if target.pressable, matches(sendWords, target.label) {
                 return held(.send, "Send or post: press \(pressed) on \(where_)")
             }
+            // A box that agrees, consents or signs up, as fill_form asks about
+            // it: ticking it by click is the same act.
+            if ["checkbox", "radio"].contains(target.type.lowercased()), target.tag.lowercased() == "input",
+               matches(consentWords, target.label) {
+                return held(.send, "Tick a box that agrees or signs up: “\(name)” on \(where_)")
+            }
             // A form that only looks something up (GET, nothing secret) is a
             // search, not a commitment.
             if target.submits, !(target.method == "get" && !target.hasPassword && !target.hasCard) {
