@@ -212,7 +212,7 @@ enum ActionReceipt {
     /// The receipt for an action, as it goes in the answer. `url` turns an
     /// address into the one an agent may be given (AgentRules.url);
     /// `label` marks the page's words.
-    static func make(id: String, action: String, origin: String, before: PageState, after: PageState, dedupe: String,
+    static func make(id: String, action: String, origin: String, before: PageState, after: PageState,
                      url: (String) -> String, label: (String) -> String) -> [String: Any] {
         let delta = PageDelta(from: before, to: after)
         var focus: [[String: String]] = []
@@ -225,21 +225,24 @@ enum ActionReceipt {
         let seen = after.requests.suffix(min(fresh, after.requests.count)).map { r -> [String: Any] in
             ["via": r.via, "origin": r.origin, "status": r.status.map { $0 as Any } ?? "unknown"]
         }
-        var network: [String: Any] = ["requests": seen, "best_effort": bestEffort]
-        if fresh > after.requests.count || after.requestsFull { network["incomplete"] = true }
+        // Only the parts that saw something: an empty list is tokens for
+        // nothing. The page's hashes and the dedupe key stay in Cairn (the
+        // ledger and the loop breaker use them); the model is not sent them.
+        var effects: [String: Any] = [:]
+        if !seen.isEmpty || delta.requests > 0 {
+            var network: [String: Any] = ["requests": seen, "best_effort": bestEffort]
+            if fresh > after.requests.count || after.requestsFull { network["incomplete"] = true }
+            effects["network"] = network
+        }
+        if before.url != after.url { effects["navigations"] = [["from": url(before.url), "to": url(after.url)]] }
+        if delta.storageChanges > 0 { effects["storage_writes"] = ["changed": delta.storageChanges, "best_effort": bestEffort] }
+        if !focus.isEmpty { effects["focus_changes"] = focus }
         var out: [String: Any] = [
             "action_id": id, "action": action,
             "eid": after.target?.eid ?? before.target?.eid ?? "",
-            "before_hash": before.hash, "after_hash": after.hash,
             "delta_summary": delta.summary,
-            "side_effects": [
-                "network": network,
-                "navigations": before.url == after.url ? [] : [["from": url(before.url), "to": url(after.url)]],
-                "storage_writes": ["changed": delta.storageChanges, "best_effort": bestEffort],
-                "focus_changes": focus,
-            ] as [String: Any],
-            "dedupe_key": dedupe,
         ]
+        if !effects.isEmpty { out["side_effects"] = effects }
         if before.hash == after.hash { out["unchanged"] = true }
         return out
     }

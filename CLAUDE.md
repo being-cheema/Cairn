@@ -144,7 +144,10 @@ A change to any of these needs its tests (`Agent*Tests.swift`) and a probe run.
 - An action's receipt (`ActionReceipt.swift`) lists only what the page's own
   scripts can see (resource timing, storage by key) and says it is best
   effort. `fill_form` is for an agent's own tabs, refuses the whole call if
-  any field is a secret or a file, and never sends. A repeat of an action on
+  any field is a secret or a file, and never sends; ticking a checkbox or
+  radio that agrees, consents or signs up is held first as a click would be
+  (`AgentGate.hold(fill:)`). Allowing a repeat also answers that action's own
+  send or submit question once (`AgentSession.repeatPass`), nothing else. A repeat of an action on
   a page it left as it was is held (`AgentGate.Reason.repeatAction`), not
   dropped. `disambiguate` is answered only by a fresh click on a badge
   (`AgentControl.choose`), and an `intent` is shown only as the agent's own

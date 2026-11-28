@@ -15,6 +15,10 @@ final class AgentActionTests: XCTestCase {
             "/": .init(type: "text/html", body: """
                 <title>Start</title>
                 <button id=count onclick="n.textContent = +n.textContent + 1">Count</button>
+                <button id=post onclick="n.textContent = +n.textContent + 1">Post comment</button>
+                <button id=buy onclick="n.textContent = +n.textContent + 1">Buy now</button>
+                <label><input type=checkbox id=remember> Remember me</label>
+                <label><input type=checkbox id=agree> I agree to the terms</label>
                 <button id=idle>Nothing</button> <button id=send>Send message</button> <span id=n>0</span>
                 <form action="/found" method=get><label>Email <input name=email type=email required></label>
                 <label>Notes <input name=notes></label><label>Pass <input type=password name=pw></label>
@@ -70,7 +74,9 @@ final class AgentActionTests: XCTestCase {
             var out = try await ask(["do": "click", "page": page, "eid": try XCTUnwrap(eids["Count"])])
             let receipt = try XCTUnwrap(out["receipt"] as? [String: Any], "\(out)")
             XCTAssertEqual(receipt["eid"] as? String, eids["Count"])
-            XCTAssertNotEqual(receipt["before_hash"] as? String, receipt["after_hash"] as? String)
+            XCTAssertNil(receipt["before_hash"], "hashes stay inside Cairn")
+            XCTAssertNil(receipt["dedupe_key"])
+            XCTAssertNil(receipt["unchanged"], "the page changed")
             XCTAssertNil(out["failure"], "\(out)")
             out = try await ask(["do": "click", "page": page, "eid": try XCTUnwrap(eids["Nothing"])])
             XCTAssertEqual(failure(out), "NO_EFFECT", "\(out)")
@@ -91,6 +97,55 @@ final class AgentActionTests: XCTestCase {
             out = try await ask(["do": "click", "page": page, "eid": count]) { reasons.append($0) }
             XCTAssertEqual(reasons, [.repeatAction])
             XCTAssertNotNil(out["receipt"], "allowed by the person's click: it is done")
+        }
+    }
+
+    func testAllowingARepeatAlsoAnswersTheSameActionsOwnSendQuestion() async throws {
+        try await withPage { _, base in
+            let (page, eids) = try await start(base)
+            let post = try XCTUnwrap(eids["Post comment"])
+            var reasons: [AgentGate.Reason] = []
+            _ = try await ask(["do": "click", "page": page, "eid": post]) { reasons.append($0) }
+            XCTAssertEqual(reasons, [.send], "the first time it asks as ever")
+            reasons = []
+            let out = try await ask(["do": "click", "page": page, "eid": post]) { reasons.append($0) }
+            XCTAssertEqual(reasons, [.repeatAction], "one question for the repeat, not that and the send")
+            XCTAssertNotNil(out["receipt"], "\(out)")
+        }
+    }
+
+    func testAnyOtherHoldStillAsksAfterARepeatWasAllowed() async throws {
+        try await withPage { _, base in
+            let (page, eids) = try await start(base)
+            let buy = try XCTUnwrap(eids["Buy now"])
+            var reasons: [AgentGate.Reason] = []
+            _ = try await ask(["do": "click", "page": page, "eid": buy]) { reasons.append($0) }
+            XCTAssertEqual(reasons, [.pay])
+            reasons = []
+            _ = try await ask(["do": "click", "page": page, "eid": buy]) { reasons.append($0) }
+            XCTAssertEqual(reasons, [.repeatAction, .pay], "paying is asked each time")
+        }
+    }
+
+    func testFillFormAsksBeforeTickingABoxThatAgreesAndNotForAPlainOne() async throws {
+        try await withPage { browser, base in
+            let (page, eids) = try await start(base)
+            let agree = try XCTUnwrap(eids["I agree to the terms"]), remember = try XCTUnwrap(eids["Remember me"])
+            var reasons: [AgentGate.Reason] = []
+            var out = try await ask(["do": "fill_form", "page": page, "fields": [["eid": remember, "value": "true"]]]) { reasons.append($0) }
+            XCTAssertEqual(reasons, [], "a plain box is not asked about: \(out)")
+            XCTAssertEqual(out["filled"] as? Int, 1)
+            out = try await ask(["do": "fill_form", "page": page, "fields": [["eid": agree, "value": "true"], ["eid": remember, "value": "false"]]],
+                                approve: false) { reasons.append($0) }
+            XCTAssertEqual(reasons, [.send])
+            XCTAssertEqual((out["error"] as? [String: Any])?["code"] as? String, "declined", "\(out)")
+            let still = try await ask(["do": "read", "page": page])
+            let boxes = (still["nodes"] as? [[String: Any]] ?? []).filter { $0["role"] as? String == "checkbox" }
+            XCTAssertEqual(boxes.compactMap { $0["checked"] as? Bool }, [true, false], "declined: nothing of the form was touched")
+            reasons = []
+            out = try await ask(["do": "fill_form", "page": page, "fields": [["eid": agree, "value": "true"]]]) { reasons.append($0) }
+            XCTAssertEqual(reasons, [.send])
+            XCTAssertEqual(out["filled"] as? Int, 1, "\(out)")
         }
     }
 

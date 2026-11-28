@@ -101,6 +101,37 @@ final class AgentGateTests: XCTestCase {
         XCTAssertEqual(button("Pay").fingerprint, button("Pay").fingerprint)
     }
 
+    private func box(_ label: String, type: String = "checkbox") -> AgentGate.Target {
+        var t = AgentGate.Target()
+        t.tag = "input"; t.type = type; t.role = type; t.label = label
+        return t
+    }
+
+    func testTickingABoxThatAgreesConsentsOrSubscribesIsHeldLikeAClick() throws {
+        let rules = AgentGate.Rules.standard
+        XCTAssertNil(AgentGate.hold(fill: [box("Remember me")], on: page, sites: [], rules: rules, registrable: reg))
+        let agree = try XCTUnwrap(AgentGate.hold(fill: [box("I agree to the terms")], on: page, sites: [], rules: rules, registrable: reg))
+        XCTAssertEqual(agree.reason, .send)
+        XCTAssertTrue(agree.summary.contains("I agree to the terms"))
+        XCTAssertNotNil(AgentGate.hold(fill: [box("Email me offers", type: "radio"), box("Subscribe")], on: page, sites: [], rules: rules, registrable: reg))
+        XCTAssertNil(AgentGate.hold(fill: [box("I agree to the terms")], on: page, sites: [], rules: .init(), registrable: reg), "gate off")
+    }
+
+    func testOneQuestionForTheFormListsEveryBoxItHolds() throws {
+        let held = try XCTUnwrap(AgentGate.hold(fill: [box("Remember me"), box("I agree to the terms"), box("Subscribe to the newsletter")],
+                                                on: page, sites: [], rules: .standard, registrable: reg))
+        XCTAssertTrue(held.summary.contains("I agree to the terms") && held.summary.contains("Subscribe to the newsletter"))
+        XCTAssertFalse(held.summary.contains("Remember me"))
+        let other = try XCTUnwrap(AgentGate.hold(fill: [box("I agree to the terms")], on: page, sites: [], rules: .standard, registrable: reg))
+        XCTAssertNotEqual(held.fingerprint, other.fingerprint, "a changed box is noticed after the answer")
+    }
+
+    func testATextFieldIsNeverHeldByFill() {
+        var field = AgentGate.Target()
+        field.tag = "input"; field.type = "text"; field.role = "textbox"; field.label = "I agree to the terms"
+        XCTAssertNil(AgentGate.hold(fill: [field], on: page, sites: [], rules: .standard, registrable: reg))
+    }
+
     func testEveryAgentRunsUnderBothGates() {
         XCTAssertTrue(AgentGate.Rules.standard.commits)
         XCTAssertTrue(AgentGate.Rules.standard.leaves)

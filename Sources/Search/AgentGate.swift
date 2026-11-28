@@ -180,6 +180,34 @@ enum AgentGate {
         return nil
     }
 
+    /// Words that make a box something to agree to: tick it and a person
+    /// has agreed, consented or signed up, which a plain checkbox is not.
+    static let consentWords = #"\b(agree|accept|consent|terms|privacy|subscribe|newsletter|opt[- ]?in|marketing|authori[sz]e|promotional|offers)\b"#
+
+    /// Boxes (checkboxes and radios) that fill_form would tick, as one
+    /// question. A box is held as a click on it would be, and also when its
+    /// words are of agreeing: fill_form ticks them in the page, past the
+    /// click path, so what a click asks is asked here. Text fields and menus
+    /// are never held. Nil: nothing to ask.
+    static func hold(fill targets: [Target], on page: URL?, sites: Set<String>, rules: Rules,
+                     registrable: (String) -> String = Vault.registrable) -> Hold? {
+        guard rules.commits else { return nil }
+        let where_ = page?.host()?.lowercased() ?? "this page"
+        var held: [(Target, Hold)] = []
+        for target in targets where ["checkbox", "radio"].contains(target.type.lowercased()) && target.tag.lowercased() == "input" {
+            if let hold = hold(click: target, on: page, sites: sites, rules: rules, registrable: registrable) {
+                held.append((target, hold))
+            } else if matches(consentWords, target.label) {
+                held.append((target, Hold(reason: .send, summary: "", fingerprint: target.fingerprint)))
+            }
+        }
+        guard let first = held.first else { return nil }
+        let names = held.map { "“\(quoted($0.0.label))”" }.joined(separator: ", ")
+        return Hold(reason: first.1.reason,
+                    summary: "Tick \(held.count == 1 ? "a box" : "\(held.count) boxes") that agrees or signs up: \(names) on \(where_)",
+                    fingerprint: held.map(\.1.fingerprint).joined(separator: "\u{2}"))
+    }
+
     /// Return pressed in the element the page has focused.
     static func hold(enter target: Target, on page: URL?, rules: Rules) -> Hold? {
         guard rules.commits, target.enter else { return nil }

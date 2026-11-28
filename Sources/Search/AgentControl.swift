@@ -645,6 +645,10 @@ final class AgentSession: ObservableObject, Identifiable {
     /// Cover for one form to be sent without asking again: set by your
     /// Approve, for the tab it was about, and spent by that send (vet).
     fileprivate var sendGrant: NavigationPolicyEngine.SendGrant?
+    /// The person allowed this tab's action to be done again (repeatAction):
+    /// that action's own question to send or submit isn't asked a second
+    /// time. Spent by the first such question, gone with the next action.
+    fileprivate var repeatPass: (tab: Tab.ID, until: TimeInterval)?
     /// Documents its tabs were kept from loading, to say with the next answer.
     fileprivate var blocked: [String] = []
     /// A page of its tab's was refused a site you blocked: for the answer in hand.
@@ -1448,6 +1452,15 @@ final class AgentControl: ObservableObject {
                      showing receipt: FormReceipt? = nil, then: @escaping (HeldAction.Answer) -> Void) {
         var hold = hold
         if hold.intent == nil { hold.intent = session.intent }
+        // Only the same action's own send or submit: pay, sign in, leaving and
+        // anything else still ask.
+        if let pass = session.repeatPass, pass.tab == sending, pass.until > ProcessInfo.processInfo.systemUptime,
+           hold.reason == .send || hold.reason == .submit {
+            session.repeatPass = nil
+            session.sendGrant = .init(tab: pass.tab, to: hold.sends, until: ProcessInfo.processInfo.systemUptime + Self.grantFor)
+            Self.log.notice("repeat allowed by your click also answered its own question: \(hold.reason.rawValue, privacy: .public)")
+            return then(.approved)
+        }
         var answered = false
         let began = ProcessInfo.processInfo.systemUptime
         let held = HeldAction(hold: hold, since: began) { [weak session] verdict in
@@ -3377,6 +3390,7 @@ extension AgentControl {
                                _ answer: @escaping ([String: Any]) -> Void,
                                act: @escaping @MainActor ([String: Any], @escaping ([String: Any]) -> Void) throws -> Void) throws {
         try resolving(request, session, browser, answer) { [self] request in
+            session.repeatPass = nil
             do {
                 let tab: Tab
                 var snap = 0
@@ -3420,7 +3434,7 @@ extension AgentControl {
                                         return answer(out)
                                     }
                                     let id = session.book.next()
-                                    var receipt = ActionReceipt.make(id: id, action: verb, origin: origin, before: before, after: after, dedupe: key,
+                                    var receipt = ActionReceipt.make(id: id, action: verb, origin: origin, before: before, after: after,
                                                                      url: AgentRules.url, label: { Quarantine.label(AgentRules.scrubbed($0)) })
                                     let delta = PageDelta(from: before, to: after)
                                     let submits = before.target?.submits == true || request["submit"] as? Bool == true
@@ -3468,6 +3482,7 @@ extension AgentControl {
                                                   summary: "Do it again: the same \(verb) on \(tab.pageAddress?.host() ?? "this page"), which hasn't changed since it was done")
                         self.ask(hold, session) { verdict in
                             guard verdict == .approved else { return answer(Self.declined(hold, verdict)) }
+                            session.repeatPass = (tab.id, ProcessInfo.processInfo.systemUptime + 60)
                             go()
                         }
                     } else {
@@ -3506,7 +3521,7 @@ extension AgentControl {
         }
         var indices: [Int] = []
         @MainActor func resolve(_ k: Int) {
-            guard k < items.count else { return fill() }
+            guard k < items.count else { return gate() }
             if let named = items[k]["element"] as? String {
                 let parts = named.split(separator: ".")
                 guard parts.count == 3, String(parts[0]) == handle, parts[1] == Substring("s\(snap)"), let i = Int(parts[2].dropFirst()) else {
@@ -3527,6 +3542,40 @@ extension AgentControl {
                     }
                     indices.append(i)
                     resolve(k + 1)
+                }
+            }
+        }
+        /// Where each field is, as a click on it would be probed.
+        @MainActor func probe(_ k: Int, _ found: [AgentGate.Target], _ then: @escaping ([AgentGate.Target]) -> Void) {
+            guard k < indices.count else { return then(found) }
+            page(tab, session, PageScripts.touch(key: Self.key, snap: snap, index: indices[k], how: "probe", text: nil, replace: true, strict: true)) { result in
+                switch result {
+                case .failure(let refusal): answer(refusal.said)
+                case .success(let out): probe(k + 1, found + [AgentGate.Target(out["gate"]) ?? AgentGate.Target()], then)
+                }
+            }
+        }
+        /// fill_form ticks boxes inside the page, which skips the click path's
+        /// question: a box that agrees, consents or signs up is asked about
+        /// here, once for the form, and must still be those boxes after.
+        @MainActor func gate() {
+            // Its own question: a repeat the person allowed doesn't answer this one.
+            session.repeatPass = nil
+            let rules = self.rules(browser)
+            guard rules.commits else { return fill() }
+            probe(0, []) { targets in
+                if let here = AgentGate.site(tab.pageAddress) { session.sites.insert(here) }
+                guard let hold = AgentGate.hold(fill: targets, on: tab.pageAddress, sites: session.sites, rules: rules) else { return fill() }
+                self.ask(hold, session) { verdict in
+                    guard verdict == .approved else { return answer(Self.declined(hold, verdict)) }
+                    probe(0, []) { now in
+                        guard AgentGate.hold(fill: now, on: tab.pageAddress, sites: session.sites, rules: rules)?.fingerprint == hold.fingerprint,
+                              now.map(\.fingerprint) == targets.map(\.fingerprint) else {
+                            return answer(AgentRefusal(code: "changed", message: "The page changed while waiting: not done",
+                                                       hint: "Read the page again and ask once more if it still applies.").said)
+                        }
+                        fill()
+                    }
                 }
             }
         }

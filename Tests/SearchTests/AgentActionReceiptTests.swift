@@ -62,16 +62,31 @@ final class AgentActionReceiptTests: XCTestCase {
         var after = state(hash: "b", url: "https://a.example/next", requests: 2)
         after.requests = [.init(via: "fetch", origin: "https://api.a.example", status: nil), .init(via: "xmlhttprequest", origin: "https://t.example", status: 200)]
         after.focus = .init(eid: "12345678", role: "textbox", name: "Email")
-        let made = ActionReceipt.make(id: "act-1", action: "click", origin: "a.example", before: state(), after: after, dedupe: "k",
-                                      url: { $0 }, label: { $0 })
-        for key in ["action_id", "eid", "before_hash", "after_hash", "delta_summary", "side_effects", "dedupe_key"] { XCTAssertNotNil(made[key], key) }
+        let made = ActionReceipt.make(id: "act-1", action: "click", origin: "a.example", before: state(), after: after, url: { $0 }, label: { $0 })
+        for key in ["action_id", "eid", "delta_summary", "side_effects"] { XCTAssertNotNil(made[key], key) }
+        // Kept inside Cairn for repeats and the loop breaker, never sent to the model.
+        for key in ["before_hash", "after_hash", "dedupe_key"] { XCTAssertNil(made[key], key) }
         let effects = try XCTUnwrap(made["side_effects"] as? [String: Any])
-        for key in ["network", "navigations", "storage_writes", "focus_changes"] { XCTAssertNotNil(effects[key], key) }
+        XCTAssertEqual(Set(effects.keys), ["network", "navigations", "focus_changes"], "no storage change seen, so no storage part")
         let network = try XCTUnwrap(effects["network"] as? [String: Any])
         XCTAssertEqual((network["requests"] as? [[String: Any]])?.count, 2)
         XCTAssertTrue((network["best_effort"] as? String ?? "").contains("not a complete record"))
         XCTAssertEqual((effects["navigations"] as? [Any])?.count, 1)
         XCTAssertEqual((effects["focus_changes"] as? [Any])?.count, 1)
+    }
+
+    func testAnActionThatDidNothingBeyondThePageSendsNoEmptyParts() {
+        let made = ActionReceipt.make(id: "act-2", action: "click", origin: "a.example", before: state(), after: state(),
+                                      url: { $0 }, label: { $0 })
+        XCTAssertNil(made["side_effects"], "\(made)")
+        XCTAssertEqual(made["unchanged"] as? Bool, true)
+        var storage = state()
+        storage.storage = ["local": ["k": "v"]]
+        let kept = ActionReceipt.make(id: "act-3", action: "click", origin: "a.example", before: state(), after: storage,
+                                      url: { $0 }, label: { $0 })
+        let effects = kept["side_effects"] as? [String: Any]
+        XCTAssertEqual(Set(effects?.keys.map { $0 } ?? []), ["storage_writes"])
+        XCTAssertNotNil((effects?["storage_writes"] as? [String: Any])?["best_effort"])
     }
 
     func testTheDedupeKeyIsStableAndTellsThingsApart() {
