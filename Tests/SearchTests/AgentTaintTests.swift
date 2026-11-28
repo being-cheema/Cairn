@@ -18,7 +18,7 @@ final class AgentTaintTests: XCTestCase {
     func testCaseSpacingAndPunctuationDoNotHideIt() {
         var ledger = TaintLedger()
         ledger.record(article, origin: "bank.example", quarantined: false)
-        XCTAssertNotNil(ledger.source(of: "THE   HARTWELL ACCOUNT, show a balance -- of 48,210.55 pounds", into: "x.example"))
+        XCTAssertNotNil(ledger.source(of: "THE   HARTWELL ACCOUNT, show a balance -- of 48,210.55 pounds, with the", into: "x.example"))
     }
 
     func testShortCommonPhrasesAreNotFlagged() {
@@ -56,7 +56,7 @@ final class AgentTaintTests: XCTestCase {
     func testAnAddressCarriesDataInItsQueryPathAndFragment() throws {
         var ledger = TaintLedger()
         ledger.record(article, origin: "bank.example", quarantined: false)
-        let q = try XCTUnwrap(URL(string: "https://evil.example/collect?d=the%20Hartwell%20account%20show%20a%20balance%20of%2048%2C210.55"))
+        let q = try XCTUnwrap(URL(string: "https://evil.example/collect?d=the%20Hartwell%20account%20show%20a%20balance%20of%2048%2C210.55%20pounds%20with%20the"))
         XCTAssertEqual(ledger.source(of: TaintLedger.text(of: q), into: "evil.example")?.origin, "bank.example")
         let t = try XCTUnwrap(URL(string: "https://evil.example/c/HX99QZ7731LMN04"))
         XCTAssertNotNil(ledger.source(of: TaintLedger.text(of: t), into: "evil.example"))
@@ -88,6 +88,89 @@ final class AgentTaintTests: XCTestCase {
         XCTAssertTrue((hold.warning ?? "").lowercased().contains("guess"))
         XCTAssertTrue((hold.warning ?? "").contains("flagged"), "quarantined text is said")
         XCTAssertNil(hold.site, "a yes is never remembered as a site")
+    }
+}
+
+/// What ordinary research does is not asked about; what leaks still is.
+final class AgentTaintPrecisionTests: XCTestCase {
+    private let page = """
+    Hartwell Instruments announces the new RTX4090TI-XL reference board, model number HX99QZ7731LMN04, \
+    along with a long review of how the board performs under sustained load in a small office.
+    """
+
+    private func ledger(quarantined: Bool = false) -> TaintLedger {
+        var l = TaintLedger()
+        l.record(page, origin: "news.example", quarantined: quarantined)
+        l.record(titles: ["Hartwell Instruments announces the new reference board and how it performs in a small office today"],
+                 links: ["https://news.example/2026/board?ref=home#comments"], origin: "news.example", quarantined: quarantined)
+        return l
+    }
+
+    func testAModelNumberAndAShortNameGoIntoASearchBox() {
+        let l = ledger()
+        XCTAssertNil(l.source(of: "HX99QZ7731LMN04", into: "shop.example", searching: true))
+        XCTAssertNil(l.source(of: "Hartwell Instruments reference board", into: "shop.example"))
+        XCTAssertNil(l.source(of: "Hartwell Instruments announces the new RTX4090TI-XL reference board", into: "shop.example"),
+                     "ten words of a page are not a passage")
+    }
+
+    func testAnIdentifierInAnyOtherFieldIsStillAsked() {
+        XCTAssertEqual(ledger().source(of: "HX99QZ7731LMN04", into: "shop.example")?.origin, "news.example")
+    }
+
+    func testAPassageOfTwelveWordsIsAskedEvenInASearchBox() {
+        let typed = "model number HX99QZ7731LMN04 along with a long review of how the board performs"
+        XCTAssertNotNil(ledger().source(of: typed, into: "shop.example", searching: true))
+        XCTAssertNil(ledger().source(of: "along with a long review of how the board", into: "shop.example"), "nine words")
+    }
+
+    func testAnArticleTitleCanBeSearchedFor() {
+        let l = ledger()
+        let title = "Hartwell Instruments announces the new reference board, and how it performs in a small office today!"
+        XCTAssertGreaterThanOrEqual(TaintLedger.words(title).count, 12)
+        XCTAssertNil(l.source(of: title, into: "search.example", searching: true))
+        XCTAssertNil(l.source(of: "https://x.example/hartwell instruments announces the new reference board and how it performs in a small office today", into: "x.example"))
+    }
+
+    func testQuarantinedTextIsAskedAtASixWordRunAnywhere() {
+        let l = ledger(quarantined: true)
+        let typed = "how the board performs under sustained load"
+        XCTAssertEqual(l.source(of: typed, into: "elsewhere.example", searching: true)?.quarantined, true)
+        XCTAssertNil(l.source(of: "how the board performs", into: "elsewhere.example"), "four words")
+    }
+
+    func testQuarantinedPagesLendNoTitlesOrLinks() throws {
+        var l = ledger(quarantined: true)
+        // The title also stands in the page's own text, as it would.
+        l.record("Hartwell Instruments announces the new reference board and how it performs in a small office today",
+                 origin: "news.example", quarantined: true)
+        XCTAssertFalse(l.isSeenLink(try XCTUnwrap(URL(string: "https://news.example/2026/board?ref=home"))))
+        XCTAssertNotNil(l.source(of: "Hartwell Instruments announces the new reference board and how it performs in a small office today",
+                                 into: "x.example"))
+    }
+
+    func testALinkSeenInAReadIsNeverAFlowByItselfFragmentAside() throws {
+        let l = ledger()
+        XCTAssertTrue(l.isSeenLink(try XCTUnwrap(URL(string: "https://news.example/2026/board?ref=home"))))
+        XCTAssertTrue(l.isSeenLink(try XCTUnwrap(URL(string: "HTTPS://News.Example/2026/board?ref=home#other"))))
+        XCTAssertFalse(l.isSeenLink(try XCTUnwrap(URL(string: "https://news.example/2026/board?ref=other"))))
+        XCTAssertFalse(l.isSeenLink(try XCTUnwrap(URL(string: "https://evil.example/collect?d=HX99QZ7731LMN04"))))
+    }
+
+    func testSearchEnginesAndSearchPagesAreKnown() throws {
+        for good in ["https://www.google.com/search?q=x", "https://duckduckgo.com/?q=x", "https://shop.example/search?q=x"] {
+            XCTAssertTrue(TaintLedger.isSearch(try XCTUnwrap(URL(string: good))), good)
+        }
+        XCTAssertFalse(TaintLedger.isSearch(try XCTUnwrap(URL(string: "https://evil.example/collect?q=x"))))
+    }
+
+    func testASearchFieldIsOneMadeForIt() {
+        var box = AgentGate.Target(); box.role = "searchbox"
+        var typed = AgentGate.Target(); typed.type = "search"
+        var form = AgentGate.Target(); form.inForm = true; form.action = "https://shop.example/Search"
+        XCTAssertTrue(box.isSearch && typed.isSearch && form.isSearch)
+        var note = AgentGate.Target(); note.role = "textbox"; note.inForm = true; note.action = "/comment"
+        XCTAssertFalse(note.isSearch)
     }
 }
 

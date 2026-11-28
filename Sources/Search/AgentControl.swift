@@ -1436,8 +1436,10 @@ final class AgentControl: ObservableObject {
     /// question when both apply, and is a question of its own otherwise.
     private func addressHold(_ url: URL, _ session: AgentSession, _ browser: Browser) -> AgentGate.Hold? {
         var hold = AgentGate.hold(address: url, sites: session.sites, rules: rules(browser))
-        guard let there = TaintLedger.origin(of: url),
-              let match = session.taint.source(of: TaintLedger.text(of: url), into: there) else { return hold }
+        // A link the task read is where the page itself pointed.
+        guard let there = TaintLedger.origin(of: url), !session.taint.isSeenLink(url),
+              let match = session.taint.source(of: TaintLedger.text(of: url), into: there,
+                                               searching: TaintLedger.isSearch(url)) else { return hold }
         var flow = AgentGate.hold(flowFrom: match, into: url.host() ?? there, doing: "go")
         if var leave = hold {
             leave.warning = [leave.warning, flow.warning.map { "The address also seems to carry text read on \(match.origin). " + $0 }]
@@ -1450,10 +1452,11 @@ final class AgentControl: ObservableObject {
     }
 
     /// Words read in this task, put on another site's page: a question
-    /// (AgentTaint). Nil for nothing to ask.
-    private func typingHold(_ text: String, on tab: Tab, _ session: AgentSession) -> AgentGate.Hold? {
+    /// (AgentTaint). `searching` is a field made for searching, where an
+    /// identifier goes unasked. Nil for nothing to ask.
+    private func typingHold(_ text: String, on tab: Tab, _ session: AgentSession, searching: Bool) -> AgentGate.Hold? {
         guard let here = TaintLedger.origin(of: tab.pageAddress),
-              let match = session.taint.source(of: text, into: here) else { return nil }
+              let match = session.taint.source(of: text, into: here, searching: searching) else { return nil }
         return AgentGate.hold(flowFrom: match, into: tab.pageAddress?.host() ?? here, doing: "type")
     }
 
@@ -1469,6 +1472,13 @@ final class AgentControl: ObservableObject {
         }
         guard !pieces.isEmpty else { return }
         let quarantined = (out["text"] as? String)?.contains(Quarantine.opening) == true
+        // What the page offered by name: opening or searching for it is no flow.
+        var titles = [out["title"] as? String].compactMap { $0 }, hrefs: [String] = []
+        for node in out["nodes"] as? [[String: Any]] ?? [] where node["role"] as? String == "link" {
+            if let name = node["name"] as? String { titles.append(name) }
+            if let href = node["href"] as? String { hrefs.append(href) }
+        }
+        session.taint.record(titles: titles, links: hrefs, origin: origin, quarantined: quarantined)
         session.taint.record(pieces.joined(separator: "\n"), origin: origin, quarantined: quarantined)
     }
 
@@ -3169,12 +3179,20 @@ final class AgentControl: ObservableObject {
             touch("set", text) { finish($0) }
         }
         }
-        // Words read on another site go in only on your say (AgentTaint).
-        guard let hold = typingHold(text, on: tab, session) else { return begin() }
-        ask(hold, session, before: tab) { verdict in
-            guard verdict == .approved else { return answer(Self.declined(hold, verdict)) }
-            guard self.live(session) else { return answer(AgentRefusal(code: "stopped", message: "Stopped in \(Brand.name)").said) }
-            begin()
+        // Words read on another site go in only on your say (AgentTaint). What
+        // only an identifier gave away is let into a search field, so the field
+        // is looked at first.
+        func askFlow(_ hold: AgentGate.Hold) {
+            ask(hold, session, before: tab) { verdict in
+                guard verdict == .approved else { return answer(Self.declined(hold, verdict)) }
+                guard self.live(session) else { return answer(AgentRefusal(code: "stopped", message: "Stopped in \(Brand.name)").said) }
+                begin()
+            }
+        }
+        if let hold = typingHold(text, on: tab, session, searching: true) { return askFlow(hold) }
+        guard let hold = typingHold(text, on: tab, session, searching: false) else { return begin() }
+        touch("probe", nil) { seen in
+            if AgentGate.Target(seen["gate"])?.isSearch == true { begin() } else { askFlow(hold) }
         }
     }
 
