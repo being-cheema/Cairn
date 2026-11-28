@@ -17,6 +17,9 @@ public enum AgentVerb: String, CaseIterable, Sendable {
     case selectOption = "select_option"
     case collectList = "collect_list"
     case updateScratchpad = "update_scratchpad"
+    case fillForm = "fill_form"
+    case disambiguate
+    case zoom
     case waitFor = "wait_for"
     case waitForSignIn = "wait_for_sign_in"
     case shot, bye

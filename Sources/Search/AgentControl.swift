@@ -492,7 +492,14 @@ struct AgentRefusal: Error {
 
     var said: [String: Any] {
         var out: [String: Any] = ["code": code, "message": message]
-        if !hint.isEmpty { out["hint"] = hint }
+        // The code an agent already branches on stays; the taxonomy's name
+        // and its way on come beside it (ActionFailure).
+        let failure = ActionFailure.from(refusal: code)
+        if let failure {
+            out["failure"] = failure.rawValue
+            if failure.heuristic { out["heuristic"] = true }
+        }
+        if !hint.isEmpty { out["hint"] = hint } else if let failure { out["hint"] = failure.hint }
         return ["error": out]
     }
 }
@@ -638,10 +645,20 @@ final class AgentSession: ObservableObject, Identifiable {
     /// Cover for one form to be sent without asking again: set by your
     /// Approve, for the tab it was about, and spent by that send (vet).
     fileprivate var sendGrant: NavigationPolicyEngine.SendGrant?
+    /// The person allowed this tab's action to be done again (repeatAction):
+    /// that action's own question to send or submit isn't asked a second
+    /// time. Spent by the first such question, gone with the next action.
+    fileprivate var repeatPass: (tab: Tab.ID, until: TimeInterval)?
     /// Documents its tabs were kept from loading, to say with the next answer.
     fileprivate var blocked: [String] = []
     /// A page of its tab's was refused a site you blocked: for the answer in hand.
     fileprivate var vaultRefused: String?
+    /// What it did, for receipts and for noticing a repeat (ActionBook).
+    fileprivate var book = ActionBook()
+    /// The agent's one line on why, for the question its action may raise.
+    fileprivate var intent: String?
+    /// The badge the person clicked, for a disambiguate being asked.
+    fileprivate var chosen: Int?
     /// p1 → the number of its last read.
     fileprivate var snaps: [String: Int] = [:]
     /// p1 → what that read said, for the next to be compared with (PageDiff).
@@ -703,6 +720,8 @@ final class AgentControl: ObservableObject {
 
     /// The one connection there is, asking or allowed.
     @Published private(set) var session: AgentSession?
+    /// The badges on a page while a disambiguate is asked.
+    fileprivate var choosing: AgentChoiceView?
     private(set) var running = false
     private var listener: Int32 = -1
     private var accepting: DispatchSourceRead?
@@ -1492,6 +1511,17 @@ final class AgentControl: ObservableObject {
     private func ask(_ hold: AgentGate.Hold, _ session: AgentSession, sending: Tab.ID? = nil, before tab: Tab? = nil,
                      within patience: TimeInterval = AgentControl.holdFor,
                      showing receipt: FormReceipt? = nil, then: @escaping (HeldAction.Answer) -> Void) {
+        var hold = hold
+        if hold.intent == nil { hold.intent = session.intent }
+        // Only the same action's own send or submit: pay, sign in, leaving and
+        // anything else still ask.
+        if let pass = session.repeatPass, pass.tab == sending, pass.until > ProcessInfo.processInfo.systemUptime,
+           hold.reason == .send || hold.reason == .submit {
+            session.repeatPass = nil
+            session.sendGrant = .init(tab: pass.tab, to: hold.sends, until: ProcessInfo.processInfo.systemUptime + Self.grantFor)
+            Self.log.notice("repeat allowed by your click also answered its own question: \(hold.reason.rawValue, privacy: .public)")
+            return then(.approved)
+        }
         var answered = false
         let began = ProcessInfo.processInfo.systemUptime
         let held = HeldAction(hold: hold, since: began) { [weak session] verdict in
@@ -2216,6 +2246,9 @@ final class AgentControl: ObservableObject {
     /// agent never signs in with what the person saved.
     static let verbs: Set<String> = Set(AgentVerb.allCases.map(\.rawValue))
 
+    /// What counts against a run's limits: everything that acts or reads a page.
+    static let counted: Set<AgentVerb> = [.zoom, .disambiguate, .open, .go, .back, .forward, .read, .batchRead, .click, .type, .press, .fillForm, .scroll, .waitFor, .shot]
+
     /// Why a verb is refused before anything is looked at: one not in `verbs`.
     static func unknown(_ verb: String) -> AgentRefusal? {
         verbs.contains(verb) ? nil : AgentRefusal(code: "no_verb", message: "\(Brand.name) doesn't do “\(AgentGate.quoted(verb))” for an agent")
@@ -2276,6 +2309,13 @@ final class AgentControl: ObservableObject {
         do {
             guard let known = AgentVerb(rawValue: verb) else {
                 throw AgentRefusal(code: "no_verb", message: "\(Brand.name) doesn't do “\(AgentGate.quoted(verb))” for an agent")
+            }
+            // The run's hard limits (LoopBreaker): once one trips, nothing of
+            // what counts as an action is done again.
+            session.intent = AgentGate.intentLine(request["intent"])
+            if Self.counted.contains(known), let trip = session.book.breaker.admit(verb) {
+                loopTripped(trip, session)
+                return answer(trip.said)
             }
             // Every verb there is (CairnProtocol): no default, so one added
             // there has to be answered here.
@@ -2411,10 +2451,23 @@ final class AgentControl: ObservableObject {
                 try batchRead(request, session, browser, answer)
             case .click:
                 session.sendGrant = nil
-                try click(request, session, browser, answer)
+                try receipted("click", request, session, browser, answer) { [self] request, answer in
+                    try click(request, session, browser, answer)
+                }
             case .type:
                 session.sendGrant = nil
-                try type(request, session, browser, answer)
+                try receipted("type", request, session, browser, answer) { [self] request, answer in
+                    try type(request, session, browser, answer)
+                }
+            case .zoom:
+                try zoom(request, session, browser, answer)
+            case .disambiguate:
+                try disambiguate(request, session, browser, answer)
+            case .fillForm:
+                session.sendGrant = nil
+                try receipted("fill_form", request, session, browser, answer) { [self] request, answer in
+                    try fillForm(request, session, browser, answer)
+                }
             case .updateScratchpad:
                 guard session.panel, let panel = session.browser?.claude else {
                     throw AgentRefusal(code: "no_panel", message: "The scratchpad is the side panel's Claude's",
@@ -2433,74 +2486,74 @@ final class AgentControl: ObservableObject {
                 try collectList(request, session, browser, answer)
             case .selectOption:
                 session.sendGrant = nil
-                try selectOption(request, session, browser, answer)
+                try receipted("select_option", request, session, browser, answer) { [self] request, answer in
+                    try selectOption(request, session, browser, answer)
+                }
             case .press:
                 session.sendGrant = nil
-                let tab = try self.tab(request, session, browser, .drive)
-                guard let key = AgentRules.key(request["key"] as? String ?? "") else {
-                    throw AgentRefusal(code: "bad_key", message: "Not a key this can press",
-                                       hint: "Enter, Tab, Escape, Backspace, an arrow, or one character, after shift+, alt+ or ctrl+. Never cmd.")
-                }
-                guard live(session) else { throw AgentRefusal(code: "stopped", message: "Stopped in \(Brand.name)") }
-                PageRoom.shared.house(tab)
-                let spec = request["key"] as? String ?? ""
-                func send(_ focused: AgentGate.Target?, on host: String?) {
-                    guard self.live(session) else { return answer(AgentRefusal(code: "stopped", message: "Stopped in \(Brand.name)").said) }
-                    let before = tab.address
-                    self.page(tab, session, PageScripts.outcomeStart()) { _ in
+                try receipted("press", request, session, browser, answer) { [self] request, answer in
+                    let tab = try self.tab(request, session, browser, .drive)
+                    guard let key = AgentRules.key(request["key"] as? String ?? "") else {
+                        throw AgentRefusal(code: "bad_key", message: "Not a key this can press",
+                                           hint: "Enter, Tab, Escape, Backspace, an arrow, or one character, after shift+, alt+ or ctrl+. Never cmd.")
+                    }
+                    guard live(session) else { throw AgentRefusal(code: "stopped", message: "Stopped in \(Brand.name)") }
+                    PageRoom.shared.house(tab)
+                    let spec = request["key"] as? String ?? ""
+                    @MainActor func send(_ focused: AgentGate.Target?, on host: String?) {
                         guard self.live(session) else { return answer(AgentRefusal(code: "stopped", message: "Stopped in \(Brand.name)").said) }
                         PageHands.key(tab.web, code: key.code, characters: key.characters, flags: key.flags)
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
                             self?.settle(tab, session, timeout: 10) { out in
                                 self?.record(MacroStep(kind: .press, tab: 0, host: host, role: focused?.role, name: focused?.label, key: spec),
                                              on: tab, session, if: out)
-                                self?.observed(tab, session, before: before, out, answer)
+                                answer(out)
                             }
                         }
                     }
-                }
-                func press() {
-                    // For a macro, what the key went to is kept with it.
-                    guard session.panel else { return send(nil, on: nil) }
-                    let host = tab.pageAddress?.host()?.lowercased()
-                    self.page(tab, session, PageScripts.focused()) { result in
-                        var focused: AgentGate.Target?
-                        if case .success(let seen) = result { focused = AgentGate.Target(seen["gate"]) }
-                        send(focused, on: host)
+                    @MainActor func press() {
+                        // For a macro, what the key went to is kept with it.
+                        guard session.panel else { return send(nil, on: nil) }
+                        let host = tab.pageAddress?.host()?.lowercased()
+                        self.page(tab, session, PageScripts.focused()) { result in
+                            var focused: AgentGate.Target?
+                            if case .success(let seen) = result { focused = AgentGate.Target(seen["gate"]) }
+                            send(focused, on: host)
+                        }
                     }
-                }
-                // Return, or Space on a button, in a form that would commit
-                // something: asked first, about what the page has focused.
-                let rules = rules(browser)
-                let sends = key.flags.isEmpty && (key.characters == "\r" || key.characters == " ")
-                guard rules.commits, sends else { return press() }
-                page(tab, session, PageScripts.focused()) { [weak self] result in
-                    guard let self else { return }
-                    let seen: [String: Any]
-                    switch result {
-                    case .failure(let refusal): return answer(refusal.said)
-                    case .success(let out): seen = out
-                    }
-                    var target = AgentGate.Target(seen["gate"]) ?? AgentGate.Target()
-                    // Space only acts on a button.
-                    if key.characters == " " { target.enter = target.submits }
-                    if let url = VaultedSites.reached(by: target, in: VaultedSites.current) {
-                        return answer(Self.blockedByPerson(VaultedSites.host(of: url)).said)
-                    }
-                    guard let hold = AgentGate.hold(enter: target, on: tab.pageAddress, rules: rules) else { return press() }
-                    if self.handsOverSignIn(hold, tab, session, answer) { return }
-                    defer { self.spotlight(tab, session, PageScripts.focused()) }
-                    let shown = FormReceipt(seen["receipt"])
-                    self.ask(hold, session, sending: tab.id, showing: shown) { verdict in
-                        guard verdict == .approved else { return answer(Self.declined(hold, verdict)) }
-                        // Still what was asked about.
-                        self.page(tab, session, PageScripts.focused()) { again in
-                            guard case .success(let now) = again, AgentGate.Target(now["gate"])?.fingerprint == target.fingerprint,
-                                  FormReceipt(now["receipt"]) == shown else {
-                                return answer(AgentRefusal(code: "changed", message: "The page changed while waiting: not done",
-                                                           hint: "Read the page again and ask once more if it still applies.").said)
+                    // Return, or Space on a button, in a form that would commit
+                    // something: asked first, about what the page has focused.
+                    let rules = rules(browser)
+                    let sends = key.flags.isEmpty && (key.characters == "\r" || key.characters == " ")
+                    guard rules.commits, sends else { return press() }
+                    page(tab, session, PageScripts.focused()) { [weak self] result in
+                        guard let self else { return }
+                        let seen: [String: Any]
+                        switch result {
+                        case .failure(let refusal): return answer(refusal.said)
+                        case .success(let out): seen = out
+                        }
+                        var target = AgentGate.Target(seen["gate"]) ?? AgentGate.Target()
+                        // Space only acts on a button.
+                        if key.characters == " " { target.enter = target.submits }
+                        if let url = VaultedSites.reached(by: target, in: VaultedSites.current) {
+                            return answer(Self.blockedByPerson(VaultedSites.host(of: url)).said)
+                        }
+                        guard let hold = AgentGate.hold(enter: target, on: tab.pageAddress, rules: rules) else { return press() }
+                        if self.handsOverSignIn(hold, tab, session, answer) { return }
+                        defer { self.spotlight(tab, session, PageScripts.focused()) }
+                        let shown = FormReceipt(seen["receipt"])
+                        self.ask(hold, session, sending: tab.id, showing: shown) { verdict in
+                            guard verdict == .approved else { return answer(Self.declined(hold, verdict)) }
+                            // Still what was asked about.
+                            self.page(tab, session, PageScripts.focused()) { again in
+                                guard case .success(let now) = again, AgentGate.Target(now["gate"])?.fingerprint == target.fingerprint,
+                                      FormReceipt(now["receipt"]) == shown else {
+                                    return answer(AgentRefusal(code: "changed", message: "The page changed while waiting: not done",
+                                                               hint: "Read the page again and ask once more if it still applies.").said)
+                                }
+                                press()
                             }
-                            press()
                         }
                     }
                 }
@@ -2777,9 +2830,9 @@ final class AgentControl: ObservableObject {
                 switch taken {
                 case .failure(let refusal): answer(refusal.said)
                 case .success(let shot):
-                    ImageText.read(shot.png) { lines in
+                    ImageText.readSure(shot.png) { found in
                         var out = out
-                        if let lines {
+                        if let (lines, confidence) = found {
                             // Card numbers and keys drawn where no box was
                             // painted are still taken out.
                             let words = TypedSecrets.hidden(in: lines.joined(separator: "\n"))
@@ -2787,6 +2840,8 @@ final class AgentControl: ObservableObject {
                             if let origin = TaintLedger.origin(of: tab.pageAddress) {
                                 session.taint.record(words, origin: origin, quarantined: (out["ocr"] as? String)?.contains(Quarantine.opening) == true)
                             }
+                            out["ocr_source"] = ["source": "vision_ocr", "confidence": confidence.map { ($0 * 100).rounded() / 100 } as Any? ?? "unknown",
+                                                 "note": "Recognised from a picture: it can misread, and is not the page's own text layer."]
                             out["ocr_note"] = "Read from a picture of what is on screen, with password and card fields and frames blacked out. It can misread. The words are the page's."
                         } else {
                             out["ocr_error"] = "The picture couldn't be read"
@@ -2945,6 +3000,7 @@ final class AgentControl: ObservableObject {
                                         var out = PDFPages.answer(contents, page: handle, longest: longest, from: textOffset,
                                                                   text: request["text"] as? Bool ?? true)
                                         out["page"] = handle
+                                        out["source"] = ["source": "pdfkit", "confidence": "the PDF's own text layer: exact where it has one, nothing for a scan"]
                                         out["url"] = AgentRules.url(address)
                                         out["title"] = Quarantine.label(tab.title)
                                         out["untrusted"] = Self.untrusted
@@ -2960,6 +3016,14 @@ final class AgentControl: ObservableObject {
                     let own = session.own.contains(tab.id)
                     let seen = PageSnapshot(out, asked: asked, snap: used)
                     session.reads[handle] = own ? seen : nil
+                    let print = LoopBreaker.fingerprint(url: seen.url, controls: seen.nodes.map { "\($0.index)\($0.role)\($0.name)\($0.facts.sorted { $0.key < $1.key })" },
+                                                        text: seen.text)
+                    // A replay waiting for its control polls the same page: that
+                    // is not a model going round in circles.
+                    if !session.replaying, let trip = session.book.breaker.read(fingerprint: print) {
+                        self.loopTripped(trip, session)
+                        return answer(trip.said)
+                    }
                     out["nodes"] = (out["nodes"] as? [[String: Any]] ?? []).map { node in
                         var node = node
                         let index = node.removeValue(forKey: "e") as? Int ?? -1
@@ -3005,12 +3069,31 @@ final class AgentControl: ObservableObject {
                     if !wantsDiff, session.governor.compacts(active: working) { out = ContextGovernor.compact(out) }
                     session.governor.spend(ContextGovernor.weight(out))
                     let said = out["text"] as? String
-                    out = Quarantine.read(out)
-                    self.remember(out, on: tab, session, text: said)
-                    // Said with every read, beside the words themselves, not only
-                    // in the tool's description a model may have read long ago.
-                    out["untrusted"] = Self.untrusted
-                    answer(out)
+                    // Where each kind of text came from, said beside it, so that
+                    // the page's own words are not taken for a reading of a
+                    // picture or a PDF's (the others say theirs).
+                    out["sources"] = ["text": ["source": "dom_innertext", "confidence": "exact"],
+                                      "nodes": ["source": "dom_accessible_name", "confidence": "computed from the page's labels"]]
+                    @MainActor func finish(_ out: [String: Any]) {
+                        var out = Quarantine.read(out)
+                        self.remember(out, on: tab, session, text: said)
+                        // Said with every read, beside the words themselves, not only
+                        // in the tool's description a model may have read long ago.
+                        out["untrusted"] = Self.untrusted
+                        answer(out)
+                    }
+                    // What kind of page it is, in a few typed fields (PageArchetype),
+                    // for a whole read of a tab of its own.
+                    guard own, !wantsDiff else { return finish(out) }
+                    let budget = min(max(request["budget_tokens"] as? Int ?? 400, 50), 3000)
+                    self.page(tab, session, PageScripts.archetype()) { found in
+                        var out = out
+                        if case .success(let raw) = found, let kind = raw["archetype"] as? [String: Any] {
+                            out["archetype"] = ArchetypeBudget.fit(kind, tokens: budget)
+                            out["archetype_note"] = "A guess from the page's structure: confidence and signals say how sure. The fields are the page's own words."
+                        }
+                        finish(out)
+                    }
                 }
             }
         }
@@ -3123,21 +3206,18 @@ final class AgentControl: ObservableObject {
                         answer(AgentRefusal(code: "not_clicked", message: "The page had nowhere to click").said)
                         return
                     }
-                    // Watched from just before the click, so what it does is seen.
-                    self.page(tab, session, PageScripts.outcomeStart()) { _ in
-                        guard self.live(session), PageHands.click(tab.web, at: at) else {
-                            answer(AgentRefusal(code: "not_clicked", message: "The page had nowhere to click").said)
-                            return
-                        }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                            self.settle(tab, session, timeout: request["timeout"] as? Double ?? 10) { out in
-                                var out = out
-                                out["page"] = page
-                                out["navigated"] = tab.address != before
-                                self.record(MacroStep(kind: .click, tab: 0, host: host, role: aimed.role, name: aimed.label),
-                                            on: tab, session, if: out)
-                                self.observed(tab, session, before: before, out, answer)
-                            }
+                    guard self.live(session), PageHands.click(tab.web, at: at) else {
+                        answer(AgentRefusal(code: "not_clicked", message: "The page had nowhere to click").said)
+                        return
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        self.settle(tab, session, timeout: request["timeout"] as? Double ?? 10) { out in
+                            var out = out
+                            out["page"] = page
+                            out["navigated"] = tab.address != before
+                            self.record(MacroStep(kind: .click, tab: 0, host: host, role: aimed.role, name: aimed.label),
+                                        on: tab, session, if: out)
+                            answer(out)
                         }
                     }
                 }
@@ -3188,7 +3268,6 @@ final class AgentControl: ObservableObject {
                                hint: "Type the text without them, then use press Enter.")
         }
         let replace = request["replace"] as? Bool ?? true
-        let before = tab.address
         func touch(_ how: String, _ text: String?, _ then: @escaping ([String: Any]) -> Void) {
             page(tab, session, PageScripts.touch(key: Self.key, snap: snap, index: index, how: how, text: text, replace: replace, strict: true)) { result in
                 switch result {
@@ -3210,7 +3289,7 @@ final class AgentControl: ObservableObject {
                 // Never kept, not even as a step with a blank.
                 self?.spoilMacro(session, "it typed into a secret field")
             }
-            self?.observed(tab, session, before: before, out, answer)
+            answer(out)
         }
         func finish(_ out: [String: Any]) {
             guard request["submit"] as? Bool == true else { return kept(out) }
@@ -3254,8 +3333,6 @@ final class AgentControl: ObservableObject {
             aimed = AgentGate.Target(seen["gate"])
             self?.mark(tab, Self.doing("Typing into", seen["gate"]), seen["box"])
         }
-        // Watched from before the typing, for what it does to the page.
-        page(tab, session, PageScripts.outcomeStart()) { _ in }
         if request["keys"] as? Bool == true {
             // Real key events, into the field once focused. A field in the
             // room off screen may take the focus; one in your window you
@@ -3490,23 +3567,18 @@ final class AgentControl: ObservableObject {
         }
     }
 
-    /// `out` with what the page showed of the action (ActionOutcome), once
-    /// asked. Not for an answer that is an error: nothing was done. Never
-    /// changes what was asked or held; if the page can't be asked and its
-    /// address didn't change, no outcome is said rather than a guessed one.
-    private func observed(_ tab: Tab, _ session: AgentSession, before: URL?, _ out: [String: Any],
-                          _ answer: @escaping ([String: Any]) -> Void) {
-        guard out["error"] == nil else { return answer(out) }
-        let moved = tab.address != before
+    /// What the page showed of the action (ActionOutcome), once asked, as the
+    /// fields the receipt carries: none if the page can't be asked and its
+    /// address didn't change, rather than a guessed outcome.
+    fileprivate func watched(_ tab: Tab, _ session: AgentSession, moved: Bool,
+                             _ then: @escaping ([String: Any]?) -> Void) {
         page(tab, session, PageScripts.outcomeEnd()) { result in
-            var out = out
             switch result {
             case .success(let seen):
-                out.merge(ActionOutcome.fields(.init(page: seen, addressChanged: moved))) { mine, _ in mine }
+                then(ActionOutcome.fields(.init(page: seen, addressChanged: moved)))
             case .failure:
-                if moved { out.merge(ActionOutcome.fields(.init(page: nil, addressChanged: true))) { mine, _ in mine } }
+                then(moved ? ActionOutcome.fields(.init(page: nil, addressChanged: true)) : nil)
             }
-            answer(out)
         }
     }
 
@@ -3734,5 +3806,428 @@ final class AgentControl: ObservableObject {
         SetOfMark.draw(marks, masks: boxes, height: height, scale: scale, points: points)
         NSGraphicsContext.restoreGraphicsState()
         return rep.representation(using: .png, properties: [:])
+    }
+}
+
+// MARK: - receipts, eids and fill_form
+
+extension AgentControl {
+    /// Said once to the panel; the run's actions answer with it from now on.
+    fileprivate func loopTripped(_ trip: LoopTrip, _ session: AgentSession) {
+        if session.panel { session.browser?.claude.loopStopped(trip) }
+        Self.log.notice("run stopped as looping: \(trip.why.rawValue, privacy: .public)")
+    }
+
+    /// A request that names its element by eid, made to name it by handle:
+    /// the page finds the element again (PageScripts.resolve) and puts it in
+    /// the last read's list, so what follows is one code path.
+    private func resolving(_ request: [String: Any], _ session: AgentSession, _ browser: Browser,
+                           _ answer: @escaping ([String: Any]) -> Void, then: @escaping @MainActor ([String: Any]) -> Void) throws {
+        guard request["element"] == nil, let eid = request["eid"] as? String else { return then(request) }
+        guard eid.range(of: "^[0-9a-f]{8}$", options: .regularExpression) != nil else {
+            throw AgentRefusal(code: "bad_handle", message: "An eid is eight letters and digits, from read_page")
+        }
+        let tab = try self.tab(request, session, browser, .drive)
+        let handle = request["page"] as? String ?? ""
+        page(tab, session, PageScripts.resolve(key: Self.key, eid: eid)) { result in
+            switch result {
+            case .failure(let refusal): answer(refusal.said)
+            case .success(let out):
+                guard let index = out["index"] as? Int, let snap = out["snap"] as? Int, session.snaps[handle] == snap else {
+                    return answer(AgentRefusal(code: "stale_element", message: "That eid is from before the last read_page",
+                                               hint: "Call read_page again.").said)
+                }
+                var made = request
+                made["element"] = "\(handle).s\(snap).e\(index)"
+                then(made)
+            }
+        }
+    }
+
+    /// Does `act` and answers with a receipt of what it did (ActionReceipt):
+    /// the page looked at before and after, what changed, what the page
+    /// asked for and kept as far as it can be seen, and a code when it did
+    /// not do its work. The same action again on a page it left as it was is
+    /// held for the person's click, never dropped and never let through.
+    fileprivate func receipted(_ verb: String, _ request: [String: Any], _ session: AgentSession, _ browser: Browser,
+                               _ answer: @escaping ([String: Any]) -> Void,
+                               act: @escaping @MainActor ([String: Any], @escaping ([String: Any]) -> Void) throws -> Void) throws {
+        try resolving(request, session, browser, answer) { [self] request in
+            session.repeatPass = nil
+            do {
+                let tab: Tab
+                var snap = 0
+                var index: Int?
+                if verb == "click" || verb == "type" || verb == "select_option" {
+                    var handle: String
+                    (tab, handle, snap, index) = try { let r = try element(request, session, browser); return (r.0, r.1, r.2, r.3) }()
+                    _ = handle
+                } else {
+                    tab = try self.tab(request, session, browser, .drive)
+                }
+                let own = session.own.contains(tab.id)
+                let origin = tab.pageAddress.map { "\($0.scheme ?? "")://\($0.host() ?? "")" } ?? ""
+                page(tab, session, PageScripts.snapshot(key: Self.key, snap: snap, index: index)) { first in
+                    var before: PageState?
+                    switch first {
+                    case .failure(let refusal): return answer(refusal.said)
+                    case .success(let raw): before = PageState(raw)
+                    }
+                    guard let before, own else {
+                        do { try act(request, answer) } catch let refusal as AgentRefusal { answer(refusal.said) } catch { answer(AgentRefusal(code: "internal", message: error.localizedDescription).said) }
+                        return
+                    }
+                    var values = before.target?.form ?? ""
+                    if verb == "type" { values = before.target?.secret == true ? "secret" : Dedupe.values([("text", request["text"] as? String ?? "")]) }
+                    if verb == "fill_form" {
+                        values = Dedupe.values((request["fields"] as? [[String: Any]] ?? []).enumerated().map {
+                            ($0.element["eid"] as? String ?? $0.element["element"] as? String ?? "\($0.offset)", $0.element["value"] as? String ?? "")
+                        })
+                    }
+                    let eid = before.target?.eid ?? before.focus?.eid ?? ""
+                    let key = Dedupe.key(origin: origin, action: verb, eid: eid, values: values)
+                    @MainActor func run() {
+                        do {
+                            try act(request) { out in
+                                guard out["error"] == nil, self.live(session) else { return answer(out) }
+                                self.watched(tab, session, moved: tab.address != addressBefore) { outcome in
+                                    self.page(tab, session, PageScripts.snapshot(key: Self.key, snap: snap, index: index)) { second in
+                                        var out = out
+                                        guard case .success(let raw) = second, let after = PageState(raw) else {
+                                            out["receipt_unavailable"] = "The page couldn't be looked at afterwards"
+                                            return answer(out)
+                                        }
+                                        let id = session.book.next()
+                                        var receipt = ActionReceipt.make(id: id, action: verb, origin: origin, before: before, after: after,
+                                                                         url: AgentRules.url, label: { Quarantine.label(AgentRules.scrubbed($0)) })
+                                        let delta = PageDelta(from: before, to: after)
+                                        let submits = before.target?.submits == true || request["submit"] as? Bool == true
+                                        var failure: ActionFailure?
+                                        var more: [String: Any] = [:]
+                                        if out["timeout"] as? Bool == true || (tab.loading && !delta.moved) {
+                                            failure = .navInterrupted
+                                        } else if let wall = ActionFailure.wall(before: before, after: after) {
+                                            failure = wall
+                                        } else if submits, !delta.moved, let bad = after.target?.invalid, !bad.isEmpty {
+                                            failure = .validationBlocked
+                                            more["fields"] = bad.map { ["eid": $0["eid"] ?? "", "message": Quarantine.label(AgentRules.scrubbed($0["message"] ?? ""))] }
+                                        } else if delta.none && out["navigated"] as? Bool != true {
+                                            failure = .noEffect
+                                        }
+                                        if let failure {
+                                            var said = failure.said
+                                            for (k, v) in more { said[k] = v }
+                                            out["failure"] = said
+                                            receipt["failure"] = failure.rawValue
+                                        }
+                                        // What the page showed in the 400 ms after, inside the
+                                        // receipt (ActionOutcome): it informs, it never changes a gate.
+                                        if let outcome { receipt.merge(outcome) { mine, _ in mine } }
+                                        out["receipt"] = receipt
+                                        if session.panel, let step = TrailStep(receipt: receipt, failure: failure?.rawValue) {
+                                            session.browser?.claude.trail(step)
+                                        }
+                                        if let trip = session.book.breaker.took(verb, key: key, eid: eid, before: before.hash, after: after.hash) {
+                                            self.loopTripped(trip, session)
+                                            out["loop_suspected"] = trip.said["error"]
+                                        }
+                                        session.book.ledger.record(key, before: before.hash, after: after.hash, at: ProcessInfo.processInfo.systemUptime)
+                                        answer(out)
+                                    }
+                                }
+                            }
+                        } catch let refusal as AgentRefusal {
+                            answer(refusal.said)
+                        } catch {
+                            answer(AgentRefusal(code: "internal", message: error.localizedDescription).said)
+                        }
+                    }
+                    // Watched from before the action, so what it does is seen: the
+                    // outcome goes inside the receipt, which is the one record of it.
+                    let addressBefore = tab.address
+                    @MainActor func go() { self.page(tab, session, PageScripts.outcomeStart()) { _ in run() } }
+                    let role = before.target?.role ?? ""
+                    let guarded = Dedupe.guards(action: verb, role: role, key: request["key"] as? String ?? "",
+                                                submit: request["submit"] as? Bool == true)
+                    if guarded, session.book.ledger.isRepeat(key, pageNow: before.hash, at: ProcessInfo.processInfo.systemUptime) {
+                        let hold = AgentGate.Hold(reason: .repeatAction,
+                                                  summary: "Do it again: the same \(verb) on \(tab.pageAddress?.host() ?? "this page"), which hasn't changed since it was done")
+                        self.ask(hold, session) { verdict in
+                            guard verdict == .approved else { return answer(Self.declined(hold, verdict)) }
+                            session.repeatPass = (tab.id, ProcessInfo.processInfo.systemUptime + 60)
+                            go()
+                        }
+                    } else {
+                        go()
+                    }
+                }
+            } catch let refusal as AgentRefusal {
+                answer(refusal.said)
+            } catch {
+                answer(AgentRefusal(code: "internal", message: error.localizedDescription).said)
+            }
+        }
+    }
+
+    /// Several fields of a form of the agent's own tab filled at once. Never
+    /// a secret, a file or anything that isn't a field: one such and nothing
+    /// is touched. It sends nothing: the button that would is a click, which
+    /// is held as ever. A field the page's script bounced is typed into with
+    /// real keys, as `type` with keys does.
+    fileprivate func fillForm(_ request: [String: Any], _ session: AgentSession, _ browser: Browser,
+                              _ answer: @escaping ([String: Any]) -> Void) throws {
+        let tab = try self.tab(request, session, browser, .drive)
+        let handle = request["page"] as? String ?? ""
+        guard let items = request["fields"] as? [[String: Any]], !items.isEmpty, items.count <= 40 else {
+            throw AgentRefusal(code: "bad_fields", message: "fields is a list of 1 to 40 of {eid, value}")
+        }
+        var values: [String] = []
+        for item in items {
+            guard let value = item["value"] as? String, value.count <= 10000, AgentRules.typeable(value) else {
+                throw AgentRefusal(code: "bad_text", message: "Each value is text without control characters but tab and newline")
+            }
+            values.append(value)
+        }
+        guard let snap = session.snaps[handle] else {
+            throw AgentRefusal(code: "stale_element", message: "Nothing has been read from that page yet", hint: "Call read_page first.")
+        }
+        var indices: [Int] = []
+        @MainActor func resolve(_ k: Int) {
+            guard k < items.count else { return flow() }
+            if let named = items[k]["element"] as? String {
+                let parts = named.split(separator: ".")
+                guard parts.count == 3, String(parts[0]) == handle, parts[1] == Substring("s\(snap)"), let i = Int(parts[2].dropFirst()) else {
+                    return answer(AgentRefusal(code: "stale_element", message: "That handle is from an earlier read_page", hint: "Call read_page again.").said)
+                }
+                indices.append(i)
+                return resolve(k + 1)
+            }
+            guard let eid = items[k]["eid"] as? String, eid.range(of: "^[0-9a-f]{8}$", options: .regularExpression) != nil else {
+                return answer(AgentRefusal(code: "bad_handle", message: "Each field needs an eid (or element) from read_page").said)
+            }
+            page(tab, session, PageScripts.resolve(key: Self.key, eid: eid)) { result in
+                switch result {
+                case .failure(let refusal): answer(refusal.said)
+                case .success(let out):
+                    guard let i = out["index"] as? Int, out["snap"] as? Int == snap else {
+                        return answer(AgentRefusal(code: "stale_element", message: "That eid is from before the last read_page", hint: "Call read_page again.").said)
+                    }
+                    indices.append(i)
+                    resolve(k + 1)
+                }
+            }
+        }
+        /// Where each field is, as a click on it would be probed.
+        @MainActor func probe(_ k: Int, _ found: [AgentGate.Target], _ then: @escaping ([AgentGate.Target]) -> Void) {
+            guard k < indices.count else { return then(found) }
+            page(tab, session, PageScripts.touch(key: Self.key, snap: snap, index: indices[k], how: "probe", text: nil, replace: true, strict: true)) { result in
+                switch result {
+                case .failure(let refusal): answer(refusal.said)
+                case .success(let out): probe(k + 1, found + [AgentGate.Target(out["gate"]) ?? AgentGate.Target()], then)
+                }
+            }
+        }
+        /// Words read on another site go in only on the person's say (AgentTaint),
+        /// as `type` asks: here once for the whole form, whichever value it was.
+        /// A search field isn't told apart here, so a long identifier asks too.
+        @MainActor func flow() {
+            guard let hold = values.lazy.compactMap({ self.typingHold($0, on: tab, session, searching: false) }).first else { return gate() }
+            ask(hold, session, before: tab) { verdict in
+                guard verdict == .approved else { return answer(Self.declined(hold, verdict)) }
+                guard self.live(session) else { return answer(AgentRefusal(code: "stopped", message: "Stopped in \(Brand.name)").said) }
+                gate()
+            }
+        }
+        /// fill_form ticks boxes inside the page, which skips the click path's
+        /// question: a box that agrees, consents or signs up is asked about
+        /// here, once for the form, and must still be those boxes after.
+        @MainActor func gate() {
+            // Its own question: a repeat the person allowed doesn't answer this one.
+            session.repeatPass = nil
+            let rules = self.rules(browser)
+            guard rules.commits else { return fill() }
+            probe(0, []) { targets in
+                if let here = AgentGate.site(tab.pageAddress) { session.sites.insert(here) }
+                guard let hold = AgentGate.hold(fill: targets, on: tab.pageAddress, sites: session.sites, rules: rules) else { return fill() }
+                self.ask(hold, session) { verdict in
+                    guard verdict == .approved else { return answer(Self.declined(hold, verdict)) }
+                    probe(0, []) { now in
+                        guard AgentGate.hold(fill: now, on: tab.pageAddress, sites: session.sites, rules: rules)?.fingerprint == hold.fingerprint,
+                              now.map(\.fingerprint) == targets.map(\.fingerprint) else {
+                            return answer(AgentRefusal(code: "changed", message: "The page changed while waiting: not done",
+                                                       hint: "Read the page again and ask once more if it still applies.").said)
+                        }
+                        fill()
+                    }
+                }
+            }
+        }
+        @MainActor func fill() {
+            let fields = indices.enumerated().map { ["i": $0.element, "value": values[$0.offset]] as [String: Any] }
+            page(tab, session, PageScripts.fill(key: Self.key, snap: snap, fields: fields)) { [self] result in
+                switch result {
+                case .failure(let refusal): return answer(refusal.said)
+                case .success(let out):
+                    var rows = out["fields"] as? [[String: Any]] ?? []
+                    @MainActor func finish() {
+                        var said = rows.map { row -> [String: Any] in
+                            var row = row
+                            if let holds = row["holds"] as? String { row["holds"] = Quarantine.label(AgentRules.scrubbed(holds)) }
+                            return row
+                        }
+                        for k in said.indices { said[k]["element"] = "\(handle).s\(snap).e\(indices[k])" }
+                        let invalid = (out["invalid"] as? [[String: Any]] ?? []).map { bad -> [String: Any] in
+                            ["eid": bad["eid"] ?? "", "message": Quarantine.label(AgentRules.scrubbed(bad["message"] as? String ?? ""))]
+                        }
+                        var done: [String: Any] = ["page": handle, "fields": said, "validation": ["invalid": invalid, "all_valid": invalid.isEmpty],
+                                                   "filled": said.filter { $0["taken"] as? Bool == true }.count]
+                        if said.contains(where: { $0["taken"] as? Bool != true }) {
+                            done["not_taken"] = "Some fields didn't take the value: see each field's taken and why."
+                        }
+                        answer(done)
+                    }
+                    // What the page's own script bounced is typed in with keys.
+                    @MainActor func keys(_ k: Int) {
+                        guard k < rows.count else { return finish() }
+                        guard rows[k]["taken"] as? Bool == false, rows[k]["why"] == nil, self.live(session) else { return keys(k + 1) }
+                        let touch = { (how: String, text: String?, then: @escaping ([String: Any]) -> Void) in
+                            self.page(tab, session, PageScripts.touch(key: Self.key, snap: snap, index: indices[k], how: how, text: text, replace: true, strict: true)) { r in
+                                if case .success(let o) = r { then(o) } else { keys(k + 1) }
+                            }
+                        }
+                        touch("focus", values[k]) { focused in
+                            let web = tab.web
+                            if web.window === PageRoom.shared.window { web.window?.makeFirstResponder(web) }
+                            PageHands.type(values[k], into: web)
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                touch("verify", focused["want"] as? String) { checked in
+                                    if checked["verified"] as? Bool == true { rows[k]["taken"] = true; rows[k]["via"] = "keystrokes" }
+                                    keys(k + 1)
+                                }
+                            }
+                        }
+                    }
+                    keys(0)
+                }
+            }
+        }
+        mark(tab, "Filling in a form", nil)
+        resolve(0)
+    }
+}
+
+// MARK: - disambiguate
+
+extension AgentControl {
+    /// Badges 1 to 4 on as many controls of its own page; the person clicks
+    /// one. Held like any question (so Stop, timeouts and the task ending all
+    /// settle it), and answered only by a fresh click on a badge.
+    fileprivate func disambiguate(_ request: [String: Any], _ session: AgentSession, _ browser: Browser,
+                                  _ answer: @escaping ([String: Any]) -> Void) throws {
+        let tab = try self.tab(request, session, browser, .drive)
+        guard let eids = request["eids"] as? [String], (2...4).contains(eids.count), Set(eids).count == eids.count,
+              eids.allSatisfy({ $0.range(of: "^[0-9a-f]{8}$", options: .regularExpression) != nil }) else {
+            throw AgentRefusal(code: "bad_eids", message: "Two to four different eids, from read_page")
+        }
+        guard let prompt = AgentGate.intentLine(request["prompt"], longest: 160) else {
+            throw AgentRefusal(code: "bad_prompt", message: "A prompt is one short line saying which you mean")
+        }
+        guard session.held == nil else {
+            throw AgentRefusal(code: "waiting", message: "Something is already waiting for the person", hint: "Try again once they have answered.")
+        }
+        page(tab, session, PageScripts.choices(eids: eids)) { [self] result in
+            switch result {
+            case .failure(let refusal): return answer(refusal.said)
+            case .success(let out):
+                let items = out["items"] as? [[String: Any]] ?? []
+                guard items.allSatisfy({ $0["found"] as? Bool == true }) else {
+                    return answer(AgentRefusal(code: "detached", message: "One of those eids is not on the page now",
+                                               hint: "Call read_page again.").said)
+                }
+                guard let web = tab.built else { return answer(AgentRefusal(code: "asleep", message: "That tab is asleep").said) }
+                let zoom = web.pageZoom * web.magnification
+                let boxes = items.compactMap { item -> CGRect? in
+                    guard item["inView"] as? Bool == true, let box = (item["box"] as? [Any])?.compactMap({ ($0 as? NSNumber)?.doubleValue }) else { return nil }
+                    return AgentOverlayView.place(box, zoom: zoom)
+                }
+                guard boxes.count == items.count else {
+                    return answer(AgentRefusal(code: "not_shown", message: "Not all of them are on screen",
+                                               hint: "Scroll so that they are, read the page again and ask once more.").said)
+                }
+                PageRoom.shared.house(tab)
+                session.chosen = nil
+                let view = AgentChoiceView.show(on: web, boxes: boxes)
+                self.choosing = view
+                var hold = AgentGate.Hold(reason: .choose, summary: "Pick one of \(items.count) on \(tab.pageAddress?.host() ?? "the page")")
+                hold.intent = prompt
+                self.ask(hold, session) { [weak self] verdict in
+                    view.removeFromSuperview()
+                    self?.choosing = nil
+                    guard verdict == .approved, let number = session.chosen, (1...eids.count).contains(number) else {
+                        return answer(verdict == .timedOut
+                            ? AgentRefusal(code: "no_answer", message: "The person didn't pick one in time", hint: "Ask in your reply.").said
+                            : AgentRefusal(code: "declined", message: "The person picked none of them",
+                                           hint: "Say what you were looking for and ask them, or carry on with the rest.").said)
+                    }
+                    let item = items[number - 1]
+                    answer(["chosen": eids[number - 1], "number": number, "role": item["role"] ?? "",
+                            "name": Quarantine.label(AgentRules.scrubbed(item["name"] as? String ?? "")), "page": session.handle(for: tab)])
+                }
+            }
+        }
+    }
+
+    /// A badge clicked: only a fresh click of the person's on that badge
+    /// answers (AgentRules.isClick); a key, an accessibility press or
+    /// anything an agent sent does not.
+    func choose(number: Int, event: NSEvent?, on badge: NSView) {
+        guard let session, let held = session.held, held.hold.reason == .choose,
+              AgentRules.isClick(event, on: badge, in: session.browser?.window, after: held.since + 0.5) else { return }
+        session.chosen = number
+        held.resolve(.approved)
+    }
+
+    /// For a unit test: the same, without an event.
+    func chooseForTest(number: Int) {
+        guard Store.testing, let session, let held = session.held, held.hold.reason == .choose else { return }
+        session.chosen = number
+        held.resolve(.approved)
+    }
+
+    /// The badges now on a page, for a test.
+    var choosingForTest: AgentChoiceView? { choosing }
+}
+
+// MARK: - zoom
+
+extension AgentControl {
+    /// One part of a page of its own at full size (PageScripts.zoom), cut to
+    /// a budget, the page's words fenced as every read's are.
+    fileprivate func zoom(_ request: [String: Any], _ session: AgentSession, _ browser: Browser,
+                          _ answer: @escaping ([String: Any]) -> Void) throws {
+        let tab = try self.tab(request, session, browser, .drive)
+        guard let eid = request["eid"] as? String, eid.range(of: "^[0-9a-f]{8}$", options: .regularExpression) != nil else {
+            throw AgentRefusal(code: "bad_handle", message: "An eid is eight letters and digits, from read_page")
+        }
+        let tokens = min(max(request["budget_tokens"] as? Int ?? 1500, 200), 6000)
+        let handle = session.handle(for: tab)
+        page(tab, session, PageScripts.zoom(key: Self.key, eid: eid, chars: tokens * 4)) { result in
+            switch result {
+            case .failure(let refusal): answer(refusal.said)
+            case .success(var out):
+                out["text"] = Quarantine.fence(TypedSecrets.hidden(in: out["text"] as? String ?? ""))
+                out["controls"] = (out["controls"] as? [[String: Any]] ?? []).map { node in
+                    var node = node
+                    for key in ["name", "value"] { if let said = node[key] as? String { node[key] = Quarantine.label(said) } }
+                    if let href = node["href"] as? String { node["href"] = AgentRules.url(href) }
+                    return node
+                }
+                out["page"] = handle
+                out["budget_tokens"] = tokens
+                out["source"] = ["source": "dom_innertext", "confidence": "exact"]
+                out["untrusted"] = Self.untrusted
+                answer(out)
+            }
+        }
     }
 }

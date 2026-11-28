@@ -117,6 +117,8 @@ struct RememberedAgents: View {
         }
         if open {
             setup
+            Rule()
+            LoopLimitRows()
             if trust.remembered.isEmpty {
                 Rule()
                 Nothing(AgentEntryWords.nobody(usable: trust.usable))
@@ -212,5 +214,30 @@ struct RememberedAgents: View {
                 .padding(.bottom, 10)
             }
         }
+    }
+}
+
+
+/// The hard limits on a run (LoopBreaker), beside the coding-agent settings.
+/// They only stop things: a lower number stops a run sooner.
+struct LoopLimitRows: View {
+    @State private var limits = LoopLimits.load()
+
+    private func row(_ title: String, _ detail: String, _ value: Binding<Int>, _ name: String, unit: String) -> some View {
+        SettingRow(icon: "arrow.triangle.2.circlepath", title: title, detail: detail) {
+            Stepper("\(value.wrappedValue) \(unit)", value: value, in: LoopLimits.ranges[name] ?? 1...1000)
+                .font(.system(size: 12))
+                .onChange(of: value.wrappedValue) { _, _ in limits.save() }
+        }
+    }
+
+    var body: some View {
+        row("Actions per message", "A run is stopped after this many actions and reads", $limits.actions, "actions", unit: "actions")
+        row("Repeats with no change", "The same control or page again and again, with nothing changing", $limits.stalled, "stalled", unit: "times")
+        row("Identical results", "The same action giving the same result", $limits.identical, "identical", unit: "times")
+        row("Time per message", "A run is stopped after this long", $limits.minutes, "minutes", unit: "min")
+        Text("Applies from the next message. A run that hits one is stopped with a note in the panel.")
+            .font(.system(size: 11)).foregroundStyle(Palette.muted)
+            .padding(.leading, 52).padding(.bottom, 8)
     }
 }

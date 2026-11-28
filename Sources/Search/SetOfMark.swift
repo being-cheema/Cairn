@@ -15,18 +15,23 @@ enum SetOfMark {
         let index: Int
         /// Left, top, width, height, in CSS pixels of the viewport.
         let box: [Double]
+        /// What the read's five-point probe says (`hit_testable`): a control
+        /// something is drawn over gets no badge, since a click there would
+        /// land on the cover. Nil where the page didn't say, and then it is badged.
+        var testable: Bool? = nil
     }
 
     /// Badges to a picture, so a busy page stays readable.
     static let most = 80
 
-    /// [[index, x, y, w, h], …] as the page's script gives them.
+    /// [[index, x, y, w, h, testable?], …] as the page's script gives them.
     static func parse(_ any: Any?) -> [Mark] {
         (any as? [Any] ?? []).compactMap { item in
-            guard let row = item as? [Any], row.count == 5 else { return nil }
-            let numbers = row.compactMap { ($0 as? NSNumber)?.doubleValue }
+            guard let row = item as? [Any], row.count == 5 || row.count == 6 else { return nil }
+            let numbers = row.prefix(5).compactMap { ($0 as? NSNumber)?.doubleValue }
             guard numbers.count == 5, numbers[3] > 0, numbers[4] > 0 else { return nil }
-            return Mark(index: Int(numbers[0]), box: Array(numbers[1...]))
+            let testable = row.count == 6 ? (row[5] as? NSNumber)?.boolValue : nil
+            return Mark(index: Int(numbers[0]), box: Array(numbers[1...]), testable: testable)
         }
     }
 
@@ -37,7 +42,7 @@ enum SetOfMark {
     /// The marks that may be drawn: none that touch a blacked-out box.
     static func visible(_ marks: [Mark], masks: [[Double]]) -> [Mark] {
         let clear = masks.filter { $0.count == 4 }
-        return Array(marks.filter { mark in !clear.contains { touches(mark.box, $0) } }.prefix(most))
+        return Array(marks.filter { mark in mark.testable != false && !clear.contains { touches(mark.box, $0) } }.prefix(most))
     }
 
     /// Draws the badges into the current graphics context of a picture
@@ -79,7 +84,7 @@ enum SetOfMark {
             if (!el || !el.isConnected || secret(el) || !visible(el)) return;
             var r = el.getBoundingClientRect();
             if (r.width <= 0 || r.height <= 0 || r.bottom < 0 || r.right < 0 || r.top >= innerHeight || r.left >= innerWidth) return;
-            out.push([i, r.left, r.top, r.width, r.height]);
+            out.push([i, r.left, r.top, r.width, r.height, probe(el, null).testable ? 1 : 0]);
           });
           return JSON.stringify({ marks: out });
         })

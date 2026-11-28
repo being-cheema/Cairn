@@ -29,6 +29,12 @@ final class SetOfMarkTests: XCTestCase {
         XCTAssertEqual(marks, [SetOfMark.Mark(index: 3, box: [10, 20, 30, 40])])
     }
 
+    func testACoveredControlGetsNoBadgeButOneWithNoAnswerKeepsIt() {
+        let marks = SetOfMark.parse([[1, 0, 0, 10, 10, 1], [2, 20, 0, 10, 10, 0], [3, 40, 0, 10, 10]])
+        XCTAssertEqual(marks.map(\.testable), [true, false, nil])
+        XCTAssertEqual(SetOfMark.visible(marks, masks: []).map(\.index), [1, 3], "hit_testable false is not badged; absent is kept")
+    }
+
     func testAMarkTouchingABlackedOutAreaIsDropped() {
         let marks = [SetOfMark.Mark(index: 1, box: [10, 10, 50, 20]), SetOfMark.Mark(index: 2, box: [190, 95, 30, 20])]
         let kept = SetOfMark.visible(marks, masks: [[200, 100, 80, 40]])

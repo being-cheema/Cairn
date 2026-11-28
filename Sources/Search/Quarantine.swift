@@ -84,6 +84,8 @@ enum Quarantine {
         if let summary = out["summary"] as? String { out["summary"] = label(summary) }
         // The page's JSON-LD: nobody looking at the page sees it.
         if let structured = out["structured"] { out["structured"] = deep(structured) }
+        // The typed summary of what kind of page it is: all the page's words.
+        if let kind = out["archetype"] { out["archetype"] = deep(kind) }
         return out
     }
 

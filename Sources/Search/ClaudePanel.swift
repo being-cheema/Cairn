@@ -100,6 +100,7 @@ struct ClaudePanel: View {
                 }
             }
             Spacer(minLength: 0)
+            if let browser = session.browser { RecordSkillDoor(browser: browser) }
             Door(icon: "clock", help: "Task History") { showingHistory.toggle() }
                 .popover(isPresented: $showingHistory, arrowEdge: .bottom) {
                     TaskHistory(session: session) { showingHistory = false }
@@ -490,6 +491,14 @@ struct ClaudePanel: View {
                         .help("Every kind of token the task used, as Claude Code counted it. Each page read is sent again with every later step.")
                 }
 
+                if let trip = turn.loop {
+                    LoopCard(trip: trip)
+                }
+
+                if turn.trail.count > 1 {
+                    TrailScrubber(steps: turn.trail)
+                }
+
                 ForEach(turn.artifacts) { artifact in
                     ArtifactCard(artifact: artifact, browser: browser)
                 }
@@ -762,6 +771,8 @@ struct PanelWaiting: View {
             return "Sign in on \(hold.site ?? "the page") yourself, then press Resume on the card at the foot of the page."
         case .submit: return "Claude wants to submit a form." + answer
         case .flow: return "Claude wants to move text it read on one site to another. The card names the site; it is a guess from matching words." + answer
+        case .repeatAction: return "Claude wants to do the same thing a second time." + answer
+        case .choose: return "Claude asks which one you mean: click a numbered badge on the page."
         }
     }
 }
@@ -779,7 +790,6 @@ struct ClaudeDoor: View {
         }
     }
 }
-
 
 /// The Task Scratchpad (Scratchpad): the agent's notes, read-only and shown
 /// as the data they are, and a box of the person's own whose words go to the
@@ -825,6 +835,105 @@ private struct ScratchpadDrawer: View {
                 .padding(.horizontal, 14).padding(.bottom, 10)
             }
             Rectangle().fill(Palette.hairline).frame(height: 1)
+        }
+    }
+}
+
+/// What the browser says when it stops a run it thinks is going round in
+/// circles: its own words, and the steps that repeated as it counted them.
+private struct LoopCard: View {
+    let trip: LoopTrip
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: 11, weight: .semibold))
+                Text("Stopped: this looks like a loop").font(.system(size: 12, weight: .semibold))
+            }
+            Text(verbatim: trip.message + ". Its actions are stopped for this message; send another to go on.")
+                .font(.system(size: 11.5))
+            ForEach(Array(trip.trace.suffix(5).enumerated()), id: \.offset) { _, line in
+                Text(verbatim: line).font(.system(size: 10.5, design: .monospaced)).foregroundStyle(Palette.muted)
+            }
+        }
+        .foregroundStyle(Palette.ink)
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Palette.wash, in: RoundedRectangle(cornerRadius: 8))
+        .accessibilityElement(children: .combine)
+    }
+}
+
+
+/// The turn's actions as a timeline to scrub: each step's change and what it
+/// did beyond the page, from the receipts the browser made (never from what
+/// Claude said it did). A step that went wrong shows its code.
+private struct TrailScrubber: View {
+    let steps: [TrailStep]
+    @State private var at = 0.0
+    @State private var open = false
+
+    private var step: TrailStep { steps[min(max(Int(at.rounded()), 0), steps.count - 1)] }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Button { open.toggle() } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: open ? "chevron.down" : "chevron.right").font(.system(size: 8.5, weight: .semibold))
+                    Text("Timeline, \(steps.count) steps").font(.system(size: 11.5))
+                }
+                .foregroundStyle(Palette.muted)
+            }
+            .buttonStyle(.plain)
+            if open {
+                Slider(value: $at, in: 0...Double(steps.count - 1), step: 1)
+                    .controlSize(.mini)
+                    .accessibilityLabel("Step")
+                    .accessibilityValue("\(Int(at.rounded()) + 1) of \(steps.count)")
+                Text(verbatim: "\(Int(at.rounded()) + 1) of \(steps.count): \(step.line)")
+                    .font(.system(size: 11.5)).foregroundStyle(step.failure == nil ? Palette.ink : Palette.accent)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(verbatim: step.effects).font(.system(size: 10.5)).foregroundStyle(Palette.muted)
+            }
+        }
+    }
+}
+
+
+/// Record Skill: on, it follows what you do in the tab in front; off, it asks
+/// what to call the playbook and writes it to the Skills folder, or drops it.
+private struct RecordSkillDoor: View {
+    let browser: Browser
+    @ObservedObject private var recorder: SkillRecorder
+
+    init(browser: Browser) {
+        self.browser = browser
+        _recorder = ObservedObject(wrappedValue: browser.skillRecorder)
+    }
+
+    var body: some View {
+        Door(icon: recorder.recording ? "stop.circle.fill" : "record.circle",
+             help: recorder.recording ? "Stop Recording and Save as a Skill" : "Record Skill: do something once, and Claude can repeat it") {
+            if recorder.recording { finish() } else {
+                recorder.start(in: browser)
+                browser.announce("Recording your steps in the tab in front: names of controls only, never what you type")
+            }
+        }
+        .foregroundStyle(recorder.recording ? Palette.accent : Palette.muted)
+    }
+
+    private func finish() {
+        let steps = recorder.stop()
+        guard !steps.isEmpty else { return browser.announce("Nothing was recorded") }
+        Ask.name("Save these \(steps.count) steps as a skill?",
+                 detail: "It is written to the Skills folder as a playbook you can read and edit. What you typed is not in it: it becomes something to type after its name. Passwords, cards and codes are never kept.",
+                 placeholder: "my-skill", confirm: "Save") { name in
+            let made = SkillRecording.markdown(name: Playbooks.name(name) ?? "skill", steps: steps)
+            if let file = SkillRecording.save(made.text, as: name) {
+                browser.announce("Saved as /\(file.deletingLastPathComponent().lastPathComponent)")
+            } else {
+                browser.announce("Couldn't save it: use letters, digits and hyphens for the name")
+            }
         }
     }
 }

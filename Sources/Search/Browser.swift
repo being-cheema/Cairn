@@ -595,6 +595,9 @@ final class Browser: NSObject, ObservableObject {
     @Published var sidePanel: SidePanelContent?
     /// The conversation in the side panel's Claude (ClaudePanel), made when
     /// the panel first asks for it. Nothing runs until something is sent.
+    /// Record Skill (SkillRecorder): on only while you have it on.
+    lazy var skillRecorder = SkillRecorder()
+
     lazy var claude = ClaudeSession(
         // The agent's browser rules (clean browser, commit gates, no saved
         // password ever filled for it) are always on; what it is told matches.

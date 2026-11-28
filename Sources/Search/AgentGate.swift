@@ -69,6 +69,10 @@ enum AgentGate {
         case pay, send, signIn, submit, leave
         /// Words read on one site about to be put on another (AgentTaint): a guess.
         case flow
+        /// The same action again on a page it left as it was (ActionReceipt.Dedupe).
+        case repeatAction = "repeat"
+        /// Which of two to four controls is meant: answered by a click on a badge (AgentChoiceView).
+        case choose
     }
 
     /// What is held, in the words the question and the agent are given.
@@ -86,6 +90,8 @@ enum AgentGate {
         var warning: String?
         /// Where the form asked about would send, when that can be told.
         var sends: URL?
+        /// The agent's own one line on why, shown on the card as its words (never ours).
+        var intent: String?
     }
 
     struct Rules: Equatable {
@@ -106,6 +112,16 @@ enum AgentGate {
     static let payWords = #"\b(pay|payment|buy|purchase|check ?out|place (your |my )?order|complete (your |my )?(order|purchase)|confirm (your |my )?(order|purchase|payment)|order now|donate|subscribe)\b"#
     static let sendWords = #"\b(send|post|publish|reply|tweet|share|comment|submit|confirm|delete|transfer)\b"#
     static let signInWords = #"\b(sign ?in|log ?in|sign ?up|register|create (an |your )?account)\b"#
+
+    /// An agent's one line of reason, as it may be shown: printable, one
+    /// line, at most `longest` characters. Nil when it says nothing.
+    static func intentLine(_ raw: Any?, longest: Int = 140) -> String? {
+        guard let text = raw as? String else { return nil }
+        let line = text.unicodeScalars.map { CharacterSet.controlCharacters.contains($0) ? " " : String($0) }.joined()
+        let squashed = line.split(separator: " ", omittingEmptySubsequences: true).joined(separator: " ")
+        guard !squashed.isEmpty else { return nil }
+        return squashed.count > longest ? String(squashed.prefix(longest)) + "…" : squashed
+    }
 
     /// A label as it may be quoted: one short printable line.
     static func quoted(_ label: String) -> String {
@@ -167,6 +183,34 @@ enum AgentGate {
                         fingerprint: target.fingerprint, warning: NavigationPolicyEngine.egressWarning(url))
         }
         return nil
+    }
+
+    /// Words that make a box something to agree to: tick it and a person
+    /// has agreed, consented or signed up, which a plain checkbox is not.
+    static let consentWords = #"\b(agree|accept|consent|terms|privacy|subscribe|newsletter|opt[- ]?in|marketing|authori[sz]e|promotional|offers)\b"#
+
+    /// Boxes (checkboxes and radios) that fill_form would tick, as one
+    /// question. A box is held as a click on it would be, and also when its
+    /// words are of agreeing: fill_form ticks them in the page, past the
+    /// click path, so what a click asks is asked here. Text fields and menus
+    /// are never held. Nil: nothing to ask.
+    static func hold(fill targets: [Target], on page: URL?, sites: Set<String>, rules: Rules,
+                     registrable: (String) -> String = Vault.registrable) -> Hold? {
+        guard rules.commits else { return nil }
+        let where_ = page?.host()?.lowercased() ?? "this page"
+        var held: [(Target, Hold)] = []
+        for target in targets where ["checkbox", "radio"].contains(target.type.lowercased()) && target.tag.lowercased() == "input" {
+            if let hold = hold(click: target, on: page, sites: sites, rules: rules, registrable: registrable) {
+                held.append((target, hold))
+            } else if matches(consentWords, target.label) {
+                held.append((target, Hold(reason: .send, summary: "", fingerprint: target.fingerprint)))
+            }
+        }
+        guard let first = held.first else { return nil }
+        let names = held.map { "“\(quoted($0.0.label))”" }.joined(separator: ", ")
+        return Hold(reason: first.1.reason,
+                    summary: "Tick \(held.count == 1 ? "a box" : "\(held.count) boxes") that agrees or signs up: \(names) on \(where_)",
+                    fingerprint: held.map(\.1.fingerprint).joined(separator: "\u{2}"))
     }
 
     /// Return pressed in the element the page has focused.

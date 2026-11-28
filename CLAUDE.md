@@ -146,13 +146,26 @@ A change to any of these needs its tests (`Agent*Tests.swift`) and a probe run.
 - `select_option` and `collect_list` act only in a task's own tabs, never on a
   secret field; `select_option` opens a list with the gated click and asks the
   gates again about the option, `collect_list` only scrolls (and puts back).
-  An action's `outcome` informs and never changes a gate. A Trusted Hub site
+  An action's `receipt.outcome` (the one place it is said) informs and never changes a gate. A Trusted Hub site
   (`AutonomyTiers`, set only in the site card) drops the `leave` question for
   links out of it and nothing else: pay, send, sign in and submit still hold.
 - `focus_query` (`FocusRank`, on-device only) only reorders what a read already
   returns; the context governor (`ContextGovernor`) shortens a read of a
   tab the agent has left once the task has read a lot. Neither drops a
   `redacted` mark, and `Quarantine.read` runs after both.
+- An action's receipt (`ActionReceipt.swift`) lists only what the page's own
+  scripts can see (resource timing, storage by key) and says it is best
+  effort. `fill_form` is for an agent's own tabs, refuses the whole call if
+  any field is a secret or a file, and never sends; ticking a checkbox or
+  radio that agrees, consents or signs up is held first as a click would be
+  (`AgentGate.hold(fill:)`). Allowing a repeat also answers that action's own
+  send or submit question once (`AgentSession.repeatPass`), nothing else. A repeat of an action on
+  a page it left as it was is held (`AgentGate.Reason.repeatAction`), not
+  dropped. `disambiguate` is answered only by a fresh click on a badge
+  (`AgentControl.choose`), and an `intent` is shown only as the agent's own
+  words. Record Skill (`SkillRecorder.swift`) runs only while the person has
+  it on, in their own front tab, never a private one, and never writes a typed
+  value or anything of a secret box. The loop breaker (`LoopBreaker.swift`) only ever stops a run.
 - A task that ends normally hands its tabs to the user, still in their own
   store. Stop, quit, misbehaviour and a declined site change close them.
 - **Local Dev Bridge.** Only a real click on its switch turns it on: no menu

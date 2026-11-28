@@ -196,3 +196,69 @@ final class AgentOverlayView: NSView {
         CATransaction.commit()
     }
 }
+
+
+/// Numbered coral badges over two to four controls of an agent's own page,
+/// for the person to click one (AgentControl.disambiguate). The app's own
+/// view: nothing goes into the page. Only a badge takes a click; the rest of
+/// the view lets the page have it. A badge answers only to a fresh click of
+/// the person's (AgentRules.isClick, in AgentControl.choose), never to a key
+/// or an accessibility press.
+final class AgentChoiceView: NSView {
+    final class Badge: NSView {
+        let number: Int
+        init(number: Int, centre: CGPoint) {
+            self.number = number
+            super.init(frame: CGRect(x: centre.x - 13, y: centre.y - 13, width: 26, height: 26))
+        }
+        required init?(coder: NSCoder) { nil }
+        override var isFlipped: Bool { true }
+        // No accessibility action: a press that isn't a click is no answer.
+        override func isAccessibilityElement() -> Bool { false }
+        override func mouseDown(with event: NSEvent) {}
+        override func mouseUp(with event: NSEvent) { AgentControl.shared.choose(number: number, event: event, on: self) }
+        override func draw(_ dirty: NSRect) {
+            NSColor(Palette.accent).setFill()
+            NSBezierPath(ovalIn: bounds.insetBy(dx: 1, dy: 1)).fill()
+            let text = NSAttributedString(string: "\(number)", attributes: [
+                .font: NSFont.systemFont(ofSize: 14, weight: .bold), .foregroundColor: NSColor.white])
+            let size = text.size()
+            text.draw(at: NSPoint(x: (bounds.width - size.width) / 2, y: (bounds.height - size.height) / 2))
+        }
+    }
+
+    private(set) var badges: [Badge] = []
+    private var outlines: [CGRect] = []
+
+    override var isFlipped: Bool { true }
+    override func isAccessibilityElement() -> Bool { false }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        badges.first { $0.frame.contains(convert(point, from: superview)) }
+    }
+
+    /// Put over a page's view: a badge at the top-left corner of each box
+    /// (view points), and an outline round it.
+    static func show(on web: WKWebView, boxes: [CGRect]) -> AgentChoiceView {
+        web.subviews.compactMap { $0 as? AgentChoiceView }.forEach { $0.removeFromSuperview() }
+        let view = AgentChoiceView(frame: web.bounds)
+        view.autoresizingMask = [.width, .height]
+        view.outlines = boxes
+        for (index, box) in boxes.enumerated() {
+            let badge = Badge(number: index + 1, centre: CGPoint(x: max(box.minX, 14), y: max(box.minY, 14)))
+            view.badges.append(badge)
+            view.addSubview(badge)
+        }
+        web.addSubview(view)
+        return view
+    }
+
+    override func draw(_ dirty: NSRect) {
+        NSColor(Palette.accent).setStroke()
+        for box in outlines {
+            let path = NSBezierPath(roundedRect: box.insetBy(dx: -3, dy: -3), xRadius: 6, yRadius: 6)
+            path.lineWidth = 2
+            path.stroke()
+        }
+    }
+}

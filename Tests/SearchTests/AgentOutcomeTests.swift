@@ -54,6 +54,7 @@ final class AgentOutcomeTests: XCTestCase {
                 <button>Nothing</button>
                 <a href="/next">Next</a>
                 <label>Name <input id=n></label>
+                <label>Pick <select id=p><option>One</option><option>Two</option></select></label>
                 <p id=out></p>
                 """),
             "/ping": .init(type: "text/plain", body: "pong"),
@@ -68,6 +69,11 @@ final class AgentOutcomeTests: XCTestCase {
         _ = try XCTUnwrap(AgentControl.shared.sessionForTest(in: browser))
         defer { AgentControl.shared.stopSession() }
         try await body("http://127.0.0.1:\(server.port)/")
+    }
+
+    /// Said once, inside the receipt (ActionReceipt), not beside it.
+    private func outcome(_ out: [String: Any]) -> String? {
+        (out["receipt"] as? [String: Any])?["outcome"] as? String
     }
 
     private func ask(_ request: [String: Any]) async -> [String: Any] {
@@ -89,29 +95,41 @@ final class AgentOutcomeTests: XCTestCase {
 
             var seen = await read()
             var out = await ask(["do": "click", "element": try element(seen, "Add")])
-            XCTAssertEqual(out["outcome"] as? String, "dom_mutated", "\(out)")
+            XCTAssertEqual(outcome(out), "dom_mutated", "\(out)")
 
             seen = await read()
             out = await ask(["do": "click", "element": try element(seen, "Ping")])
-            XCTAssertEqual(out["outcome"] as? String, "network_settled", "\(out)")
-            XCTAssertNotNil(out["outcome_note"])
+            XCTAssertEqual(outcome(out), "network_settled", "\(out)")
+            XCTAssertNotNil((out["receipt"] as? [String: Any])?["outcome_note"])
+            XCTAssertNil(out["outcome"], "said once, in the receipt: \(out)")
 
             seen = await read()
             out = await ask(["do": "click", "element": try element(seen, "Nothing")])
-            XCTAssertEqual(out["outcome"] as? String, "no_effect", "a dead click: \(out)")
+            XCTAssertEqual(outcome(out), "no_effect", "a dead click: \(out)")
 
             seen = await read()
             out = await ask(["do": "type", "element": try element(seen, "Name"), "text": "owl"])
-            XCTAssertEqual(out["outcome"] as? String, "no_effect", "typing that nothing answered: \(out)")
+            XCTAssertEqual(outcome(out), "no_effect", "typing that nothing answered: \(out)")
             XCTAssertEqual(out["verified"] as? Bool, true, "the typing is checked as before: \(out)")
 
             out = await ask(["do": "press", "page": page, "key": "Tab"])
-            XCTAssertEqual(out["outcome"] as? String, "no_effect", "\(out)")
+            XCTAssertEqual(outcome(out), "no_effect", "\(out)")
 
             seen = await read()
             out = await ask(["do": "click", "element": try element(seen, "Next")])
-            XCTAssertEqual(out["outcome"] as? String, "navigated", "\(out)")
+            XCTAssertEqual(outcome(out), "navigated", "\(out)")
             XCTAssertEqual(out["navigated"] as? Bool, true)
+        }
+    }
+
+    func testSelectOptionAnswersWithAReceipt() async throws {
+        try await withServer { base in
+            let opened = await ask(["do": "open", "url": base])
+            let page = try XCTUnwrap(opened["page"] as? String, "\(opened)")
+            let seen = await ask(["do": "read", "page": page])
+            let out = await ask(["do": "select_option", "element": try XCTUnwrap((seen["nodes"] as? [[String: Any]])?.first { $0["role"] as? String == "combobox" }?["element"] as? String), "value": "Two"])
+            XCTAssertNil(out["error"], "\(out)")
+            XCTAssertNotNil(out["receipt"] as? [String: Any], "a receipt like click's: \(out)")
         }
     }
 
@@ -121,7 +139,7 @@ final class AgentOutcomeTests: XCTestCase {
             let page = try XCTUnwrap(opened["page"] as? String)
             let out = await ask(["do": "click", "element": "\(page).s99.e0"])
             XCTAssertNotNil(out["error"], "\(out)")
-            XCTAssertNil(out["outcome"])
+            XCTAssertNil(outcome(out))
         }
     }
 }

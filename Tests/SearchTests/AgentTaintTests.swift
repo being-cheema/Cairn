@@ -236,4 +236,38 @@ final class AgentTaintFlowTests: XCTestCase {
         for _ in 0..<100 where answered == nil { try await Task.sleep(nanoseconds: 50_000_000) }
         XCTAssertEqual((answered?["error"] as? [String: Any])?["code"] as? String, "declined", "\(String(describing: answered))")
     }
+
+    func testFillFormValuesReadOnAnotherSiteAreHeldToo() async throws {
+        let secret = "the Hartwell account shows a balance of forty eight thousand pounds today"
+        let one = try LocalPageServer(["/a": .init(type: "text/html", body: "<title>A</title><p>\(secret)</p>")])
+        let two = try LocalPageServer(["/b": .init(type: "text/html", body: "<title>B</title><label>Note <input id=q></label>")])
+        defer { one.stop(); two.stop() }
+        Store.settings.set(["127.0.0.1"], forKey: "test.agentLocalHosts")
+        defer { Store.settings.removeObject(forKey: "test.agentLocalHosts") }
+        let browser = Browser()
+        Browsers.register(browser)
+        defer { Browsers.discard(browser) }
+        let session = try XCTUnwrap(AgentControl.shared.sessionForTest(in: browser))
+        defer { AgentControl.shared.stopSession() }
+
+        let a = await ask(["do": "open", "url": "http://127.0.0.1:\(one.port)/a", "timeout": 10.0])
+        _ = await ask(["do": "read", "page": try XCTUnwrap(a["page"] as? String, "\(a)"), "timeout": 10.0])
+        let b = await ask(["do": "open", "url": "http://127.0.0.1:\(two.port)/b", "timeout": 10.0])
+        let pageB = try XCTUnwrap(b["page"] as? String, "\(b)")
+        let read = await ask(["do": "read", "page": pageB, "timeout": 10.0])
+        let field = try XCTUnwrap((read["nodes"] as? [[String: Any]])?.first { $0["role"] as? String == "textbox" }?["element"] as? String)
+
+        let short = await ask(["do": "fill_form", "page": pageB, "fields": [["element": field, "value": "hello"]]])
+        XCTAssertNil(short["error"], "\(short)")
+        XCTAssertNil(session.held)
+
+        var answered: [String: Any]?
+        AgentControl.shared.askForTest(["do": "fill_form", "page": pageB, "fields": [["element": field, "value": secret]]]) { answered = $0 }
+        for _ in 0..<100 where session.held == nil { try await Task.sleep(nanoseconds: 50_000_000) }
+        let held = try XCTUnwrap(session.held, "\(String(describing: answered))")
+        XCTAssertEqual(held.hold.reason, .flow)
+        AgentControl.shared.answerHeldForTest(approve: false)
+        for _ in 0..<100 where answered == nil { try await Task.sleep(nanoseconds: 50_000_000) }
+        XCTAssertEqual((answered?["error"] as? [String: Any])?["code"] as? String, "declined", "\(String(describing: answered))")
+    }
 }
