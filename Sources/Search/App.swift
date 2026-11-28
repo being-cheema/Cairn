@@ -137,6 +137,10 @@ struct SearchApp: App {
                 Button("Save Page As…") { browser.savePage() }
                     .shortcut("file.savePage")
                     .disabled(!(browser.active?.isWeb ?? false))
+                Button("Save Page as Cairn Snapshot…") { browser.saveSnapshot() }
+                    .disabled(!(browser.active?.isWeb ?? false) || browser.active?.shy == true)
+                Button("Show Snapshots") { browser.showSnapshots() }
+                Button("Delete All Snapshots…") { browser.deleteAllSnapshots() }
                 Button("Export as PDF…") { browser.exportPDF() }
                     .shortcut("file.exportPDF")
                     .disabled(!(browser.active?.isWeb ?? false))
