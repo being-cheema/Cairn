@@ -2859,7 +2859,9 @@ final class AgentControl: ObservableObject {
                     session.reads[handle] = own ? seen : nil
                     let print = LoopBreaker.fingerprint(url: seen.url, controls: seen.nodes.map { "\($0.index)\($0.role)\($0.name)\($0.facts.sorted { $0.key < $1.key })" },
                                                         text: seen.text)
-                    if let trip = session.book.breaker.read(fingerprint: print) {
+                    // A replay waiting for its control polls the same page: that
+                    // is not a model going round in circles.
+                    if !session.replaying, let trip = session.book.breaker.read(fingerprint: print) {
                         self.loopTripped(trip, session)
                         return answer(trip.said)
                     }
