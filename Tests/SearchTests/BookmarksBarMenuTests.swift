@@ -28,7 +28,14 @@ final class BookmarksBarMenuTests: XCTestCase {
         let browser = Browser(record: WindowRecord())
         let prefs = browser.prefs
         let saved = prefs.usesTabGroups
-        defer { browser.closeAll(); prefs.usesTabGroups = saved }
+        let space = browser.spaceID
+        defer {
+            browser.closeAll()
+            prefs.usesTabGroups = saved
+            // The tabs it opened were written as the space's row, which the
+            // next window made in this run (CloseTabsBelowTests) would restore.
+            Session.write(now: true, space: space, Session.Shape(tabs: [], active: 0))
+        }
 
         prefs.usesTabGroups = false
         let off = browser.tabs.count
