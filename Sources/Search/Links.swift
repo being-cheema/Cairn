@@ -143,6 +143,8 @@ final class Links: NSObject, NSApplicationDelegate {
     /// window is asked for here instead; started hidden, it stays hidden
     /// with the app until the app is shown.
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // "Research in Cairn" in other apps' Services menu (ResearchService).
+        ResearchService.register()
         // The pages you asked to be told about, and a click on what they
         // said. Nothing at all with none.
         if PageWatches.shared.on, !PageWatches.shared.watches.isEmpty {

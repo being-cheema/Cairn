@@ -123,7 +123,10 @@ enum AgentGate {
 
     /// A click on `target`, on the page at `page`, in a task that has been
     /// to `sites`. Nil: nothing to ask.
-    static func hold(click target: Target, on page: URL?, sites: Set<String>, rules: Rules,
+    /// `hubs` are the sites set to Trusted Hub (AutonomyTiers): from a page on
+    /// one, a link out is not asked about as a `leave`. Nothing else it holds
+    /// depends on it.
+    static func hold(click target: Target, on page: URL?, sites: Set<String>, rules: Rules, hubs: Set<String> = [],
                      registrable: (String) -> String = Vault.registrable) -> Hold? {
         let where_ = page?.host()?.lowercased() ?? "this page"
         let name = quoted(target.label)
@@ -157,7 +160,7 @@ enum AgentGate {
                 return held(.submit, "Send a form: press \(pressed) on \(where_)")
             }
         }
-        if rules.leaves, target.role == "link", !target.href.isEmpty, let url = URL(string: target.href),
+        if rules.leaves, !VaultedSites.blocks(page, in: hubs), target.role == "link", !target.href.isEmpty, let url = URL(string: target.href),
            ["http", "https"].contains(url.scheme?.lowercased() ?? ""),
            let there = site(url, registrable: registrable), !sites.isEmpty, !sites.contains(there) {
             return Hold(reason: .leave, summary: "Leave this task's sites: go to \(url.host() ?? there)", site: there,

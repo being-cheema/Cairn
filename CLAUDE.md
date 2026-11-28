@@ -143,6 +143,16 @@ A change to any of these needs its tests (`Agent*Tests.swift`) and a probe run.
   name that points inside are known gaps.
 - Words an agent read on one site and is about to type into, or put in an address on, another site are held for your click (`TaintLedger`, `AgentGate.hold(flowFrom:)`). A heuristic that only adds questions: the ledger is in memory, ends with the task, and takes no secret field's value. It asks at a 12-word passage; an identifier-like token unless it looks like a model number (24 characters at most, not secret-shaped) going into a search field or a search engine's address; and a 6-word run of quarantined text. A link address or title as read is not a flow by itself.
 - `cairn` (the command line, `CairnCLI`) is one more agent on the socket: asked about, gated like any other. `ask` only fills the panel's box; `md` reads a tab of its own in the task store; `audit` needs a live Dev Bridge grant. Fork Tab and Rewind Step never touch an agent's tabs or undo anything sent.
+- `select_option` and `collect_list` act only in a task's own tabs, never on a
+  secret field; `select_option` opens a list with the gated click and asks the
+  gates again about the option, `collect_list` only scrolls (and puts back).
+  An action's `outcome` informs and never changes a gate. A Trusted Hub site
+  (`AutonomyTiers`, set only in the site card) drops the `leave` question for
+  links out of it and nothing else: pay, send, sign in and submit still hold.
+- `focus_query` (`FocusRank`, on-device only) only reorders what a read already
+  returns; the context governor (`ContextGovernor`) shortens a read of a
+  tab the agent has left once the task has read a lot. Neither drops a
+  `redacted` mark, and `Quarantine.read` runs after both.
 - A task that ends normally hands its tabs to the user, still in their own
   store. Stop, quit, misbehaviour and a declined site change close them.
 - **Local Dev Bridge.** Only a real click on its switch turns it on: no menu

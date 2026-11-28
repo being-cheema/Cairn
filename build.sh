@@ -352,6 +352,19 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <!-- Owning http and https is what sends a link clicked in Mail here.
        Appearing in Desktop & Dock → Default web browser also needs the
        XHTML document type below. -->
+  <!-- Research in Cairn, in other apps' Services menu: selected text or an
+       address goes into the Claude panel's box and waits for Send
+       (ResearchService.swift). -->
+  <key>NSServices</key>
+  <array>
+    <dict>
+      <key>NSMenuItem</key><dict><key>default</key><string>Research in Cairn</string></dict>
+      <key>NSMessage</key><string>researchInCairn</string>
+      <key>NSPortName</key><string>$NAME</string>
+      <key>NSSendTypes</key>
+      <array><string>NSStringPboardType</string><string>public.utf8-plain-text</string></array>
+    </dict>
+  </array>
   <key>CFBundleURLTypes</key>
   <array>
     <dict>

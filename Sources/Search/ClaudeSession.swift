@@ -109,6 +109,12 @@ final class ClaudeSession: ObservableObject {
         tab.rewind(to: item.state)
         return true
     }
+    /// The Task Scratchpad (Scratchpad): in memory, with the conversation.
+    @Published private(set) var scratchpad = Scratchpad()
+
+    func editScratchpad(_ words: String) { scratchpad.mine = words }
+    func writeScratchpad(_ text: String, append: Bool) -> Bool { scratchpad.write(text, append: append) }
+    func takeScratchpadEdits() -> [String: Any]? { scratchpad.takeEdits() }
     /// Named with "@" for the next message, and that one only (Mentions).
     @Published var mentions: [Mention] = []
 
@@ -285,6 +291,7 @@ final class ClaudeSession: ObservableObject {
         problem = nil
         draft = ""
         mentions = []
+        scratchpad.clear()
     }
 
     // MARK: - the ledger

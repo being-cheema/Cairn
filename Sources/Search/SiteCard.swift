@@ -501,18 +501,21 @@ struct SiteCard: View {
     /// tab: agents never see one, and the list would remember where you were.
     @ViewBuilder private var agents: some View {
         if !tab.shy, let url = tab.pageAddress, ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
-            HStack(spacing: 0) {
-                Text("Block Agents on This Site").font(MenuMetrics.font).fixedSize()
-                Spacer(minLength: 24)
-                Switch(on: Binding(
-                    get: { VaultedSites.blocks(url, in: prefs.vaultedSites) },
-                    set: { prefs.vaultedSites = VaultedSites.setting($0, for: url, in: prefs.vaultedSites) }
-                ))
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Agents on This Site").font(MenuMetrics.font).fixedSize()
+                Segmented(options: AutonomyTier.allCases.map { ($0, $0.title) }, selection: Binding(
+                    get: { AutonomyTiers.tier(of: url, vaulted: prefs.vaultedSites, hubs: prefs.trustedHubs) },
+                    set: { tier in
+                        let lists = AutonomyTiers.setting(tier, for: url, vaulted: prefs.vaultedSites, hubs: prefs.trustedHubs)
+                        prefs.vaultedSites = lists.vaulted
+                        prefs.trustedHubs = lists.hubs
+                    }
+                ), wide: true)
             }
             .padding(.leading, MenuMetrics.text)
             .padding(.trailing, MenuMetrics.trailing)
-            .frame(height: MenuMetrics.row)
-            .help("Claude and other agents can't open or read \(VaultedSites.entry(for: url) ?? "this site") or its subdomains")
+            .padding(.vertical, 6)
+            .help("Standard: Claude asks before sending, paying or signing in. Trusted Hub: it also follows links out of this site without asking. Vaulted: it can't open or read \(VaultedSites.entry(for: url) ?? "this site") or its subdomains.")
         }
     }
 

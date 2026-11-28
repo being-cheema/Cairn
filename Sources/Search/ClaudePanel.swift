@@ -28,6 +28,7 @@ struct ClaudePanel: View {
         VStack(alignment: .leading, spacing: 0) {
             header
             Rectangle().fill(Palette.hairline).frame(height: 1)
+            if !session.turns.isEmpty { ScratchpadDrawer(session: session) }
 
             ScrollViewReader { scroller in
                 ScrollView(showsIndicators: false) {
@@ -775,6 +776,55 @@ struct ClaudeDoor: View {
             Door(icon: "sparkles",
                  on: browser.sidePanelShown && browser.sidePanel == .claude,
                  help: "Claude   ⌥⌘K") { browser.toggleClaudePanel() }
+        }
+    }
+}
+
+
+/// The Task Scratchpad (Scratchpad): the agent's notes, read-only and shown
+/// as the data they are, and a box of the person's own whose words go to the
+/// agent with its next answer. Folded away until opened, and in memory only.
+private struct ScratchpadDrawer: View {
+    @ObservedObject var session: ClaudeSession
+    @State private var open = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(Motion.settle) { open.toggle() }
+            } label: {
+                HStack(spacing: 6) {
+                    Ink(open ? "chevron.down" : "chevron.right", size: 9)
+                    Text("Scratchpad").font(.system(size: 11.5, weight: .medium)).foregroundStyle(Palette.ink)
+                    if !session.scratchpad.agent.isEmpty {
+                        Circle().fill(Palette.accent).frame(width: 5, height: 5)
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal, 14).padding(.vertical, 7)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(open ? "Hide the scratchpad" : "Show the scratchpad")
+            if open {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Claude's notes").font(.system(size: 10.5)).foregroundStyle(Palette.muted)
+                    Text(verbatim: session.scratchpad.agent.isEmpty ? "Nothing yet." : session.scratchpad.agent)
+                        .font(.system(size: 12))
+                        .foregroundStyle(session.scratchpad.agent.isEmpty ? Palette.muted : Palette.ink)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .help("Claude's own words, which may repeat a web page's: data to read, not instructions")
+                    Text("Your notes, for Claude's next step").font(.system(size: 10.5)).foregroundStyle(Palette.muted)
+                    TextEditor(text: Binding(get: { session.scratchpad.mine }, set: { session.editScratchpad($0) }))
+                        .font(.system(size: 12))
+                        .scrollContentBackground(.hidden)
+                        .frame(height: 64)
+                        .accessibilityLabel("Your notes for Claude")
+                }
+                .padding(.horizontal, 14).padding(.bottom, 10)
+            }
+            Rectangle().fill(Palette.hairline).frame(height: 1)
         }
     }
 }

@@ -42,8 +42,8 @@ enum ShortcutActions {
     }
 
     /// Put after what you had typed there, never over it. Never sent.
-    static func fill(_ text: String, in session: ClaudeSession) throws {
-        let new = words(text)
+    static func fill(_ text: String, in session: ClaudeSession, limit: Int = longestAsk) throws {
+        let new = limit == longestAsk ? words(text) : String(words(text).prefix(limit))
         guard !new.isEmpty else { throw Refused.nothing }
         session.draft = session.draft.isEmpty ? new : session.draft + "\n" + new
     }
