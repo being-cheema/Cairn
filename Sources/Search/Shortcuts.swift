@@ -235,6 +235,8 @@ struct Command: Identifiable {
         Command("edit.pasteMatchStyle", "Paste and Match Style", .edit, KeyCombo("v", shift: true, option: true)) { _ in
             Browser.pasteMatchingStyle()
         },
+        // ⌘E ("Use Selection for Find") is not used here; it opens the card, and sends nothing.
+        Command("edit.askSelection", "Ask About Selection…", .edit, KeyCombo("e")) { $0.askAboutSelection() },
         Command("edit.find", "Find on Page…", .edit, KeyCombo("f")) { $0.openFind() },
         Command("edit.findNext", "Find Next", .edit, KeyCombo("g")) { $0.look(forward: true) },
         Command("edit.findPrevious", "Find Previous", .edit, KeyCombo("g", shift: true)) { $0.look(forward: false) },
@@ -344,6 +346,8 @@ struct Command: Identifiable {
             if let tab = browser.active { browser.beginTabRename(tab) }
         },
         Command("tabs.duplicate", "Duplicate Tab", .tabs, KeyCombo("d")) { $0.duplicate() },
+        // ⌘⇧D is Darken This Site; ⌥⌘F is free (Find's own are ⌘F and ⌃⌘F).
+        Command("tabs.fork", "Fork Tab", .tabs, KeyCombo("f", option: true)) { $0.forkTab() },
         Command("tabs.copyAddress", "Copy Address", .tabs, KeyCombo("c", shift: true)) { $0.copyAddress() },
         Command("tabs.copyMarkdown", "Copy as Markdown Link", .tabs, nil) { $0.copyMarkdownLink() },
         Command("tabs.pasteAndGo", "Paste and Go", .tabs, KeyCombo("v", shift: true)) { $0.pasteAndGo() },

@@ -7023,6 +7023,34 @@ final class Browser: NSObject, ObservableObject {
         open(url, foreground: true, from: active)
     }
 
+    /// Tab › Fork Tab: a copy of this page with its Back and Forward history
+    /// and place (WKWebView.interactionState), beside it, as a split pair
+    /// when split view is on. The fork is made as `open` makes a tab from
+    /// this one, so it is in the store this one is in and no other: a private
+    /// tab's fork is private, a tab of yours is yours. An agent's tab, and
+    /// anything in its store, is never forked (the task's tabs are the
+    /// task's), and neither is one of the browser's own pages or an
+    /// extension's. Nothing typed into a field and not sent comes along.
+    @discardableResult
+    func forkTab() -> Tab? {
+        guard !websitePopup, let source = active, ForkTab.allows(source), let url = source.address else { return nil }
+        let tab = source.shy
+            ? Tab(shy: true, configuration: Web.configuration(shy: true, store: source.store))
+            : Tab(configuration: Web.configuration(space: spaceID))
+        // Never a different store than the source's, whatever space this window is in.
+        guard source.shy || source.store === tab.store else { return nil }
+        prepare(tab)
+        if prefs.usesTabGroups, !tab.shy { tab.groupID = source.groupID }
+        tabs.insert(tab, at: placeForLink(from: source))
+        tab.restore(url: url, title: source.title, state: source.keepsake)
+        if prefs.splitView, canJoin(tab, beside: source) { pair(tab, with: source, onLeft: false) }
+        leaving()
+        activeID = tab.id
+        editing = false
+        typed = ""
+        return tab
+    }
+
     /// ⌘⇧V, when nothing is being typed. What is in the clipboard, if it is a
     /// place — or a search — in the tab you're on.
     func pasteAndGo() {

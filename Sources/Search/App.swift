@@ -158,6 +158,9 @@ struct SearchApp: App {
                     .shortcut("edit.copyMarkdown")
                     .disabled(!(browser.active?.isWeb ?? false))
                 Divider()
+                Button("Ask About Selection…") { browser.askAboutSelection() }
+                    .shortcut("edit.askSelection")
+                    .disabled(!(browser.active?.isWeb ?? false))
                 Button("Find on Page…") { browser.openFind() }
                     .shortcut("edit.find")
                     // On the Settings tab, ⌘F finds a setting.
@@ -418,6 +421,9 @@ struct SearchApp: App {
                 Button("Rename Tab") { if let tab = browser.active { browser.beginTabRename(tab) } }
                     .shortcut("tabs.rename")
                     .disabled(browser.active == nil)
+                Button("Fork Tab") { browser.forkTab() }
+                    .shortcut("tabs.fork")
+                    .disabled(!(browser.active.map { ForkTab.allows($0) } ?? false))
                 Button("Duplicate Tab") { browser.duplicate() }
                     .shortcut("tabs.duplicate")
                     .disabled(!(browser.active?.isWeb ?? false))

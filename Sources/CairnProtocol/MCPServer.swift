@@ -18,7 +18,7 @@ public struct MCPRefusal: Error {
     public let message: String
     public let hint: String
 
-    init(_ code: String, _ message: String, _ hint: String = "") {
+    public init(_ code: String, _ message: String, _ hint: String = "") {
         self.code = code
         self.message = message
         self.hint = hint
@@ -260,6 +260,7 @@ public final class MCPServer {
                 var request: [String: Any] = ["do": tool.verb.rawValue, "page": arguments["page"] as? String ?? ""]
                 let width = Self.seconds(arguments["width"], or: 0)
                 if width > 0 { request["width"] = width }
+                if arguments["marks"] as? Bool == true { request["marks"] = true }
                 var answer = try link.ask(request)
                 let png = answer.removeValue(forKey: "png") as? String ?? ""
                 return ["content": [["type": "image", "data": png, "mimeType": "image/png"],

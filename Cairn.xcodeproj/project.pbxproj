@@ -7,6 +7,13 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		AA2C8F11DEFB527021AD0C0A /* PasskeyInspector.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA664E8A5C6AB1DE05BAE6D1 /* PasskeyInspector.swift */; };
+		AA3899CDC75FBE44949EC679 /* SelectionAsk.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2B572AF551298A9DEE2BAA /* SelectionAsk.swift */; };
+		B1D6C492AD7AFBCD5E7F2A77 /* CairnCLI.swift in Sources */ = {isa = PBXBuildFile; fileRef = B11D78F0F101945F63D8E8B5 /* CairnCLI.swift */; };
+		AA51E98C33959A8717CC0680 /* StepRewind.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA89A3D16FAFA1CBC05B2887 /* StepRewind.swift */; };
+		AA309FFCEE6E4EC26650E45E /* ForkTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1541F1436138C74FCA8914 /* ForkTab.swift */; };
+		AAACA42141DD78984F2C0BE5 /* SetOfMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA8767B7B124BA76343384C1 /* SetOfMark.swift */; };
+		AAD6C19C13F4DBB78C835333 /* AgentTaint.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA4015DE38D6EB496815E949 /* AgentTaint.swift */; };
 		01744E61AC11FE472BB499F1 /* AgentControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A3B2EDD8D3157B85CF50D9B /* AgentControl.swift */; };
 		020A24A35233118C8A84E834 /* PinIconHome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03FDBCFD6BD2D03F36EF765E /* PinIconHome.swift */; };
 		02E8F78913B74A65984BEE49 /* SoftPasskeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DEE1500A2CAF48174750183 /* SoftPasskeys.swift */; };
@@ -307,6 +314,13 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		AA664E8A5C6AB1DE05BAE6D1 /* PasskeyInspector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PasskeyInspector.swift; path = Sources/Search/PasskeyInspector.swift; sourceTree = SOURCE_ROOT; };
+		AA2B572AF551298A9DEE2BAA /* SelectionAsk.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SelectionAsk.swift; path = Sources/Search/SelectionAsk.swift; sourceTree = SOURCE_ROOT; };
+		B11D78F0F101945F63D8E8B5 /* CairnCLI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CairnCLI.swift; path = Sources/CairnProtocol/CairnCLI.swift; sourceTree = SOURCE_ROOT; };
+		AA89A3D16FAFA1CBC05B2887 /* StepRewind.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = StepRewind.swift; path = Sources/Search/StepRewind.swift; sourceTree = SOURCE_ROOT; };
+		AA1541F1436138C74FCA8914 /* ForkTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ForkTab.swift; path = Sources/Search/ForkTab.swift; sourceTree = SOURCE_ROOT; };
+		AA8767B7B124BA76343384C1 /* SetOfMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SetOfMark.swift; path = Sources/Search/SetOfMark.swift; sourceTree = SOURCE_ROOT; };
+		AA4015DE38D6EB496815E949 /* AgentTaint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AgentTaint.swift; path = Sources/Search/AgentTaint.swift; sourceTree = SOURCE_ROOT; };
 		006D0AA98436E72FEA556A22 /* Webmail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Webmail.swift; path = Sources/Search/Webmail.swift; sourceTree = SOURCE_ROOT; };
 		00F30BADF1B68F400E955B38 /* OneWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = OneWindow.swift; path = Sources/Search/OneWindow.swift; sourceTree = SOURCE_ROOT; };
 		018752CF31837E445A6C0CE4 /* Float.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Float.swift; path = Sources/Search/Float.swift; sourceTree = SOURCE_ROOT; };
@@ -707,6 +721,12 @@
 				AA12674D042E25B77B4480E7 /* TaskHistory.swift */,
 				AA11674D042E25B77B4480E7 /* TaskLedger.swift */,
 				AA10674D042E25B77B4480E7 /* Playbooks.swift */,
+				AA664E8A5C6AB1DE05BAE6D1 /* PasskeyInspector.swift */,
+				AA2B572AF551298A9DEE2BAA /* SelectionAsk.swift */,
+				AA89A3D16FAFA1CBC05B2887 /* StepRewind.swift */,
+				AA1541F1436138C74FCA8914 /* ForkTab.swift */,
+				AA8767B7B124BA76343384C1 /* SetOfMark.swift */,
+				AA4015DE38D6EB496815E949 /* AgentTaint.swift */,
 				AA10277B92F383F026131BD3 /* HomeTiles.swift */,
 				AA10DFA92DB64E3C90A5F772 /* DNSRetry.swift */,
 				C4D0674D042E25B77B4480E7 /* AgentDrawer.swift */,
@@ -716,6 +736,7 @@
 				B1D0674D042E25B77B4480E7 /* AgentOverlayView.swift */,
 				B1C4674D042E25B77B4480E7 /* MCPServer.swift */,
 				B1C3674D042E25B77B4480E7 /* MCPTools.swift */,
+				B11D78F0F101945F63D8E8B5 /* CairnCLI.swift */,
 				B1C2674D042E25B77B4480E7 /* CairnProtocol.swift */,
 				B1C1674D042E25B77B4480E7 /* AgentWorkspaceCoordinator.swift */,
 				B1C0674D042E25B77B4480E7 /* NavigationPolicyEngine.swift */,
@@ -1094,6 +1115,12 @@
 				AA12896F2F0E502555C6BE2D /* TaskHistory.swift in Sources */,
 				AA11896F2F0E502555C6BE2D /* TaskLedger.swift in Sources */,
 				AA10896F2F0E502555C6BE2D /* Playbooks.swift in Sources */,
+				AA2C8F11DEFB527021AD0C0A /* PasskeyInspector.swift in Sources */,
+				AA3899CDC75FBE44949EC679 /* SelectionAsk.swift in Sources */,
+				AA51E98C33959A8717CC0680 /* StepRewind.swift in Sources */,
+				AA309FFCEE6E4EC26650E45E /* ForkTab.swift in Sources */,
+				AAACA42141DD78984F2C0BE5 /* SetOfMark.swift in Sources */,
+				AAD6C19C13F4DBB78C835333 /* AgentTaint.swift in Sources */,
 				AA1079CC3127F30BEB4B6C50 /* HomeTiles.swift in Sources */,
 				AA105C81AFC866E50D452B01 /* DNSRetry.swift in Sources */,
 				C4D0896F2F0E502555C6BE2D /* AgentDrawer.swift in Sources */,
@@ -1103,6 +1130,7 @@
 				B1D0896F2F0E502555C6BE2D /* AgentOverlayView.swift in Sources */,
 				B1C4896F2F0E502555C6BE2D /* MCPServer.swift in Sources */,
 				B1C3896F2F0E502555C6BE2D /* MCPTools.swift in Sources */,
+				B1D6C492AD7AFBCD5E7F2A77 /* CairnCLI.swift in Sources */,
 				B1C2896F2F0E502555C6BE2D /* CairnProtocol.swift in Sources */,
 				B1C1896F2F0E502555C6BE2D /* AgentWorkspaceCoordinator.swift in Sources */,
 				B1C0896F2F0E502555C6BE2D /* NavigationPolicyEngine.swift in Sources */,

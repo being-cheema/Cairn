@@ -248,6 +248,10 @@ cp Search.sdef "$APP/Contents/Resources/"
 swift build "${SWIFTFLAGS[@]}" --product cairn-mcp
 cp "$(swift build "${SWIFTFLAGS[@]}" --show-bin-path)/cairn-mcp" "$APP/Contents/MacOS/cairn-mcp"
 [ "$CONFIG" = "release" ] && strip -x "$APP/Contents/MacOS/cairn-mcp"
+# The command line (CairnCLI): the same socket and checks, beside the others.
+swift build "${SWIFTFLAGS[@]}" --product cairn-cli
+cp "$(swift build "${SWIFTFLAGS[@]}" --show-bin-path)/cairn-cli" "$APP/Contents/MacOS/cairn-cli"
+[ "$CONFIG" = "release" ] && strip -x "$APP/Contents/MacOS/cairn-cli"
 # The owner's pictures (Art.swift), when there are any: the app draws a plain
 # circle in each place without them. With them, About credits icons8 (above).
 if [ -n "$ART_FILES" ]; then
@@ -499,6 +503,8 @@ fi
 if [ -n "$IDENTITY" ]; then
   codesign --force --timestamp --options runtime --identifier "$BUNDLE_ID.mcp" \
     --sign "$IDENTITY" "$APP/Contents/MacOS/cairn-mcp"
+  codesign --force --timestamp --options runtime --identifier "$BUNDLE_ID.cli" \
+    --sign "$IDENTITY" "$APP/Contents/MacOS/cairn-cli"
   codesign --force --timestamp --options runtime \
     --entitlements "$ENTITLEMENTS" \
     --sign "$IDENTITY" "$APP"
@@ -508,6 +514,7 @@ else
   # through as though it had finished, leaving a bundle that would not open.
   # set -e stops it now, with codesign's own words above.
   codesign --force --identifier "$BUNDLE_ID.mcp" --sign - "$APP/Contents/MacOS/cairn-mcp"
+  codesign --force --identifier "$BUNDLE_ID.cli" --sign - "$APP/Contents/MacOS/cairn-cli"
   codesign --force --sign - "$APP"
   [ "$STEP" != "app" ] && echo "no Developer ID certificate found — the DMG will only open on this Mac" >&2
 fi

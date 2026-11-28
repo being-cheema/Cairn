@@ -382,7 +382,7 @@ struct AgentApproval: View {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.system(size: 11))
                         .foregroundStyle(.orange)
-                    Text(verbatim: "Check before you approve. \(warning) This is a guess from how the address looks.")
+                    Text(verbatim: "Check before you approve. \(warning)" + (warning.contains("guess") ? "" : " This is a guess from how the address looks."))
                         .font(.system(size: 11.5, weight: .medium))
                         .foregroundStyle(Palette.ink)
                         .fixedSize(horizontal: false, vertical: true)
@@ -507,6 +507,7 @@ extension AgentApproval {
     static func title(client: String, hold: AgentGate.Hold, own: Bool = false) -> String {
         // Quotes mark a name a program gave itself; the panel's is ours.
         let name = own ? client : "“\(client)”"
+        if hold.reason == .flow { return "\(name) wants to move text between sites" }
         return hold.reason == .leave ? "\(name) wants to go to another site" : "\(name) is waiting for you"
     }
 
@@ -516,6 +517,9 @@ extension AgentApproval {
     }
 
     static func footnote(_ hold: AgentGate.Hold) -> String {
+        if hold.reason == .flow {
+            return "It's paused until you answer. This is a heuristic check: approve only if this is what you asked for."
+        }
         if hold.reason == .leave {
             return "It's paused until you answer. A page can try to send an agent elsewhere: approve only if this is what you asked for."
         }

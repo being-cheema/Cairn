@@ -647,6 +647,10 @@ final class AgentSession: ObservableObject, Identifiable {
     /// p1 → what that read said, for the next to be compared with (PageDiff).
     /// Its own tabs only.
     fileprivate var reads: [String: PageSnapshot] = [:]
+    /// What it read and where, for a second look at a cross-site flow
+    /// (AgentTaint: a heuristic that only adds questions). In memory; gone
+    /// when the task ends.
+    fileprivate var taint = TaintLedger()
     private var counter = 0
 
     fileprivate init(fd: Int32, program: String) {
@@ -1045,6 +1049,7 @@ final class AgentControl: ObservableObject {
         session.writer?.cancel()
         session.writer = nil
         session.inbox = []
+        session.taint.clear()
         session.source?.cancel()
         session.source = nil
         work(on: nil, session)
@@ -1425,10 +1430,62 @@ final class AgentControl: ObservableObject {
         AgentGate.Rules.standard
     }
 
+    /// What `open` and `go` are held for: a move to a site the task hasn't
+    /// used (AgentGate), or an address that seems to carry words read on
+    /// another site (AgentTaint). The second only adds a line to the first's
+    /// question when both apply, and is a question of its own otherwise.
+    private func addressHold(_ url: URL, _ session: AgentSession, _ browser: Browser) -> AgentGate.Hold? {
+        var hold = AgentGate.hold(address: url, sites: session.sites, rules: rules(browser))
+        // A link the task read is where the page itself pointed.
+        guard let there = TaintLedger.origin(of: url), !session.taint.isSeenLink(url),
+              let match = session.taint.source(of: TaintLedger.text(of: url), into: there,
+                                               searching: TaintLedger.isSearch(url)) else { return hold }
+        var flow = AgentGate.hold(flowFrom: match, into: url.host() ?? there, doing: "go")
+        if var leave = hold {
+            leave.warning = [leave.warning, flow.warning.map { "The address also seems to carry text read on \(match.origin). " + $0 }]
+                .compactMap { $0 }.joined(separator: " ")
+            return leave
+        }
+        flow.sends = nil
+        hold = flow
+        return hold
+    }
+
+    /// Words read in this task, put on another site's page: a question
+    /// (AgentTaint). `searching` is a field made for searching, where an
+    /// identifier goes unasked. Nil for nothing to ask.
+    private func typingHold(_ text: String, on tab: Tab, _ session: AgentSession, searching: Bool) -> AgentGate.Hold? {
+        guard let here = TaintLedger.origin(of: tab.pageAddress),
+              let match = session.taint.source(of: text, into: here, searching: searching) else { return nil }
+        return AgentGate.hold(flowFrom: match, into: tab.pageAddress?.host() ?? here, doing: "type")
+    }
+
+    /// What a read taught the ledger: the page's text and what its controls
+    /// are named and hold, as read (secret fields come with no value).
+    private func remember(_ out: [String: Any], on tab: Tab, _ session: AgentSession, text: String?) {
+        guard let origin = TaintLedger.origin(of: tab.pageAddress) else { return }
+        var pieces: [String] = []
+        if let text { pieces.append(text) }
+        for node in out["nodes"] as? [[String: Any]] ?? [] {
+            if node["redacted"] as? Bool == true { continue }
+            for key in ["name", "value"] { if let said = node[key] as? String, !said.isEmpty { pieces.append(said) } }
+        }
+        guard !pieces.isEmpty else { return }
+        let quarantined = (out["text"] as? String)?.contains(Quarantine.opening) == true
+        // What the page offered by name: opening or searching for it is no flow.
+        var titles = [out["title"] as? String].compactMap { $0 }, hrefs: [String] = []
+        for node in out["nodes"] as? [[String: Any]] ?? [] where node["role"] as? String == "link" {
+            if let name = node["name"] as? String { titles.append(name) }
+            if let href = node["href"] as? String { hrefs.append(href) }
+        }
+        session.taint.record(titles: titles, links: hrefs, origin: origin, quarantined: quarantined)
+        session.taint.record(pieces.joined(separator: "\n"), origin: origin, quarantined: quarantined)
+    }
+
     /// Puts `hold` to you in the window and calls `then` once with the
     /// answer: yours, or none within `holdFor`, or the session going. The
     /// agent's call waits for it, and gets the result, or why not.
-    private func ask(_ hold: AgentGate.Hold, _ session: AgentSession, sending: Tab.ID? = nil,
+    private func ask(_ hold: AgentGate.Hold, _ session: AgentSession, sending: Tab.ID? = nil, before tab: Tab? = nil,
                      within patience: TimeInterval = AgentControl.holdFor,
                      showing receipt: FormReceipt? = nil, then: @escaping (HeldAction.Answer) -> Void) {
         var answered = false
@@ -1440,6 +1497,11 @@ final class AgentControl: ObservableObject {
             session?.held = nil
             session?.receipt = nil
             if verdict == .approved, let site = hold.site { session?.sites.insert(site) }
+            // The page as it was before what you approved (StepRewind).
+            if verdict == .approved, let session, session.panel,
+               let tab = tab ?? sending.flatMap({ id in session.browser?.tabs.first { $0.id == id } }) {
+                session.browser?.claude.checkpoint(tab, what: hold.summary)
+            }
             // For the panel's task record (TaskLedger).
             if let session, session.panel {
                 session.browser?.claude.asked(reason: hold.reason.rawValue, what: hold.summary,
@@ -2278,7 +2340,7 @@ final class AgentControl: ObservableObject {
                         }
                     }
                 }
-                if let hold = AgentGate.hold(address: url, sites: session.sites, rules: rules(browser)) {
+                if let hold = addressHold(url, session, browser) {
                     ask(hold, session) { verdict in
                         if verdict == .approved { open() } else { answer(Self.declined(hold, verdict)) }
                     }
@@ -2301,8 +2363,8 @@ final class AgentControl: ObservableObject {
                         }
                     }
                 }
-                if let hold = AgentGate.hold(address: url, sites: session.sites, rules: rules(browser)) {
-                    ask(hold, session) { verdict in
+                if let hold = addressHold(url, session, browser) {
+                    ask(hold, session, before: tab) { verdict in
                         if verdict == .approved { go() } else { answer(Self.declined(hold, verdict)) }
                     }
                 } else {
@@ -2431,6 +2493,46 @@ final class AgentControl: ObservableObject {
                 answer(known == .devConsole ? DevReport.console(logs, level: nil) : DevReport.network(logs))
             case .assertLayout:
                 try assertLayout(request, session, browser, answer)
+            case .markdown:
+                // For `cairn md`: a tab of its own, as Markdown, fenced as any read is.
+                let tab = try self.tab(request, session, browser, .drive)
+                let handle = session.handle(for: tab)
+                if tab.bench { PageRoom.shared.house(tab) }
+                holdingStill(tab, session) { [weak self] _ in
+                    guard let self, self.live(session) else { return answer(AgentRefusal(code: "stopped", message: "Stopped in \(Brand.name)").said) }
+                    guard !Self.isVaulted(tab), !Self.isShut(tab, session) else { return answer(Self.blockedByPerson().said) }
+                    PageMarkdown.read(tab.web, links: true, most: 200_000) { page in
+                        guard self.live(session) else { return answer(AgentRefusal(code: "stopped", message: "Stopped in \(Brand.name)").said) }
+                        guard !Self.isVaulted(tab), let page, !page.markdown.isEmpty else {
+                            return answer(AgentRefusal(code: "no_text", message: "Nothing on that page could be read as text").said)
+                        }
+                        let words = TypedSecrets.hidden(in: PageMarkdown.copied(page) ?? page.markdown)
+                        if let origin = TaintLedger.origin(of: tab.pageAddress) {
+                            session.taint.record(words, origin: origin, quarantined: Quarantine.fence(words).contains(Quarantine.opening))
+                        }
+                        answer(["markdown": Quarantine.fence(words), "title": Quarantine.label(page.title),
+                                "url": AgentRules.url(page.url?.absoluteString ?? ""), "cut": page.cut, "page": handle,
+                                "untrusted": Self.untrusted])
+                    }
+                }
+            case .askPanel:
+                // Fills the panel's box and nothing more: sending it is the
+                // person's, from the panel (ClaudeSession.submit).
+                let prompt = String((request["prompt"] as? String ?? "").prefix(4000)).trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !prompt.isEmpty, AgentRules.typeable(prompt) else {
+                    throw AgentRefusal(code: "bad_text", message: "A question with no control characters but tab and newline")
+                }
+                let claude = browser.claude
+                guard claude.offer(prompt, by: ObjectIdentifier(session)) else {
+                    throw AgentRefusal(code: "box_busy", message: "The Claude panel is busy or has something typed in it",
+                                       hint: "Ask the person to send or clear it, then try again.")
+                }
+                if !(browser.sidePanelShown && browser.sidePanel == .claude) { browser.toggleClaudePanel() }
+                answer(["waiting": true, "note": "The question is in the Claude panel's box. Nothing is asked until the person presses Send there."])
+            case .askPoll:
+                let seen = browser.claude.progress(from: min(max(request["offset"] as? Int ?? 0, 0), 10_000_000),
+                                                   for: ObjectIdentifier(session))
+                answer(seen)
             case .bye:
                 answer(["bye": true])
                 DispatchQueue.main.async { [weak self] in self?.end(session, .bye) }
@@ -2641,7 +2743,11 @@ final class AgentControl: ObservableObject {
                         if let lines {
                             // Card numbers and keys drawn where no box was
                             // painted are still taken out.
-                            out["ocr"] = Quarantine.fence(TypedSecrets.hidden(in: lines.joined(separator: "\n")))
+                            let words = TypedSecrets.hidden(in: lines.joined(separator: "\n"))
+                            out["ocr"] = Quarantine.fence(words)
+                            if let origin = TaintLedger.origin(of: tab.pageAddress) {
+                                session.taint.record(words, origin: origin, quarantined: (out["ocr"] as? String)?.contains(Quarantine.opening) == true)
+                            }
                             out["ocr_note"] = "Read from a picture of what is on screen, with password and card fields and frames blacked out. It can misread. The words are the page's."
                         } else {
                             out["ocr_error"] = "The picture couldn't be read"
@@ -2796,6 +2902,9 @@ final class AgentControl: ObservableObject {
                                         out["url"] = AgentRules.url(address)
                                         out["title"] = Quarantine.label(tab.title)
                                         out["untrusted"] = Self.untrusted
+                                        if let origin = TaintLedger.origin(of: tab.pageAddress), let text = out["text"] as? String {
+                                            session.taint.record(text, origin: origin, quarantined: text.contains(Quarantine.opening))
+                                        }
                                         answer(out)
                                     }
                                 }
@@ -2844,7 +2953,9 @@ final class AgentControl: ObservableObject {
                             out["diff_unavailable"] = "no earlier read of this tab"
                         }
                     }
+                    let said = out["text"] as? String
                     out = Quarantine.read(out)
+                    self.remember(out, on: tab, session, text: said)
                     // Said with every read, beside the words themselves, not only
                     // in the tool's description a model may have read long ago.
                     out["untrusted"] = Self.untrusted
@@ -3051,6 +3162,7 @@ final class AgentControl: ObservableObject {
                 }
             }
         }
+        func begin() {
         // Where it is about to type; never what.
         touch("probe", nil) { [weak self] seen in
             aimed = AgentGate.Target(seen["gate"])
@@ -3071,6 +3183,22 @@ final class AgentControl: ObservableObject {
             }
         } else {
             touch("set", text) { finish($0) }
+        }
+        }
+        // Words read on another site go in only on your say (AgentTaint). What
+        // only an identifier gave away is let into a search field, so the field
+        // is looked at first.
+        func askFlow(_ hold: AgentGate.Hold) {
+            ask(hold, session, before: tab) { verdict in
+                guard verdict == .approved else { return answer(Self.declined(hold, verdict)) }
+                guard self.live(session) else { return answer(AgentRefusal(code: "stopped", message: "Stopped in \(Brand.name)").said) }
+                begin()
+            }
+        }
+        if let hold = typingHold(text, on: tab, session, searching: true) { return askFlow(hold) }
+        guard let hold = typingHold(text, on: tab, session, searching: false) else { return begin() }
+        touch("probe", nil) { seen in
+            if AgentGate.Target(seen["gate"])?.isSearch == true { begin() } else { askFlow(hold) }
         }
     }
 
@@ -3190,12 +3318,26 @@ final class AgentControl: ObservableObject {
     private func shot(_ request: [String: Any], _ session: AgentSession, _ browser: Browser, _ answer: @escaping ([String: Any]) -> Void) throws {
         let tab = try self.tab(request, session, browser, .drive)
         let width = (request["width"] as? Double).map { min(max($0, 200), 2560) }
-        picture(tab, session, width: width) { taken in
+        let handle = session.handle(for: tab)
+        let wantsMarks = request["marks"] as? Bool == true
+        // Numbered as the last read_page numbered them: no read, no badges.
+        let snap = wantsMarks ? session.snaps[handle] : nil
+        picture(tab, session, width: width, marking: snap) { taken in
             switch taken {
             case .failure(let refusal): answer(refusal.said)
             case .success(let shot):
-                answer(["png": shot.png.base64EncodedString(), "width": shot.width, "height": shot.height,
-                        "blackedOut": shot.boxes, "page": session.handle(for: tab)])
+                var out: [String: Any] = ["png": shot.png.base64EncodedString(), "width": shot.width, "height": shot.height,
+                                          "blackedOut": shot.boxes, "page": handle]
+                if wantsMarks {
+                    if snap == nil {
+                        out["marks_note"] = "No badges: read_page this tab first, then take the picture."
+                    } else {
+                        out["marks"] = shot.marked.map { "\(handle).s\(snap ?? 0).e\($0)" }
+                        out["marks_note"] = shot.markNote ?? "Badges [eN] were drawn on the picture only, at the corner of each control in view from your last read_page; "
+                            + "the page itself is unchanged. Nothing is badged over a blacked-out area or on a password, card or code field."
+                    }
+                }
+                answer(out)
             }
         }
     }
@@ -3203,10 +3345,13 @@ final class AgentControl: ObservableObject {
     private struct Picture {
         let png: Data
         let width: Int, height: Int, boxes: Int
+        /// Numbers of the controls given a badge, when asked for.
+        var marked: [Int] = []
+        var markNote: String?
     }
 
     /// The only picture of a page that anything of an agent's is made from.
-    private func picture(_ tab: Tab, _ session: AgentSession, width: Double?,
+    private func picture(_ tab: Tab, _ session: AgentSession, width: Double?, marking snap: Int? = nil,
                          _ done: @escaping (Result<Picture, AgentRefusal>) -> Void) {
         let key = Self.key + "Hidden"
         // Put back whatever happens, alive or not: the page is yours too.
@@ -3226,6 +3371,9 @@ final class AgentControl: ObservableObject {
                 putBack()
                 return done(.failure(AgentRefusal(code: "stopped", message: "Stopped in \(Brand.name)")))
             }
+            // Measured with the picture's own page state, before it is taken;
+            // a stale read just means no badges.
+            @MainActor func take(_ marks: [SetOfMark.Mark], note: String?) {
             PageHands.snapshot(tab.web, width: width) { taken in
                 putBack()
                 guard !Self.isVaulted(tab) else { return done(.failure(Self.blockedByPerson())) }
@@ -3238,11 +3386,21 @@ final class AgentControl: ObservableObject {
                     let across = found["width"] as? Double ?? Double(rep.pixelsWide)
                     let scale = across > 0 ? Double(rep.pixelsWide) / across : 1
                     let boxes = (found["boxes"] as? [[Double]] ?? []).filter { $0.count == 4 }
-                    guard let png = Self.blackedOut(rep, boxes: boxes, scale: scale) else {
+                    guard let png = Self.blackedOut(rep, boxes: boxes, scale: scale, marks: marks) else {
                         done(.failure(AgentRefusal(code: "no_picture", message: "No picture")))
                         return
                     }
-                    done(.success(Picture(png: png, width: rep.pixelsWide, height: rep.pixelsHigh, boxes: boxes.count)))
+                    let drawn = SetOfMark.visible(marks, masks: boxes).map(\.index)
+                    done(.success(Picture(png: png, width: rep.pixelsWide, height: rep.pixelsHigh, boxes: boxes.count,
+                                          marked: drawn, markNote: note)))
+                }
+            }
+            }
+            guard let snap else { return take([], note: nil) }
+            self.page(tab, session, SetOfMark.script(key: Self.key, snap: snap)) { measured in
+                switch measured {
+                case .success(let out): take(SetOfMark.parse(out["marks"]), note: nil)
+                case .failure: take([], note: "No badges: the page changed since read_page. Read it again, then take the picture.")
                 }
             }
         }
@@ -3250,8 +3408,8 @@ final class AgentControl: ObservableObject {
 
     /// The picture as a PNG, with each box (top-left CSS pixels) painted
     /// over.
-    static func blackedOut(_ rep: NSBitmapImageRep, boxes: [[Double]], scale: Double) -> Data? {
-        guard !boxes.isEmpty else { return rep.representation(using: .png, properties: [:]) }
+    static func blackedOut(_ rep: NSBitmapImageRep, boxes: [[Double]], scale: Double, marks: [SetOfMark.Mark] = []) -> Data? {
+        guard !boxes.isEmpty || !marks.isEmpty else { return rep.representation(using: .png, properties: [:]) }
         guard let context = NSGraphicsContext(bitmapImageRep: rep) else { return nil }
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = context
@@ -3264,6 +3422,8 @@ final class AgentControl: ObservableObject {
             let x = box[0] * scale, y = box[1] * scale, w = box[2] * scale, h = box[3] * scale
             NSRect(x: x * points, y: (height - y - h) * points, width: w * points, height: h * points).fill()
         }
+        // After the blacking out, so no badge is ever under it or over it.
+        SetOfMark.draw(marks, masks: boxes, height: height, scale: scale, points: points)
         NSGraphicsContext.restoreGraphicsState()
         return rep.representation(using: .png, properties: [:])
     }

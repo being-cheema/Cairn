@@ -973,6 +973,12 @@ final class Tab: ObservableObject, Identifiable {
     /// view built to wake it, so it opens exactly where this one was left.
     private var memory: Any?
 
+    /// The page put back as `state` (Tab.keepsake) had it: its history and
+    /// place. The page only; nothing it sent is unsent (StepRewind).
+    func rewind(to state: Any) {
+        if let built { built.interactionState = state } else { memory = state }
+    }
+
     /// The same, for a tab about to close: what ⇧⌘T hands back, so the tab
     /// comes back with Back and Forward and its place on the page, not as
     /// its address typed in again (see Browser.Ghost). Nothing while a page

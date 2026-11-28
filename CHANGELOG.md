@@ -11,6 +11,17 @@ in [ROADMAP-upstream.md](docs/history/ROADMAP-upstream.md).
 
 ## Unreleased
 
+### Added
+
+- Passkey Inspector in the site card of a local site the Dev Bridge is on for: the last passkey ceremony's public metadata (RP ID, user present and verified, backup flags, counter, credential ID), read-only, in memory, forgotten when the bridge is turned off. No simulation toggles: the system's passkeys can't be switched safely.
+- /triangulate, a built-in playbook for the Claude panel: reads the case for a claim, then the case against, in read-only side-by-side tabs of its own store, and hands over one card with Evidence For, Caveats & Risks and Sources.
+- Edit › Ask About Selection… (⌘E): a small card beside the words you selected, with a box for your question. ⌘E only opens it; pressing Ask sends the selection and its paragraph, fenced as the website's words, to your own Claude, asked to use only those words, and Continue in Panel puts it in the panel's box instead. Never from a private tab or a blocked site.
+- A `cairn` command line in the app (Cairn.app/Contents/MacOS/cairn-cli, linked as cairn; Settings › Agents copies the line that links it into ~/.local/bin): `cairn md <url>` prints a page as fenced Markdown read in a fresh private tab with none of your sign-ins, `cairn ask "…"` only fills the Claude panel's box and waits for your Send before streaming the answer, `cairn audit <local url>` runs the layout checks for a site the Dev Bridge is on for (else it prints bridge_off). It asks you like any other agent.
+- Tab › Fork Tab (⌥⌘F; ⌘⇧D is Darken This Site): a copy of the page with its Back and Forward history and place, in the same store as the tab it came from (a private tab's fork is private), as a split pair when split view is on. Never for an agent's tab.
+- Rewind Step in the Claude panel: before each step of Claude's you approve, the page's history and place are kept, and one click of yours puts the tab back. It restores the page only and says it can't unsend anything already sent.
+- screenshot takes marks: numbered badges [eN] drawn on the picture (never in the page) at each control in view from the last read_page, so a model can name what it sees. None over blacked-out areas or on secret fields.
+- An agent that read words on one site and is about to type them into a page on another, or open an address that carries them, is held for your click, with the card naming the site they came from. It is a heuristic (matching runs of words and long identifiers) and says so; it only adds questions, keeps the task's reading in memory until the task ends, and never records a secret field.
+
 ### Fixed
 
 - Settings › Appearance › Darken pages that stay light no longer turns pages near black with their borders gone, or gives up on them: WebKit now lists a page's added style sheets among its own, so the dark copy of each of a site's colours was copied again on every look, darker and longer each time, until the page fell back to the inverting filter. Pages are darkened in their own colours again (Google, Wikipedia, GitHub, Stack Overflow, Amazon, Notion, news sites), a light frame such as Google's sign-in prompt no longer shows as a white box, and the switch stays in Settings while it is on even with Search set to Light, so it can always be turned off. `python3 Tests/dark_pages.py`

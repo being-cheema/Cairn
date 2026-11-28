@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 // One conversation with the person's own Claude Code, in the side panel.
@@ -48,6 +49,66 @@ final class ClaudeSession: ObservableObject {
     }
 
     @Published private(set) var turns: [Turn] = []
+    /// The page state from before each approved step (StepRewind).
+    @Published private(set) var steps = StepLog()
+    /// The question the `cairn ask` command put in the box (CairnCLI), to
+    /// follow if you send it as it stands.
+    private var offered: String?
+    /// The connection that offered it: only that one is told how it went,
+    /// since the answer can carry what you attached to the message.
+    private var offeredBy: ObjectIdentifier?
+
+    /// Puts a question in the box for you to send. False when the panel is
+    /// running or its box already holds something of yours.
+    func offer(_ prompt: String, by asker: ObjectIdentifier) -> Bool {
+        guard !running, draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+        draft = prompt
+        offered = prompt
+        offeredBy = asker
+        return true
+    }
+
+    /// How the offered question has gone, from `offset` characters into its
+    /// answer: waiting for your Send, running, done, or withdrawn (what you
+    /// sent isn't what was offered, or the box was cleared).
+    func progress(from offset: Int, for asker: ObjectIdentifier) -> [String: Any] {
+        // Another connection, or none: nothing of the panel's conversation.
+        guard offeredBy == asker else { return ["state": "withdrawn"] }
+        return Self.progress(offered: offered, draft: draft, turns: turns, from: offset)
+    }
+
+    static func progress(offered: String?, draft: String, turns: [Turn], from offset: Int) -> [String: Any] {
+        guard let offered else { return ["state": "withdrawn"] }
+        if let turn = turns.last(where: { $0.question == offered }) {
+            let answer = turn.answer
+            let text = String(decoding: Array(answer.utf16).dropFirst(offset), as: UTF16.self)
+            var out: [String: Any] = ["state": turn.done || turn.failed != nil ? "done" : "running", "text": text,
+                                      "length": answer.utf16.count]
+            if let failed = turn.failed { out["failed"] = failed }
+            return out
+        }
+        return ["state": draft.trimmingCharacters(in: .whitespacesAndNewlines) == offered ? "waiting" : "withdrawn"]
+    }
+
+    /// The button's own view, so only a click of yours on it counts.
+    var rewindButton: NSView?
+
+    /// Before an approved step of the run's: the tab as it is now.
+    func checkpoint(_ tab: Tab, what: String) {
+        guard running, let state = tab.keepsake else { return }
+        steps.keep(StepCheckpoint(tab: tab.id, state: state, what: AgentRules.scrubbed(what)))
+    }
+
+    /// Your press of Rewind Step: the latest tab put back where it was.
+    @discardableResult
+    func rewind(event: NSEvent?) -> Bool {
+        guard !running, steps.last != nil,
+              AgentRules.isClick(event, on: rewindButton, in: browser?.window, after: 0),
+              let browser, let item = steps.pop(),
+              let tab = (browser.tabs + browser.parkedTabs).first(where: { $0.id == item.tab }) else { return false }
+        tab.rewind(to: item.state)
+        return true
+    }
     /// Named with "@" for the next message, and that one only (Mentions).
     @Published var mentions: [Mention] = []
 
@@ -158,6 +219,7 @@ final class ClaudeSession: ObservableObject {
             ?? (text.hasPrefix("/") ? "My message: " + text : text)
         if process == nil, !start() { return }
         problem = nil
+        steps.clear()
         draft = ""
         let named = mentions
         mentions = []
@@ -218,6 +280,7 @@ final class ClaudeSession: ObservableObject {
         stop()
         record = nil
         turns = []
+        steps.clear()
         snapshots = SourceSnapshots()
         problem = nil
         draft = ""
